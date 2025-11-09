@@ -46,8 +46,7 @@ class MockRuntime(UiPathBaseRuntime):
 
         tracer = trace.get_tracer("uipath.dev.mock-runtime")
 
-        execution_id = getattr(self.context, "job_id", None) or "mock-execution"
-        entrypoint = getattr(self.context, "entrypoint", None) or "mock-entrypoint"
+        entrypoint = "mock-entrypoint"
         message = str(payload.get("message", ""))
         message_length = len(message)
 
@@ -56,7 +55,6 @@ class MockRuntime(UiPathBaseRuntime):
             attributes={
                 "uipath.runtime.name": "MockRuntime",
                 "uipath.runtime.type": "agent",
-                "uipath.execution.id": execution_id,
                 "uipath.runtime.entrypoint": entrypoint,
                 "uipath.input.message.length": message_length,
                 "uipath.input.has_message": "message" in payload,
@@ -65,11 +63,10 @@ class MockRuntime(UiPathBaseRuntime):
             logger.info(
                 "MockRuntime: starting execution",
                 extra={
-                    "uipath.execution.id": execution_id,
                     "uipath.runtime.entrypoint": entrypoint,
                 },
             )
-            print(f"[MockRuntime] Starting execution (execution_id={execution_id})")
+            print(f"[MockRuntime] Starting execution with payload={payload!r}")
 
             # Stage 1: Initialization
             with tracer.start_as_current_span(
@@ -77,7 +74,6 @@ class MockRuntime(UiPathBaseRuntime):
                 attributes={
                     "uipath.step.name": "initialize-environment",
                     "uipath.step.kind": "init",
-                    "uipath.execution.id": execution_id,
                 },
             ):
                 logger.info("MockRuntime: initializing environment")
@@ -90,7 +86,6 @@ class MockRuntime(UiPathBaseRuntime):
                 attributes={
                     "uipath.step.name": "validate-input",
                     "uipath.step.kind": "validation",
-                    "uipath.execution.id": execution_id,
                     "uipath.input.has_message": "message" in payload,
                 },
             ) as validate_span:
@@ -110,7 +105,6 @@ class MockRuntime(UiPathBaseRuntime):
                 attributes={
                     "uipath.step.name": "preprocess-data",
                     "uipath.step.kind": "preprocess",
-                    "uipath.execution.id": execution_id,
                     "uipath.input.size.bytes": len(str(payload).encode("utf-8")),
                 },
             ):
@@ -124,7 +118,6 @@ class MockRuntime(UiPathBaseRuntime):
                 attributes={
                     "uipath.step.name": "compute-result",
                     "uipath.step.kind": "compute",
-                    "uipath.execution.id": execution_id,
                 },
             ):
                 logger.info("MockRuntime: compute phase started")
@@ -136,7 +129,6 @@ class MockRuntime(UiPathBaseRuntime):
                     attributes={
                         "uipath.step.name": "compute-embeddings",
                         "uipath.step.kind": "compute-subtask",
-                        "uipath.execution.id": execution_id,
                     },
                 ):
                     logger.info("MockRuntime: computing embeddings")
@@ -149,7 +141,6 @@ class MockRuntime(UiPathBaseRuntime):
                     attributes={
                         "uipath.step.name": "query-knowledgebase",
                         "uipath.step.kind": "io",
-                        "uipath.execution.id": execution_id,
                         "uipath.kb.query.length": message_length,
                     },
                 ):
@@ -163,7 +154,6 @@ class MockRuntime(UiPathBaseRuntime):
                 attributes={
                     "uipath.step.name": "postprocess-results",
                     "uipath.step.kind": "postprocess",
-                    "uipath.execution.id": execution_id,
                 },
             ):
                 logger.info("MockRuntime: post-processing results")
@@ -175,7 +165,6 @@ class MockRuntime(UiPathBaseRuntime):
                     attributes={
                         "uipath.step.name": "generate-output",
                         "uipath.step.kind": "postprocess-subtask",
-                        "uipath.execution.id": execution_id,
                     },
                 ):
                     logger.info("MockRuntime: generating structured output")
@@ -188,7 +177,6 @@ class MockRuntime(UiPathBaseRuntime):
                 attributes={
                     "uipath.step.name": "persist-artifacts",
                     "uipath.step.kind": "io",
-                    "uipath.execution.id": execution_id,
                     "uipath.persistence.enabled": False,
                 },
             ):
@@ -202,7 +190,6 @@ class MockRuntime(UiPathBaseRuntime):
                 attributes={
                     "uipath.step.name": "cleanup-resources",
                     "uipath.step.kind": "cleanup",
-                    "uipath.execution.id": execution_id,
                 },
             ):
                 logger.info("MockRuntime: cleaning up resources")
@@ -212,7 +199,6 @@ class MockRuntime(UiPathBaseRuntime):
             result_payload = {
                 "result": f"Mock runtime processed: {payload.get('message', '<no message>')}",
                 "metadata": {
-                    "execution_id": execution_id,
                     "entrypoint": entrypoint,
                     "message_length": message_length,
                 },
@@ -228,7 +214,6 @@ class MockRuntime(UiPathBaseRuntime):
             logger.info(
                 "MockRuntime: execution completed successfully",
                 extra={
-                    "uipath.execution.id": execution_id,
                     "uipath.runtime.status": "success",
                 },
             )
