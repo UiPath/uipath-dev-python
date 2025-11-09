@@ -1,7 +1,7 @@
 [project]
 name = "uipath-dev"
 version = "0.0.1"
-description = "UiPath Dev Terminal"
+description = "UiPath Developer Console"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
 dependencies = [

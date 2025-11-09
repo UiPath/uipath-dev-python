@@ -35,10 +35,10 @@ from ._utils._logger import patch_textual_stderr
 
 
 class UiPathDeveloperConsole(App[Any]):
-    """UiPath debugging terminal interface."""
+    """UiPath developer console interface."""
 
-    TITLE = "UiPath Debugging Terminal"
-    SUB_TITLE = "Interactive debugging interface for UiPath Python projects"
+    TITLE = "UiPath Developer Console"
+    SUB_TITLE = "Interactive terminal application for building, testing, and debugging UiPath Python runtimes, agents, and automation scripts."
     CSS_PATH = Path(__file__).parent / "_styles" / "terminal.tcss"
 
     BINDINGS = [
