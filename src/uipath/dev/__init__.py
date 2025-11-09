@@ -31,7 +31,7 @@ from uipath.dev.models.execution import ExecutionRun
 from uipath.dev.models.messages import LogMessage, TraceMessage
 
 from ._utils._exporter import RunContextExporter
-from ._utils._logger import patch_textual_stderr
+from ._utils._logger import RunContextLogHandler, patch_textual_stderr
 
 
 class UiPathDeveloperConsole(App[Any]):
@@ -203,10 +203,16 @@ class UiPathDeveloperConsole(App[Any]):
 
             run.status = "running"
             run.start_time = datetime.now()
-
+            log_handler = RunContextLogHandler(
+                run_id=run.id,
+                callback=self._handle_log_message,
+            )
             runtime = self.runtime_factory.new_runtime(entrypoint=run.entrypoint)
             execution_runtime = UiPathExecutionRuntime(
-                delegate=runtime, trace_manager=self.trace_manager, execution_id=run.id
+                delegate=runtime,
+                trace_manager=self.trace_manager,
+                log_handler=log_handler,
+                execution_id=run.id,
             )
             result = await execution_runtime.execute(execution_input, execution_options)
 

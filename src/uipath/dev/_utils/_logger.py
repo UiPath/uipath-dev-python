@@ -7,10 +7,12 @@ import threading
 from datetime import datetime
 from typing import Callable, Pattern
 
+from uipath.runtime.logging import UiPathRuntimeExecutionLogHandler
+
 from uipath.dev.models.messages import LogMessage
 
 
-class RunContextLogHandler(logging.Handler):
+class RunContextLogHandler(UiPathRuntimeExecutionLogHandler):
     """Custom log handler that sends logs to CLI UI."""
 
     def __init__(
@@ -18,9 +20,10 @@ class RunContextLogHandler(logging.Handler):
         run_id: str,
         callback: Callable[[LogMessage], None],
     ):
-        super().__init__()
+        super().__init__(run_id)
         self.run_id = run_id
         self.callback = callback
+        self.setFormatter(logging.Formatter("%(message)s"))
 
     def emit(self, record: logging.LogRecord):
         """Emit a log record to CLI UI."""
