@@ -18,6 +18,9 @@ class MockRuntime(UiPathBaseRuntime):
 
     async def get_schema(self) -> UiPathRuntimeSchema:
         return UiPathRuntimeSchema(
+            filePath="default",
+            uniqueId="mock-runtime",
+            type="agent",
             input={
                 "type": "object",
                 "properties": {"message": {"type": "string"}},
