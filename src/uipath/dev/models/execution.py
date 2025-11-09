@@ -25,7 +25,7 @@ class ExecutionRun:
         self.entrypoint = entrypoint
         self.input_data = input_data
         self.conversational = conversational
-        self.resume_data: Optional[Any] = None
+        self.resume_data: Optional[dict[str, Any]] = None
         self.output_data: Optional[dict[str, Any]] = None
         self.start_time = datetime.now()
         self.end_time: Optional[datetime] = None

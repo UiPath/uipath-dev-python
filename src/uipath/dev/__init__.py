@@ -5,9 +5,10 @@ import json
 import traceback
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import pyperclip  # type: ignore[import-untyped]
+from pydantic import BaseModel
 from rich.traceback import Traceback
 from textual import on
 from textual.app import App, ComposeResult
@@ -128,7 +129,7 @@ class UiPathDeveloperConsole(App[Any]):
                 )
                 return
             if details_panel.current_run.status == "suspended":
-                details_panel.current_run.resume_data = user_text
+                details_panel.current_run.resume_data = {"message": user_text}
             asyncio.create_task(self._execute_runtime(details_panel.current_run))
             event.input.clear()
 
@@ -190,7 +191,7 @@ class UiPathDeveloperConsole(App[Any]):
     async def _execute_runtime(self, run: ExecutionRun):
         """Execute the script using UiPath runtime."""
         try:
-            execution_input: dict[str, Any] = {}
+            execution_input: Optional[dict[str, Any]] = {}
             execution_options: UiPathExecuteOptions = UiPathExecuteOptions()
             if run.status == "suspended":
                 execution_input = run.resume_data
@@ -216,7 +217,12 @@ class UiPathDeveloperConsole(App[Any]):
                 ):
                     run.status = "suspended"
                 else:
-                    run.output_data = result.output
+                    if result.output is None:
+                        run.output_data = {}
+                    elif isinstance(result.output, BaseModel):
+                        run.output_data = result.output.model_dump()
+                    else:
+                        run.output_data = result.output
                     run.status = "completed"
                 if run.output_data:
                     self._add_info_log(run, f"Execution result: {run.output_data}")
