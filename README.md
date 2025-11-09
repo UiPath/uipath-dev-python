@@ -1,6 +1,10 @@
 # UiPath Developer Console
 
-The **UiPath Developer Console** is an interactive terminal application for building, testing, and debugging UiPath Python runtimes, agents, and automation scripts.
+[![PyPI downloads](https://img.shields.io/pypi/dm/uipath-dev.svg)](https://pypi.org/project/uipath-dev/)
+[![Python versions](https://img.shields.io/pypi/pyversions/uipath-dev.svg)](https://pypi.org/project/uipath-dev/)
+
+
+Interactive terminal application for building, testing, and debugging UiPath Python runtimes, agents, and automation scripts.
 
 ## Overview
 
@@ -11,6 +15,8 @@ This tool is designed for:
 - Developers building **UiPath agents** or **custom runtime integrations**
 - Python engineers testing **standalone automation scripts** before deployment
 - Contributors exploring **runtime orchestration** and **execution traces**
+
+![Runtime Trace Demo](https://raw.githubusercontent.com/UiPath/uipath-dev-python/main/docs/demo_traces.svg)
 
 ## Features
 
