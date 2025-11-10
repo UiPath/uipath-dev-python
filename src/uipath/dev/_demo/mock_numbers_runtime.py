@@ -1,0 +1,144 @@
+import asyncio
+import logging
+from typing import Any, AsyncGenerator, Optional
+
+from opentelemetry import trace
+from uipath.runtime import (
+    UiPathExecuteOptions,
+    UiPathRuntimeEvent,
+    UiPathRuntimeResult,
+    UiPathRuntimeStatus,
+    UiPathStreamOptions,
+)
+from uipath.runtime.schema import UiPathRuntimeSchema
+
+ENTRYPOINT_ANALYZE_NUMBERS = "analytics/numbers.py:analyze"
+
+logger = logging.getLogger(__name__)
+
+
+class MockNumberAnalyticsRuntime:
+    """Mock runtime that analyzes a list of numbers."""
+
+    def __init__(self, entrypoint: str = ENTRYPOINT_ANALYZE_NUMBERS) -> None:
+        self.entrypoint = entrypoint
+        self.tracer = trace.get_tracer("uipath.dev.mock.number-analytics")
+
+    async def get_schema(self) -> UiPathRuntimeSchema:
+        return UiPathRuntimeSchema(
+            filePath=self.entrypoint,
+            uniqueId="mock-number-analytics-runtime",
+            type="script",
+            input={
+                "type": "object",
+                "properties": {
+                    "numbers": {
+                        "type": "array",
+                        "items": {"type": "number"},
+                        "description": "List of numeric values to analyze",
+                    },
+                    "operation": {
+                        "type": "string",
+                        "enum": ["sum", "avg", "max"],
+                        "default": "sum",
+                    },
+                },
+                "required": ["numbers"],
+            },
+            output={
+                "type": "object",
+                "properties": {
+                    "operation": {"type": "string"},
+                    "result": {"type": "number"},
+                    "count": {"type": "integer"},
+                },
+                "required": ["operation", "result"],
+            },
+        )
+
+    async def execute(
+        self,
+        input: Optional[dict[str, Any]] = None,
+        options: Optional[UiPathExecuteOptions] = None,
+    ) -> UiPathRuntimeResult:
+        payload = input or {}
+        numbers = payload.get("numbers") or []
+        operation = str(payload.get("operation", "sum")).lower()
+
+        numbers = [float(x) for x in numbers]
+
+        with self.tracer.start_as_current_span(
+            "number_analytics.execute",
+            attributes={
+                "uipath.runtime.name": "NumberAnalyticsRuntime",
+                "uipath.runtime.entrypoint": self.entrypoint,
+                "uipath.input.count": len(numbers),
+                "uipath.input.operation": operation,
+            },
+        ):
+            logger.info("NumberAnalyticsRuntime: starting execution")
+
+            # Validation span
+            with self.tracer.start_as_current_span(
+                "number_analytics.validate_input",
+                attributes={"uipath.step.kind": "validation"},
+            ):
+                await asyncio.sleep(0.05)
+                if not numbers:
+                    logger.warning("NumberAnalyticsRuntime: empty 'numbers' list")
+                    result_payload = {
+                        "operation": operation,
+                        "result": 0,
+                        "count": 0,
+                    }
+                    return UiPathRuntimeResult(
+                        output=result_payload,
+                        status=UiPathRuntimeStatus.SUCCESSFUL,
+                    )
+
+            # Compute span
+            with self.tracer.start_as_current_span(
+                "number_analytics.compute",
+                attributes={"uipath.step.kind": "compute"},
+            ):
+                await asyncio.sleep(0.1)
+                if operation == "avg":
+                    result = sum(numbers) / len(numbers)
+                elif operation == "max":
+                    result = max(numbers)
+                else:
+                    operation = "sum"
+                    result = sum(numbers)
+
+            # Postprocess span
+            with self.tracer.start_as_current_span(
+                "number_analytics.postprocess",
+                attributes={"uipath.step.kind": "postprocess"},
+            ):
+                await asyncio.sleep(0.05)
+                result_payload = {
+                    "operation": operation,
+                    "result": result,
+                    "count": len(numbers),
+                }
+
+            logger.info(
+                "NumberAnalyticsRuntime: execution completed",
+                extra={"operation": operation, "result": result},
+            )
+
+        return UiPathRuntimeResult(
+            output=result_payload,
+            status=UiPathRuntimeStatus.SUCCESSFUL,
+        )
+
+    async def stream(
+        self,
+        input: Optional[dict[str, Any]] = None,
+        options: Optional[UiPathStreamOptions] = None,
+    ) -> AsyncGenerator[UiPathRuntimeEvent, None]:
+        logger.info("NumberAnalyticsRuntime: stream() invoked")
+        yield await self.execute(input=input, options=options)
+
+    async def dispose(self) -> None:
+        logger.info("NumberAnalyticsRuntime: dispose() invoked")
