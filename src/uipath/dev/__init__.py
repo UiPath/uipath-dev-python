@@ -2,34 +2,24 @@
 
 import asyncio
 import json
-import traceback
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import pyperclip  # type: ignore[import-untyped]
-from pydantic import BaseModel
-from rich.traceback import Traceback
 from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal
 from textual.widgets import Button, Footer, Input, ListView, RichLog
 from uipath.core.tracing import UiPathTraceManager
-from uipath.runtime import (
-    UiPathExecuteOptions,
-    UiPathExecutionRuntime,
-    UiPathRuntimeFactoryProtocol,
-    UiPathRuntimeStatus,
-)
-from uipath.runtime.errors import UiPathErrorContract, UiPathRuntimeError
+from uipath.runtime import UiPathRuntimeFactoryProtocol
 
 from uipath.dev.infrastructure import (
-    RunContextExporter,
-    RunContextLogHandler,
     patch_textual_stderr,
 )
 from uipath.dev.models import ExecutionRun, LogMessage, TraceMessage
+from uipath.dev.services import RunService
 from uipath.dev.ui.panels import NewRunPanel, RunDetailsPanel, RunHistoryPanel
 
 
@@ -37,7 +27,10 @@ class UiPathDeveloperConsole(App[Any]):
     """UiPath developer console interface."""
 
     TITLE = "UiPath Developer Console"
-    SUB_TITLE = "Interactive terminal application for building, testing, and debugging UiPath Python runtimes, agents, and automation scripts."
+    SUB_TITLE = (
+        "Interactive terminal application for building, testing, and debugging "
+        "UiPath Python runtimes, agents, and automation scripts."
+    )
     CSS_PATH = Path(__file__).parent / "ui" / "styles" / "terminal.tcss"
 
     BINDINGS = [
@@ -56,22 +49,26 @@ class UiPathDeveloperConsole(App[Any]):
         **kwargs,
     ):
         """Initialize the UiPath Dev Terminal App."""
+        # Capture subprocess stderr lines and route to our log handler
         self._stderr_write_fd: int = patch_textual_stderr(self._add_subprocess_log)
 
         super().__init__(**kwargs)
 
-        self.initial_entrypoint: str = "main.py"
-        self.initial_input: str = '{\n  "message": "Hello World"\n}'
-        self.runs: dict[str, ExecutionRun] = {}
         self.runtime_factory = runtime_factory
         self.trace_manager = trace_manager
-        self.trace_manager.add_span_exporter(
-            RunContextExporter(
-                on_trace=self._handle_trace_message,
-                on_log=self._handle_log_message,
-            ),
-            batch=False,
+
+        # Core service: owns run state, logs, traces
+        self.run_service = RunService(
+            runtime_factory=self.runtime_factory,
+            trace_manager=self.trace_manager,
+            on_run_updated=self._on_run_updated,
+            on_log=self._on_log_for_ui,
+            on_trace=self._on_trace_for_ui,
         )
+
+        # Just defaults for convenience
+        self.initial_entrypoint: str = "main.py"
+        self.initial_input: str = '{\n  "message": "Hello World"\n}'
 
     def compose(self) -> ComposeResult:
         """Compose the UI layout."""
@@ -127,8 +124,10 @@ class UiPathDeveloperConsole(App[Any]):
                     "Wait for agent response...", timeout=1.5, severity="warning"
                 )
                 return
+
             if details_panel.current_run.status == "suspended":
                 details_panel.current_run.resume_data = {"message": user_text}
+
             asyncio.create_task(self._execute_runtime(details_panel.current_run))
             event.input.clear()
 
@@ -145,24 +144,24 @@ class UiPathDeveloperConsole(App[Any]):
         await self.action_new_run()
 
     async def action_execute_run(self) -> None:
-        """Execute a new run with UiPath runtime."""
+        """Execute a new run based on NewRunPanel inputs."""
         new_run_panel = self.query_one("#new-run-panel", NewRunPanel)
         entrypoint, input_data, conversational = new_run_panel.get_input_values()
 
         if not entrypoint:
             return
 
-        input: dict[str, Any] = {}
         try:
-            input = json.loads(input_data)
+            input_payload: dict[str, Any] = json.loads(input_data)
         except json.JSONDecodeError:
             return
 
-        run = ExecutionRun(entrypoint, input, conversational)
+        run = ExecutionRun(entrypoint, input_payload, conversational)
 
-        self.runs[run.id] = run
+        history_panel = self.query_one("#history-panel", RunHistoryPanel)
+        history_panel.add_run(run)
 
-        self._add_run_in_history(run)
+        self.run_service.register_run(run)
 
         self._show_run_details(run)
 
@@ -187,139 +186,47 @@ class UiPathDeveloperConsole(App[Any]):
         else:
             self.app.notify("Nothing to copy here.", timeout=1.5, severity="warning")
 
-    async def _execute_runtime(self, run: ExecutionRun):
-        """Execute the script using UiPath runtime."""
-        try:
-            execution_input: Optional[dict[str, Any]] = {}
-            execution_options: UiPathExecuteOptions = UiPathExecuteOptions()
-            if run.status == "suspended":
-                execution_input = run.resume_data
-                execution_options.resume = True
-                self._add_info_log(run, f"Resuming execution: {run.entrypoint}")
-            else:
-                execution_input = run.input_data
-                self._add_info_log(run, f"Starting execution: {run.entrypoint}")
+    async def _execute_runtime(self, run: ExecutionRun) -> None:
+        """Wrapper that delegates execution to RunService."""
+        await self.run_service.execute(run)
 
-            run.status = "running"
-            run.start_time = datetime.now()
-            log_handler = RunContextLogHandler(
-                run_id=run.id,
-                callback=self._handle_log_message,
-            )
-            runtime = await self.runtime_factory.new_runtime(entrypoint=run.entrypoint)
-            execution_runtime = UiPathExecutionRuntime(
-                delegate=runtime,
-                trace_manager=self.trace_manager,
-                log_handler=log_handler,
-                execution_id=run.id,
-            )
-            result = await execution_runtime.execute(execution_input, execution_options)
+    def _on_run_updated(self, run: ExecutionRun) -> None:
+        """Called whenever a run changes (status, times, logs, traces)."""
+        # Update the run in history
+        history_panel = self.query_one("#history-panel", RunHistoryPanel)
+        history_panel.update_run(run)
 
-            if result is not None:
-                if (
-                    result.status == UiPathRuntimeStatus.SUSPENDED.value
-                    and result.resume
-                ):
-                    run.status = "suspended"
-                else:
-                    if result.output is None:
-                        run.output_data = {}
-                    elif isinstance(result.output, BaseModel):
-                        run.output_data = result.output.model_dump()
-                    else:
-                        run.output_data = result.output
-                    run.status = "completed"
-                if run.output_data:
-                    self._add_info_log(run, f"Execution result: {run.output_data}")
+        # If this run is currently shown, refresh details
+        details_panel = self.query_one("#details-panel", RunDetailsPanel)
+        if details_panel.current_run and details_panel.current_run.id == run.id:
+            details_panel.update_run_details(run)
 
-            self._add_info_log(run, "✅ Execution completed successfully")
-            run.end_time = datetime.now()
+    def _on_log_for_ui(self, log_msg: LogMessage) -> None:
+        """Append a log message to the logs UI."""
+        details_panel = self.query_one("#details-panel", RunDetailsPanel)
+        details_panel.add_log(log_msg)
 
-        except UiPathRuntimeError as e:
-            self._add_error_log(run)
-            run.status = "failed"
-            run.end_time = datetime.now()
-            run.error = e.error_info
+    def _on_trace_for_ui(self, trace_msg: TraceMessage) -> None:
+        """Append/refresh traces in the UI."""
+        details_panel = self.query_one("#details-panel", RunDetailsPanel)
+        details_panel.add_trace(trace_msg)
 
-        except Exception as e:
-            self._add_error_log(run)
-            run.status = "failed"
-            run.end_time = datetime.now()
-            run.error = UiPathErrorContract(
-                code="Unknown", title=str(e), detail=traceback.format_exc()
-            )
-
-        self._update_run_in_history(run)
-        self._update_run_details(run)
-
-    def _show_run_details(self, run: ExecutionRun):
+    def _show_run_details(self, run: ExecutionRun) -> None:
         """Show details panel for a specific run."""
-        # Hide new run panel, show details panel
         new_panel = self.query_one("#new-run-panel")
         details_panel = self.query_one("#details-panel", RunDetailsPanel)
 
         new_panel.add_class("hidden")
         details_panel.remove_class("hidden")
 
-        # Populate the details panel with run data
         details_panel.update_run(run)
 
-    def _focus_chat_input(self):
+    def _focus_chat_input(self) -> None:
         """Focus the chat input box."""
         details_panel = self.query_one("#details-panel", RunDetailsPanel)
         details_panel.switch_tab("chat-tab")
         chat_input = details_panel.query_one("#chat-input", Input)
         chat_input.focus()
-
-    def _add_run_in_history(self, run: ExecutionRun):
-        """Add run to history panel."""
-        history_panel = self.query_one("#history-panel", RunHistoryPanel)
-        history_panel.add_run(run)
-
-    def _update_run_in_history(self, run: ExecutionRun):
-        """Update run display in history panel."""
-        history_panel = self.query_one("#history-panel", RunHistoryPanel)
-        history_panel.update_run(run)
-
-    def _update_run_details(self, run: ExecutionRun):
-        """Update the displayed run information."""
-        details_panel = self.query_one("#details-panel", RunDetailsPanel)
-        details_panel.update_run_details(run)
-
-    def _handle_trace_message(self, trace_msg: TraceMessage):
-        """Handle trace message from exporter."""
-        run = self.runs[trace_msg.run_id]
-        for i, existing_trace in enumerate(run.traces):
-            if existing_trace.span_id == trace_msg.span_id:
-                run.traces[i] = trace_msg
-                break
-        else:
-            run.traces.append(trace_msg)
-
-        details_panel = self.query_one("#details-panel", RunDetailsPanel)
-        details_panel.add_trace(trace_msg)
-
-    def _handle_log_message(self, log_msg: LogMessage):
-        """Handle log message from exporter."""
-        self.runs[log_msg.run_id].logs.append(log_msg)
-        details_panel = self.query_one("#details-panel", RunDetailsPanel)
-        details_panel.add_log(log_msg)
-
-    def _add_info_log(self, run: ExecutionRun, message: str):
-        """Add info log to run."""
-        timestamp = datetime.now()
-        log_msg = LogMessage(run.id, "INFO", message, timestamp)
-        self._handle_log_message(log_msg)
-
-    def _add_error_log(self, run: ExecutionRun):
-        """Add error log to run."""
-        timestamp = datetime.now()
-        tb = Traceback(
-            show_locals=False,
-            max_frames=4,
-        )
-        log_msg = LogMessage(run.id, "ERROR", tb, timestamp)
-        self._handle_log_message(log_msg)
 
     def _add_subprocess_log(self, level: str, message: str) -> None:
         """Handle a stderr line coming from subprocesses."""
@@ -329,6 +236,7 @@ class UiPathDeveloperConsole(App[Any]):
             run = getattr(details_panel, "current_run", None)
             if run:
                 log_msg = LogMessage(run.id, level, message, datetime.now())
-                self._handle_log_message(log_msg)
+                # Route through RunService so state + UI stay in sync
+                self.run_service.handle_log(log_msg)
 
         self.call_from_thread(add_log)
