@@ -1,41 +1,82 @@
 """Panel for creating new runs with entrypoint selection and JSON input."""
 
 import json
-import os
-from typing import Any, Tuple, cast
+from typing import Any, Dict, Tuple, cast
 
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.reactive import reactive
 from textual.widgets import Button, Select, TabbedContent, TabPane, TextArea
+from uipath.runtime import UiPathRuntimeFactoryProtocol
 
 from uipath.dev.ui.widgets.json_input import JsonInput
 
 
-def mock_json_from_schema(schema: dict[str, Any]) -> dict[str, Any]:
-    """Generate a mock JSON object based on a given JSON schema."""
-    props: dict[str, Any] = schema.get("properties", {})
-    required = schema.get("required", [])
-    mock = {}
-    for key, info in props.items():
-        if "default" in info:
-            mock[key] = info["default"]
-            continue
-        t = info.get("type")
+def mock_json_from_schema(schema: dict[str, Any]) -> Any:
+    """Generate a mock JSON value based on a given JSON schema.
+
+    - For object schemas: returns a dict of mocked properties.
+    - For arrays: returns a list with one mocked item.
+    - For primitives: returns a sensible example / default / enum[0].
+    """
+
+    def _mock_value(sub_schema: dict[str, Any], required: bool = True) -> Any:
+        # 1) Default wins
+        if "default" in sub_schema:
+            return sub_schema["default"]
+
+        t = sub_schema.get("type")
+
+        # 2) Enums: pick the first option
+        enum = sub_schema.get("enum")
+        if enum and isinstance(enum, list):
+            return enum[0]
+
+        # 3) Objects: recurse into mock_json_from_schema
+        if t == "object":
+            return mock_json_from_schema(sub_schema)
+
+        # 4) Arrays: mock a single item based on "items" schema
+        if t == "array":
+            item_schema = sub_schema.get("items", {})
+            # If items is not a dict, just return empty list
+            if not isinstance(item_schema, dict):
+                return []
+            return [_mock_value(item_schema, required=True)]
+
+        # 5) Primitives
         if t == "string":
-            mock[key] = f"example_{key}" if key in required else ""
-        elif t == "integer":
-            mock[key] = 0 if key in required else None
-        elif t == "boolean":
-            mock[key] = True if key in required else False
-        elif t == "array":
-            item_schema = info.get("items", {"type": "string"})
-            mock[key] = [mock_json_from_schema(item_schema)]
-        elif t == "object":
-            mock[key] = mock_json_from_schema(info)
-        else:
-            mock[key] = None
-    return mock
+            # If there's a format, we could specialize later (email, date, etc.)
+            return "example" if required else ""
+
+        if t == "integer":
+            return 0
+
+        if t == "number":
+            return 0.0
+
+        if t == "boolean":
+            return True if required else False
+
+        # 6) Fallback
+        return None
+
+    # Top-level: if it's an object with properties, build a dict
+    if schema.get("type") == "object" and "properties" in schema:
+        props: dict[str, Any] = schema.get("properties", {})
+        required_keys = set(schema.get("required", []))
+        result: dict[str, Any] = {}
+
+        for key, prop_schema in props.items():
+            if not isinstance(prop_schema, dict):
+                continue
+            is_required = key in required_keys
+            result[key] = _mock_value(prop_schema, required=is_required)
+
+        return result
+
+    # If it's not an object schema, just mock the value directly
+    return _mock_value(schema, required=True)
 
 
 class NewRunPanel(Container):
@@ -43,44 +84,32 @@ class NewRunPanel(Container):
 
     selected_entrypoint = reactive("")
 
-    def __init__(self, **kwargs):
-        """Initialize NewRunPanel with entrypoints from uipath.json."""
+    def __init__(
+        self,
+        runtime_factory: UiPathRuntimeFactoryProtocol,
+        **kwargs: Any,
+    ) -> None:
+        """Initialize NewRunPanel using UiPathRuntimeFactoryProtocol."""
         super().__init__(**kwargs)
-        json_path = os.path.join(os.getcwd(), "uipath.json")
-        data: dict[str, Any] = {}
-        if os.path.exists(json_path):
-            with open(json_path, "r") as f:
-                data = json.load(f)
 
-        self.entrypoints = data.get("entryPoints", [{"filePath": "default"}])
-        self.entrypoint_paths = [ep["filePath"] for ep in self.entrypoints]
-        self.conversational = False
-        self.selected_entrypoint = (
-            self.entrypoint_paths[0] if self.entrypoint_paths else ""
-        )
-        ep: dict[str, Any] = next(
-            (
-                ep
-                for ep in self.entrypoints
-                if ep["filePath"] == self.selected_entrypoint
-            ),
-            {},
-        )
-        self.initial_input = json.dumps(
-            mock_json_from_schema(ep.get("input", {})), indent=2
-        )
+        self._runtime_factory = runtime_factory
+
+        self.entrypoints: list[str] = []
+
+        self.entrypoint_schemas: Dict[str, dict[str, Any]] = {}
+
+        self.conversational: bool = False
+        self.initial_input: str = "{}"
 
     def compose(self) -> ComposeResult:
         """Compose the UI layout."""
         with TabbedContent():
             with TabPane("New run", id="new-tab"):
                 with Vertical():
-                    options = [(path, path) for path in self.entrypoint_paths]
                     yield Select(
-                        options,
+                        options=[],
                         id="entrypoint-select",
-                        value=self.selected_entrypoint,
-                        allow_blank=False,
+                        allow_blank=True,
                     )
 
                     yield JsonInput(
@@ -98,45 +127,98 @@ class NewRunPanel(Container):
                             classes="action-btn",
                         )
 
+    async def on_mount(self) -> None:
+        """Discover entrypoints once, and set the first as default."""
+        try:
+            discovered = self._runtime_factory.discover_entrypoints()
+        except Exception:
+            discovered = []
+
+        self.entrypoints = discovered or []
+
+        select = self.query_one("#entrypoint-select", Select)
+
+        json_input = self.query_one("#json-input", TextArea)
+        run_button = self.query_one("#execute-btn", Button)
+
+        if not self.entrypoints:
+            self.selected_entrypoint = ""
+            select.set_options([("No entrypoints found", "no-entrypoints")])
+            select.value = "no-entrypoints"
+            select.disabled = True
+            run_button.disabled = True
+            json_input.text = "{}"
+            return
+
+        options = [(ep, ep) for ep in self.entrypoints]
+        select.set_options(options)
+
+        # Use the first entrypoint as default
+        self.selected_entrypoint = self.entrypoints[0]
+        select.value = self.selected_entrypoint
+
+        # Lazily fetch schema and populate input
+        await self._load_schema_and_update_input(self.selected_entrypoint)
+
+    async def _load_schema_and_update_input(self, entrypoint: str) -> None:
+        """Ensure schema for entrypoint is loaded, then update JSON input."""
+        json_input = self.query_one("#json-input", TextArea)
+
+        if not entrypoint or entrypoint == "no-entrypoints":
+            json_input.text = "{}"
+            return
+
+        schema = self.entrypoint_schemas.get(entrypoint)
+
+        if schema is None:
+            try:
+                runtime = await self._runtime_factory.new_runtime(entrypoint)
+                schema_obj = await runtime.get_schema()
+
+                input_schema = schema_obj.input or {}
+                self.entrypoint_schemas[entrypoint] = input_schema
+                schema = input_schema
+
+                await runtime.dispose()
+            except Exception:
+                schema = {}
+                self.entrypoint_schemas[entrypoint] = schema
+
+        json_input.text = json.dumps(
+            mock_json_from_schema(schema),
+            indent=2,
+        )
+
     async def on_select_changed(self, event: Select.Changed) -> None:
         """Update JSON input when user selects an entrypoint."""
-        self.selected_entrypoint = cast(str, event.value)
+        self.selected_entrypoint = cast(str, event.value) if event.value else ""
 
-        ep: dict[str, Any] = next(
-            (
-                ep
-                for ep in self.entrypoints
-                if ep["filePath"] == self.selected_entrypoint
-            ),
-            {},
-        )
-        json_input = self.query_one("#json-input", TextArea)
-        json_input.text = json.dumps(
-            mock_json_from_schema(ep.get("input", {})), indent=2
-        )
+        await self._load_schema_and_update_input(self.selected_entrypoint)
 
     def get_input_values(self) -> Tuple[str, str, bool]:
         """Get the selected entrypoint and JSON input values."""
         json_input = self.query_one("#json-input", TextArea)
         return self.selected_entrypoint, json_input.text.strip(), self.conversational
 
-    def reset_form(self):
+    def reset_form(self) -> None:
         """Reset selection and JSON input to defaults."""
-        self.selected_entrypoint = (
-            self.entrypoint_paths[0] if self.entrypoint_paths else ""
-        )
         select = self.query_one("#entrypoint-select", Select)
+        json_input = self.query_one("#json-input", TextArea)
+
+        if not self.entrypoints:
+            self.selected_entrypoint = ""
+            select.clear()
+            json_input.text = "{}"
+            return
+
+        self.selected_entrypoint = self.entrypoints[0]
         select.value = self.selected_entrypoint
 
-        ep: dict[str, Any] = next(
-            (
-                ep
-                for ep in self.entrypoints
-                if ep["filePath"] == self.selected_entrypoint
-            ),
-            {},
-        )
-        json_input = self.query_one("#json-input", TextArea)
-        json_input.text = json.dumps(
-            mock_json_from_schema(ep.get("input", {})), indent=2
-        )
+        schema = self.entrypoint_schemas.get(self.selected_entrypoint)
+        if schema is None:
+            json_input.text = "{}"
+        else:
+            json_input.text = json.dumps(
+                mock_json_from_schema(schema),
+                indent=2,
+            )

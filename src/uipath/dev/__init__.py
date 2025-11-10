@@ -83,6 +83,7 @@ class UiPathDeveloperConsole(App[Any]):
                 yield NewRunPanel(
                     id="new-run-panel",
                     classes="new-run-panel",
+                    runtime_factory=self.runtime_factory,
                 )
 
                 # Run details panel (initially hidden)
