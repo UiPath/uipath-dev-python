@@ -1,3 +1,5 @@
+"""Custom logging handlers for CLI UI integration."""
+
 from __future__ import annotations
 
 import logging
@@ -20,6 +22,7 @@ class RunContextLogHandler(UiPathRuntimeExecutionLogHandler):
         run_id: str,
         callback: Callable[[LogMessage], None],
     ):
+        """Initialize RunContextLogHandler with run and callback."""
         super().__init__(run_id)
         self.run_id = run_id
         self.callback = callback

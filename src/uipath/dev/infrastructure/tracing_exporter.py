@@ -1,3 +1,5 @@
+"""Custom OpenTelemetry trace exporter for CLI UI integration."""
+
 import logging
 from datetime import datetime
 from typing import Callable, Sequence
@@ -18,6 +20,7 @@ class RunContextExporter(SpanExporter):
         on_trace: Callable[[TraceMessage], None],
         on_log: Callable[[LogMessage], None],
     ):
+        """Initialize RunContextExporter with callbacks for trace and log messages."""
         self.on_trace = on_trace
         self.on_log = on_log
         self.logger = logging.getLogger(__name__)
