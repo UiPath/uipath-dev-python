@@ -19,7 +19,7 @@ from uipath.core.tracing import UiPathTraceManager
 from uipath.runtime import (
     UiPathExecuteOptions,
     UiPathExecutionRuntime,
-    UiPathRuntimeFactory,
+    UiPathRuntimeFactoryProtocol,
     UiPathRuntimeStatus,
 )
 from uipath.runtime.errors import UiPathErrorContract, UiPathRuntimeError
@@ -52,7 +52,7 @@ class UiPathDeveloperConsole(App[Any]):
 
     def __init__(
         self,
-        runtime_factory: UiPathRuntimeFactory[Any],
+        runtime_factory: UiPathRuntimeFactoryProtocol,
         trace_manager: UiPathTraceManager,
         **kwargs,
     ):
@@ -207,7 +207,7 @@ class UiPathDeveloperConsole(App[Any]):
                 run_id=run.id,
                 callback=self._handle_log_message,
             )
-            runtime = self.runtime_factory.new_runtime(entrypoint=run.entrypoint)
+            runtime = await self.runtime_factory.new_runtime(entrypoint=run.entrypoint)
             execution_runtime = UiPathExecutionRuntime(
                 delegate=runtime,
                 trace_manager=self.trace_manager,

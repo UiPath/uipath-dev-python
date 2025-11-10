@@ -2,22 +2,23 @@
 
 import asyncio
 import logging
-from typing import Any, Optional
+from typing import Any, AsyncGenerator, Optional
 
 from opentelemetry import trace
 from uipath.runtime import (
-    UiPathBaseRuntime,
     UiPathExecuteOptions,
-    UiPathRuntimeFactory,
+    UiPathRuntimeEvent,
+    UiPathRuntimeProtocol,
     UiPathRuntimeResult,
     UiPathRuntimeStatus,
+    UiPathStreamOptions,
 )
 from uipath.runtime.schema import UiPathRuntimeSchema
 
 logger = logging.getLogger(__name__)
 
 
-class MockRuntime(UiPathBaseRuntime):
+class MockRuntime:
     """A mock runtime that simulates a multi-step workflow with rich telemetry."""
 
     async def get_schema(self) -> UiPathRuntimeSchema:
@@ -224,18 +225,30 @@ class MockRuntime(UiPathBaseRuntime):
             status=UiPathRuntimeStatus.SUCCESSFUL,
         )
 
-    async def cleanup(self) -> None:
-        logger.info("MockRuntime: cleanup() invoked")
-        print("[MockRuntime] cleanup() invoked")
+    async def stream(
+        self,
+        input: Optional[dict[str, Any]] = None,
+        options: Optional[UiPathStreamOptions] = None,
+    ) -> AsyncGenerator[UiPathRuntimeEvent, None]:
+        logger.info("MockRuntime: stream() invoked")
+        print("[MockRuntime] stream() invoked")
+        yield await self.execute(input=input, options=options)
+
+    async def dispose(self) -> None:
+        logger.info("MockRuntime: dispose() invoked")
+        print("[MockRuntime] dispose() invoked")
 
 
-class MockRuntimeFactory(UiPathRuntimeFactory[MockRuntime]):
+class MockRuntimeFactory:
     """Runtime factory compatible with UiPathDevTerminal expectations."""
 
     # This is the method the Textual app calls here:
-    #   runtime = self.runtime_factory.new_runtime(entrypoint=run.entrypoint)
-    def new_runtime(self, entrypoint: str) -> MockRuntime:
+    #   runtime = await self.runtime_factory.new_runtime(entrypoint=run.entrypoint)
+    async def new_runtime(self, entrypoint: str) -> UiPathRuntimeProtocol:
         return MockRuntime()
 
-    def discover_runtimes(self) -> list[MockRuntime]:
+    def discover_runtimes(self) -> list[UiPathRuntimeProtocol]:
+        return []
+
+    def discover_entrypoints(self) -> list[str]:
         return []
