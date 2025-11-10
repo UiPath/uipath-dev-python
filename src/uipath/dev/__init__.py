@@ -1,4 +1,4 @@
-"""UiPath Dev Terminal Application."""
+"""UiPath Developer Console Application."""
 
 import asyncio
 import json
@@ -24,14 +24,13 @@ from uipath.runtime import (
 )
 from uipath.runtime.errors import UiPathErrorContract, UiPathRuntimeError
 
-from uipath.dev.components.details import RunDetailsPanel
-from uipath.dev.components.history import RunHistoryPanel
-from uipath.dev.components.new import NewRunPanel
-from uipath.dev.models.execution import ExecutionRun
-from uipath.dev.models.messages import LogMessage, TraceMessage
-
-from ._utils._exporter import RunContextExporter
-from ._utils._logger import RunContextLogHandler, patch_textual_stderr
+from uipath.dev.infrastructure import (
+    RunContextExporter,
+    RunContextLogHandler,
+    patch_textual_stderr,
+)
+from uipath.dev.models import ExecutionRun, LogMessage, TraceMessage
+from uipath.dev.ui.panels import NewRunPanel, RunDetailsPanel, RunHistoryPanel
 
 
 class UiPathDeveloperConsole(App[Any]):
@@ -39,7 +38,7 @@ class UiPathDeveloperConsole(App[Any]):
 
     TITLE = "UiPath Developer Console"
     SUB_TITLE = "Interactive terminal application for building, testing, and debugging UiPath Python runtimes, agents, and automation scripts."
-    CSS_PATH = Path(__file__).parent / "_styles" / "terminal.tcss"
+    CSS_PATH = Path(__file__).parent / "ui" / "styles" / "terminal.tcss"
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),

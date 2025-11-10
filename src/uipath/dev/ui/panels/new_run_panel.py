@@ -9,7 +9,7 @@ from textual.containers import Container, Horizontal, Vertical
 from textual.reactive import reactive
 from textual.widgets import Button, Select, TabbedContent, TabPane, TextArea
 
-from uipath.dev.components.json_input import JsonInput
+from uipath.dev.ui.widgets.json_input import JsonInput
 
 
 def mock_json_from_schema(schema: dict[str, Any]) -> dict[str, Any]:
