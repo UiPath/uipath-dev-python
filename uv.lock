@@ -1029,7 +1029,7 @@ dev = [
 requires-dist = [
     { name = "pyperclip", specifier = ">=1.11.0" },
     { name = "textual", specifier = ">=6.5.0" },
-    { name = "uipath-runtime", specifier = ">=0.0.5,<0.1.0" },
+    { name = "uipath-runtime", specifier = ">=0.0.7,<0.1.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -1049,7 +1049,7 @@ dev = [
 
 [[package]]
 name = "uipath-runtime"
-version = "0.0.5"
+version = "0.0.7"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "opentelemetry-instrumentation" },
@@ -1057,9 +1057,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "uipath-core" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/45/81/c1ef659dec890746838700d86ae1359d44eac6a4a484a5a5814d668e210d/uipath_runtime-0.0.5.tar.gz", hash = "sha256:872907939e3166c9c171109a17b924ab2c568dae9cfee7da142c541fd1fb4482", size = 80964, upload-time = "2025-11-09T16:15:08.587Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/73/69/a06b0dc0072ad8c8d40084899fd7c4ee25b1ee4ae5c6529a74d759625355/uipath_runtime-0.0.7.tar.gz", hash = "sha256:5569466d125be30b90982bf2396635b50450d8bcaee88bf5de3556eb4810b650", size = 81197, upload-time = "2025-11-10T09:32:26.619Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/60/eb/ef3ea7be07933ce38366c4ccad69fbcda628aa6ab32e1c0e5757ef913265/uipath_runtime-0.0.5-py3-none-any.whl", hash = "sha256:ff359f4d5b8821d9589da519c65d6026d8672a18ecb21d2631ec132495f537b2", size = 26771, upload-time = "2025-11-09T16:15:06.995Z" },
+    { url = "https://files.pythonhosted.org/packages/db/60/6af437fc8d7914f292300487252dffecdd6b79f69dda8b7f22e4c0526dd6/uipath_runtime-0.0.7-py3-none-any.whl", hash = "sha256:c19ae2e7283961d7a69319b70de7196132d0439722793bd8ccbe66684fe48736", size = 26808, upload-time = "2025-11-10T09:32:25.211Z" },
 ]
 
 [[package]]
