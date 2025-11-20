@@ -5,7 +5,13 @@ from typing import Optional
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.reactive import reactive
-from textual.widgets import RichLog, TabbedContent, TabPane, Tree
+from textual.widgets import (
+    Button,
+    RichLog,
+    TabbedContent,
+    TabPane,
+    Tree,
+)
 from textual.widgets.tree import TreeNode
 
 from uipath.dev.models.execution import ExecutionRun
@@ -22,7 +28,7 @@ class SpanDetailsDisplay(Container):
             max_lines=1000,
             highlight=True,
             markup=True,
-            classes="detail-log",
+            classes="span-detail-log",
         )
 
     def show_span_details(self, trace_msg: TraceMessage):
@@ -119,6 +125,24 @@ class RunDetailsPanel(Container):
                     markup=True,
                     classes="detail-log",
                 )
+        # Global debug controls (hidden by default, shown when debug mode active)
+        with Container(id="debug-controls", classes="debug-controls hidden"):
+            with Horizontal(classes="debug-actions-row"):
+                yield Button(
+                    "▶ Step",
+                    id="debug-step-btn",
+                    variant="primary",
+                    classes="action-btn",
+                )
+                yield Button(
+                    "⏭ Continue",
+                    id="debug-continue-btn",
+                    variant="default",
+                    classes="action-btn",
+                )
+                yield Button(
+                    "⏹ Stop", id="debug-stop-btn", variant="error", classes="action-btn"
+                )
 
     def watch_current_run(
         self, old_value: Optional[ExecutionRun], new_value: Optional[ExecutionRun]
@@ -135,6 +159,8 @@ class RunDetailsPanel(Container):
 
     def show_run(self, run: ExecutionRun):
         """Display traces and logs for a specific run."""
+        self.update_debug_controls_visibility(run.debug)
+
         # Populate run details tab
         self._show_run_details(run)
 
@@ -151,6 +177,14 @@ class RunDetailsPanel(Container):
         """Switch to a specific tab by id (e.g. 'run-tab', 'traces-tab')."""
         tabbed = self.query_one(TabbedContent)
         tabbed.active = tab_id
+
+    def update_debug_controls_visibility(self, show: bool):
+        """Show or hide debug controls based on whether run is in debug mode."""
+        debug_controls = self.query_one("#debug-controls", Container)
+        if show:
+            debug_controls.remove_class("hidden")
+        else:
+            debug_controls.add_class("hidden")
 
     def _flatten_values(self, value: object, prefix: str = "") -> list[str]:
         """Flatten nested dict/list structures into dot-notation paths."""
