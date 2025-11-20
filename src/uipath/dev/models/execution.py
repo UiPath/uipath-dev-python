@@ -19,12 +19,14 @@ class ExecutionRun:
         entrypoint: str,
         input_data: Union[dict[str, Any]],
         conversational: bool = False,
+        debug: bool = False,
     ):
         """Initialize an ExecutionRun instance."""
         self.id = str(uuid4())[:8]
         self.entrypoint = entrypoint
         self.input_data = input_data
         self.conversational = conversational
+        self.debug = debug
         self.resume_data: Optional[dict[str, Any]] = None
         self.output_data: Optional[dict[str, Any]] = None
         self.start_time = datetime.now()

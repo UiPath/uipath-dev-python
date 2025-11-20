@@ -126,6 +126,12 @@ class NewRunPanel(Container):
                             variant="primary",
                             classes="action-btn",
                         )
+                        yield Button(
+                            "⏯ Debug",
+                            id="debug-btn",
+                            variant="primary",
+                            classes="action-btn",
+                        )
 
     async def on_mount(self) -> None:
         """Discover entrypoints once, and set the first as default."""

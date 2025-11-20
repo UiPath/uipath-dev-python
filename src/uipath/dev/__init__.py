@@ -97,8 +97,16 @@ class UiPathDeveloperConsole(App[Any]):
             await self.action_new_run()
         elif event.button.id == "execute-btn":
             await self.action_execute_run()
+        elif event.button.id == "debug-btn":
+            await self.action_debug_run()
         elif event.button.id == "cancel-btn":
             await self.action_cancel()
+        elif event.button.id == "debug-step-btn":
+            await self.action_debug_step()
+        elif event.button.id == "debug-continue-btn":
+            await self.action_debug_continue()
+        elif event.button.id == "debug-stop-btn":
+            await self.action_debug_stop()
 
     async def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Handle run selection from history."""
@@ -170,6 +178,72 @@ class UiPathDeveloperConsole(App[Any]):
             asyncio.create_task(self._execute_runtime(run))
         else:
             self._focus_chat_input()
+
+    async def action_debug_run(self) -> None:
+        """Execute a new run in debug mode (step-by-step)."""
+        new_run_panel = self.query_one("#new-run-panel", NewRunPanel)
+        entrypoint, input_data, conversational = new_run_panel.get_input_values()
+
+        if not entrypoint:
+            return
+
+        try:
+            input_payload: dict[str, Any] = json.loads(input_data)
+        except json.JSONDecodeError:
+            return
+
+        # Create run with debug=True
+        run = ExecutionRun(entrypoint, input_payload, conversational, debug=True)
+
+        history_panel = self.query_one("#history-panel", RunHistoryPanel)
+        history_panel.add_run(run)
+
+        self.run_service.register_run(run)
+
+        self._show_run_details(run)
+
+        # start execution in debug mode (it will pause immediately)
+        asyncio.create_task(self._execute_runtime(run))
+
+    async def action_debug_step(self) -> None:
+        """Step to next breakpoint in debug mode."""
+        details_panel = self.query_one("#details-panel", RunDetailsPanel)
+        if details_panel and details_panel.current_run:
+            run = details_panel.current_run
+
+            # Get the debug bridge for this run
+            debug_bridge = self.run_service.get_debug_bridge(run.id)
+            if debug_bridge:
+                # Step mode = break on all nodes
+                debug_bridge.set_breakpoints("*")
+                # Resume execution (will pause at next node)
+                debug_bridge.resume()
+
+    async def action_debug_continue(self) -> None:
+        """Continue execution without stopping at breakpoints."""
+        details_panel = self.query_one("#details-panel", RunDetailsPanel)
+        if details_panel and details_panel.current_run:
+            run = details_panel.current_run
+
+            # Get the debug bridge for this run
+            debug_bridge = self.run_service.get_debug_bridge(run.id)
+            if debug_bridge:
+                # Clear breakpoints = run to completion
+                debug_bridge.set_breakpoints([])
+                # Resume execution
+                debug_bridge.resume()
+
+    async def action_debug_stop(self) -> None:
+        """Stop debug execution."""
+        details_panel = self.query_one("#details-panel", RunDetailsPanel)
+        if details_panel and details_panel.current_run:
+            run = details_panel.current_run
+
+            # Get the debug bridge for this run
+            debug_bridge = self.run_service.get_debug_bridge(run.id)
+            if debug_bridge:
+                # Signal quit
+                debug_bridge.quit()
 
     async def action_clear_history(self) -> None:
         """Clear run history."""

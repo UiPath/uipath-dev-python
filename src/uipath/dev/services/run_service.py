@@ -12,12 +12,15 @@ from uipath.runtime import (
     UiPathExecuteOptions,
     UiPathExecutionRuntime,
     UiPathRuntimeFactoryProtocol,
+    UiPathRuntimeProtocol,
     UiPathRuntimeStatus,
 )
+from uipath.runtime.debug import UiPathDebugRuntime
 from uipath.runtime.errors import UiPathErrorContract, UiPathRuntimeError
 
 from uipath.dev.infrastructure import RunContextExporter, RunContextLogHandler
 from uipath.dev.models import ExecutionRun, LogMessage, TraceMessage
+from uipath.dev.services.debug_bridge import TextualDebugBridge
 
 RunUpdatedCallback = Callable[[ExecutionRun], None]
 LogCallback = Callable[[LogMessage], None]
@@ -58,6 +61,8 @@ class RunService:
             batch=False,
         )
 
+        self.debug_bridges: dict[str, TextualDebugBridge] = {}
+
     def register_run(self, run: ExecutionRun) -> None:
         """Register a new run and emit an initial update."""
         self.runs[run.id] = run
@@ -94,7 +99,32 @@ class RunService:
                 callback=self.handle_log,
             )
 
-            runtime = await self.runtime_factory.new_runtime(entrypoint=run.entrypoint)
+            new_runtime = await self.runtime_factory.new_runtime(
+                entrypoint=run.entrypoint
+            )
+
+            runtime: UiPathRuntimeProtocol
+
+            if run.debug:
+                debug_bridge = TextualDebugBridge()
+
+                # Connect callbacks
+                debug_bridge.on_state_update = lambda event: self._handle_state_update(
+                    run.id, event
+                )
+                debug_bridge.on_breakpoint_hit = lambda bp: self._handle_breakpoint_hit(
+                    run.id, bp
+                )
+
+                # Store bridge so UI can access it
+                self.debug_bridges[run.id] = debug_bridge
+
+                runtime = UiPathDebugRuntime(
+                    delegate=new_runtime,
+                    debug_bridge=debug_bridge,
+                )
+            else:
+                runtime = new_runtime
 
             execution_runtime = UiPathExecutionRuntime(
                 delegate=runtime,
@@ -108,7 +138,7 @@ class RunService:
             if result is not None:
                 if (
                     result.status == UiPathRuntimeStatus.SUSPENDED.value
-                    and result.resume
+                    and result.trigger
                 ):
                     run.status = "suspended"
                 else:
@@ -145,6 +175,9 @@ class RunService:
         self.runs[run.id] = run
         self._emit_run_updated(run)
 
+        if run.id in self.debug_bridges:
+            del self.debug_bridges[run.id]
+
     def handle_log(self, log_msg: LogMessage) -> None:
         """Entry point for all logs (runtime, traces, stderr)."""
         run = self.runs.get(log_msg.run_id)
@@ -171,6 +204,22 @@ class RunService:
 
         if self.on_trace is not None:
             self.on_trace(trace_msg)
+
+    def get_debug_bridge(self, run_id: str) -> Optional[TextualDebugBridge]:
+        """Get the debug bridge for a run."""
+        return self.debug_bridges.get(run_id)
+
+    def _handle_state_update(self, run_id: str, event) -> None:
+        """Handle state update from debug runtime."""
+        # You can add more logic here later if needed
+        pass
+
+    def _handle_breakpoint_hit(self, run_id: str, bp) -> None:
+        """Handle breakpoint hit from debug runtime."""
+        run = self.runs.get(run_id)
+        if run:
+            run.status = "suspended"
+            self._emit_run_updated(run)
 
     def _emit_run_updated(self, run: ExecutionRun) -> None:
         """Notify observers that a run's state changed."""

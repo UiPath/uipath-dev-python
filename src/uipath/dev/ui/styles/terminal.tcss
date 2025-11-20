@@ -103,6 +103,12 @@ Screen {
     height: 1fr;
     padding: 1;
     padding-top: 0;
+    margin-bottom: 1;
+}
+.span-detail-log {
+    height: 1fr;
+    padding: 1;
+    padding-top: 0;
 }
 
 .status-running {
@@ -144,6 +150,7 @@ TabPane {
 
 .traces-content {
     height: 100%;
+    margin-bottom: 1;
 }
 
 .spans-tree-section {
@@ -259,3 +266,16 @@ Response, Tool {
 Checkbox{
     margin-top: 1;
 }
+
+#debug-controls {
+    height: auto;
+    dock: bottom;
+}
+
+.debug-actions-row {
+    height: 2;
+    width: 100%;
+    align: left middle;
+}
+
+
