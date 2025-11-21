@@ -1,7 +1,7 @@
 """Messages used for inter-component communication in the UiPath Developer Console."""
 
 from datetime import datetime
-from typing import Any, Optional, Union
+from typing import Any
 
 from rich.console import RenderableType
 from textual.message import Message
@@ -14,8 +14,8 @@ class LogMessage(Message):
         self,
         run_id: str,
         level: str,
-        message: Union[str, RenderableType],
-        timestamp: Optional[datetime] = None,
+        message: str | RenderableType,
+        timestamp: datetime | None = None,
     ):
         """Initialize a LogMessage instance."""
         self.run_id = run_id
@@ -33,12 +33,12 @@ class TraceMessage(Message):
         run_id: str,
         span_name: str,
         span_id: str,
-        parent_span_id: Optional[str] = None,
-        trace_id: Optional[str] = None,
+        parent_span_id: str | None = None,
+        trace_id: str | None = None,
         status: str = "running",
-        duration_ms: Optional[float] = None,
-        timestamp: Optional[datetime] = None,
-        attributes: Optional[dict[str, Any]] = None,
+        duration_ms: float | None = None,
+        timestamp: datetime | None = None,
+        attributes: dict[str, Any] | None = None,
     ):
         """Initialize a TraceMessage instance."""
         self.run_id = run_id

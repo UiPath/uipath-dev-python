@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Any, Callable, Literal, Optional
+from typing import Any, Callable, Literal
 
 from uipath.runtime.debug import UiPathBreakpointResult, UiPathDebugQuitError
 from uipath.runtime.events import UiPathRuntimeStateEvent
@@ -22,15 +22,11 @@ class TextualDebugBridge:
         self._breakpoints: list[str] | Literal["*"] = "*"  # Default: step mode
 
         # Callbacks to UI
-        self.on_execution_started: Optional[Callable[[], None]] = None
-        self.on_state_update: Optional[Callable[[UiPathRuntimeStateEvent], None]] = None
-        self.on_breakpoint_hit: Optional[Callable[[UiPathBreakpointResult], None]] = (
-            None
-        )
-        self.on_execution_completed: Optional[Callable[[UiPathRuntimeResult], None]] = (
-            None
-        )
-        self.on_execution_error: Optional[Callable[[str], None]] = None
+        self.on_execution_started: Callable[[], None] | None = None
+        self.on_state_update: Callable[[UiPathRuntimeStateEvent], None] | None = None
+        self.on_breakpoint_hit: Callable[[UiPathBreakpointResult], None] | None = None
+        self.on_execution_completed: Callable[[UiPathRuntimeResult], None] | None = None
+        self.on_execution_error: Callable[[str], None] | None = None
 
     async def connect(self) -> None:
         """Establish connection to debugger."""

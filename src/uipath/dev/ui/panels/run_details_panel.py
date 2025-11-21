@@ -1,7 +1,5 @@
 """Panel for displaying execution run details, traces, and logs."""
 
-from typing import Optional
-
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.reactive import reactive
@@ -82,7 +80,7 @@ class SpanDetailsDisplay(Container):
 class RunDetailsPanel(Container):
     """Panel showing traces and logs for selected run with tabbed interface."""
 
-    current_run: reactive[Optional[ExecutionRun]] = reactive(None)
+    current_run: reactive[ExecutionRun | None] = reactive(None)
 
     def __init__(self, **kwargs):
         """Initialize RunDetailsPanel."""
@@ -145,7 +143,7 @@ class RunDetailsPanel(Container):
                 )
 
     def watch_current_run(
-        self, old_value: Optional[ExecutionRun], new_value: Optional[ExecutionRun]
+        self, old_value: ExecutionRun | None, new_value: ExecutionRun | None
     ):
         """Watch for changes to the current run."""
         if new_value is not None:

@@ -1,7 +1,5 @@
 """Panel for displaying execution run history."""
 
-from typing import List, Optional
-
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import Container, Vertical
@@ -23,8 +21,8 @@ class RunHistoryPanel(Container):
     def __init__(self, **kwargs):
         """Initialize RunHistoryPanel with empty run list."""
         super().__init__(**kwargs)
-        self.runs: List[ExecutionRun] = []
-        self.selected_run: Optional[ExecutionRun] = None
+        self.runs: list[ExecutionRun] = []
+        self.selected_run: ExecutionRun | None = None
 
     def compose(self) -> ComposeResult:
         """Compose the RunHistoryPanel layout."""
@@ -57,7 +55,7 @@ class RunHistoryPanel(Container):
                 break
         # If run not found, just ignore; creation is done via add_run()
 
-    def get_run_by_id(self, run_id: str) -> Optional[ExecutionRun]:
+    def get_run_by_id(self, run_id: str) -> ExecutionRun | None:
         """Get a run."""
         for run in self.runs:
             if run.id == run_id:

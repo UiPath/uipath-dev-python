@@ -1,7 +1,7 @@
 """Panel for creating new runs with entrypoint selection and JSON input."""
 
 import json
-from typing import Any, Dict, Tuple, cast
+from typing import Any, Tuple, cast
 
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
@@ -96,7 +96,7 @@ class NewRunPanel(Container):
 
         self.entrypoints: list[str] = []
 
-        self.entrypoint_schemas: Dict[str, dict[str, Any]] = {}
+        self.entrypoint_schemas: dict[str, dict[str, Any]] = {}
 
         self.conversational: bool = False
         self.initial_input: str = "{}"
