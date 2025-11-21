@@ -154,13 +154,13 @@ TabPane {
 }
 
 .spans-tree-section {
-    width: 40%;
+    width: 50%;
     height: 100%;
     padding-right: 1;
 }
 
 .span-details-section {
-    width: 60%;
+    width: 50%;
     height: 100%;
     padding-left: 1;
 }
