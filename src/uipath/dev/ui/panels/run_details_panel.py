@@ -137,7 +137,7 @@ class RunDetailsPanel(Container):
                 yield Button(
                     "⏭ Continue",
                     id="debug-continue-btn",
-                    variant="default",
+                    variant="success",
                     classes="action-btn",
                 )
                 yield Button(
@@ -159,8 +159,6 @@ class RunDetailsPanel(Container):
 
     def show_run(self, run: ExecutionRun):
         """Display traces and logs for a specific run."""
-        self.update_debug_controls_visibility(run.debug)
-
         # Populate run details tab
         self._show_run_details(run)
 
@@ -178,11 +176,14 @@ class RunDetailsPanel(Container):
         tabbed = self.query_one(TabbedContent)
         tabbed.active = tab_id
 
-    def update_debug_controls_visibility(self, show: bool):
+    def update_debug_controls_visibility(self, run: ExecutionRun):
         """Show or hide debug controls based on whether run is in debug mode."""
         debug_controls = self.query_one("#debug-controls", Container)
-        if show:
+        if run.debug:
             debug_controls.remove_class("hidden")
+            is_enabled = run.status == "suspended"
+            for button in debug_controls.query(Button):
+                button.disabled = not is_enabled
         else:
             debug_controls.add_class("hidden")
 
@@ -241,6 +242,7 @@ class RunDetailsPanel(Container):
 
     def _show_run_details(self, run: ExecutionRun):
         """Display detailed information about the run in the Details tab."""
+        self.update_debug_controls_visibility(run)
         run_details_log = self.query_one("#run-details-log", RichLog)
         run_details_log.clear()
 

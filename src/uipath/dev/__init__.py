@@ -210,40 +210,21 @@ class UiPathDeveloperConsole(App[Any]):
         details_panel = self.query_one("#details-panel", RunDetailsPanel)
         if details_panel and details_panel.current_run:
             run = details_panel.current_run
-
-            # Get the debug bridge for this run
-            debug_bridge = self.run_service.get_debug_bridge(run.id)
-            if debug_bridge:
-                # Step mode = break on all nodes
-                debug_bridge.set_breakpoints("*")
-                # Resume execution (will pause at next node)
-                debug_bridge.resume()
+            self.run_service.step_debug(run)
 
     async def action_debug_continue(self) -> None:
         """Continue execution without stopping at breakpoints."""
         details_panel = self.query_one("#details-panel", RunDetailsPanel)
         if details_panel and details_panel.current_run:
             run = details_panel.current_run
-
-            # Get the debug bridge for this run
-            debug_bridge = self.run_service.get_debug_bridge(run.id)
-            if debug_bridge:
-                # Clear breakpoints = run to completion
-                debug_bridge.set_breakpoints([])
-                # Resume execution
-                debug_bridge.resume()
+            self.run_service.continue_debug(run)
 
     async def action_debug_stop(self) -> None:
         """Stop debug execution."""
         details_panel = self.query_one("#details-panel", RunDetailsPanel)
         if details_panel and details_panel.current_run:
             run = details_panel.current_run
-
-            # Get the debug bridge for this run
-            debug_bridge = self.run_service.get_debug_bridge(run.id)
-            if debug_bridge:
-                # Signal quit
-                debug_bridge.quit()
+            self.run_service.stop_debug(run)
 
     async def action_clear_history(self) -> None:
         """Clear run history."""

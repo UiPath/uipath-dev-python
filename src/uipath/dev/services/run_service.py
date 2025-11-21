@@ -115,6 +115,12 @@ class RunService:
                 debug_bridge.on_breakpoint_hit = lambda bp: self._handle_breakpoint_hit(
                     run.id, bp
                 )
+                debug_bridge.on_execution_started = lambda: self._handle_debug_started(
+                    run.id
+                )
+                debug_bridge.on_execution_error = lambda error: self._add_error_log(
+                    run, error
+                )
 
                 # Store bridge so UI can access it
                 self.debug_bridges[run.id] = debug_bridge
@@ -178,6 +184,34 @@ class RunService:
         if run.id in self.debug_bridges:
             del self.debug_bridges[run.id]
 
+    def step_debug(self, run: ExecutionRun) -> None:
+        """Step to next breakpoint in debug mode."""
+        debug_bridge = self.debug_bridges.get(run.id)
+        if debug_bridge:
+            # Step mode = break on all nodes
+            debug_bridge.set_breakpoints("*")
+            # Resume execution (will pause at next node)
+            run.status = "running"
+            self._emit_run_updated(run)
+            debug_bridge.resume()
+
+    def continue_debug(self, run: ExecutionRun) -> None:
+        """Continue execution without stopping at breakpoints."""
+        debug_bridge = self.debug_bridges.get(run.id)
+        if debug_bridge:
+            # Clear breakpoints = run to completion
+            debug_bridge.set_breakpoints([])
+            # Resume execution
+            run.status = "running"
+            self._emit_run_updated(run)
+            debug_bridge.resume()
+
+    def stop_debug(self, run: ExecutionRun) -> None:
+        """Stop debug execution."""
+        debug_bridge = self.debug_bridges.get(run.id)
+        if debug_bridge:
+            debug_bridge.quit()
+
     def handle_log(self, log_msg: LogMessage) -> None:
         """Entry point for all logs (runtime, traces, stderr)."""
         run = self.runs.get(log_msg.run_id)
@@ -214,6 +248,13 @@ class RunService:
         # You can add more logic here later if needed
         pass
 
+    def _handle_debug_started(self, run_id: str) -> None:
+        """Handle debug started event."""
+        run = self.runs.get(run_id)
+        if run:
+            run.status = "suspended"
+            self._emit_run_updated(run)
+
     def _handle_breakpoint_hit(self, run_id: str, bp) -> None:
         """Handle breakpoint hit from debug runtime."""
         run = self.runs.get(run_id)
@@ -236,17 +277,25 @@ class RunService:
         )
         self.handle_log(log_msg)
 
-    def _add_error_log(self, run: ExecutionRun) -> None:
-        from rich.traceback import Traceback
+    def _add_error_log(self, run: ExecutionRun, error: str | None = None) -> None:
+        if error is None:
+            from rich.traceback import Traceback
 
-        tb = Traceback(
-            show_locals=False,
-            max_frames=4,
-        )
-        log_msg = LogMessage(
-            run_id=run.id,
-            level="ERROR",
-            message=tb,
-            timestamp=datetime.now(),
-        )
+            tb = Traceback(
+                show_locals=False,
+                max_frames=4,
+            )
+            log_msg = LogMessage(
+                run_id=run.id,
+                level="ERROR",
+                message=tb,
+                timestamp=datetime.now(),
+            )
+        else:
+            log_msg = LogMessage(
+                run_id=run.id,
+                level="ERROR",
+                message=error,
+                timestamp=datetime.now(),
+            )
         self.handle_log(log_msg)
