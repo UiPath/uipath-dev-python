@@ -2,7 +2,7 @@
 
 import os
 from datetime import datetime
-from typing import Any, Optional, Union
+from typing import Any
 from uuid import uuid4
 
 from rich.text import Text
@@ -17,7 +17,7 @@ class ExecutionRun:
     def __init__(
         self,
         entrypoint: str,
-        input_data: Union[dict[str, Any]],
+        input_data: dict[str, Any],
         conversational: bool = False,
         debug: bool = False,
     ):
@@ -27,14 +27,14 @@ class ExecutionRun:
         self.input_data = input_data
         self.conversational = conversational
         self.debug = debug
-        self.resume_data: Optional[dict[str, Any]] = None
-        self.output_data: Optional[dict[str, Any]] = None
+        self.resume_data: dict[str, Any] | None = None
+        self.output_data: dict[str, Any] | None = None
         self.start_time = datetime.now()
-        self.end_time: Optional[datetime] = None
+        self.end_time: datetime | None = None
         self.status = "pending"  # pending, running, completed, failed, suspended
         self.traces: list[TraceMessage] = []
         self.logs: list[LogMessage] = []
-        self.error: Optional[UiPathErrorContract] = None
+        self.error: UiPathErrorContract | None = None
 
     @property
     def duration(self) -> str:

@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Any, AsyncGenerator, Optional
+from typing import Any, AsyncGenerator
 
 from opentelemetry import trace
 from uipath.runtime import (
@@ -57,8 +57,8 @@ class MockSupportChatRuntime:
 
     async def execute(
         self,
-        input: Optional[dict[str, Any]] = None,
-        options: Optional[UiPathExecuteOptions] = None,
+        input: dict[str, Any] | None = None,
+        options: UiPathExecuteOptions | None = None,
     ) -> UiPathRuntimeResult:
         payload = input or {}
         message = str(payload.get("message", "")).strip()
@@ -136,8 +136,8 @@ class MockSupportChatRuntime:
 
     async def stream(
         self,
-        input: Optional[dict[str, Any]] = None,
-        options: Optional[UiPathStreamOptions] = None,
+        input: dict[str, Any] | None = None,
+        options: UiPathStreamOptions | None = None,
     ) -> AsyncGenerator[UiPathRuntimeEvent, None]:
         logger.info("SupportChatRuntime: stream() invoked")
         yield await self.execute(input=input, options=options)

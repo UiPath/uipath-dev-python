@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import traceback
 from datetime import datetime
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable
 
 from pydantic import BaseModel
 from uipath.core.tracing import UiPathTraceManager
@@ -40,14 +40,14 @@ class RunService:
         self,
         runtime_factory: UiPathRuntimeFactoryProtocol,
         trace_manager: UiPathTraceManager,
-        on_run_updated: Optional[RunUpdatedCallback] = None,
-        on_log: Optional[LogCallback] = None,
-        on_trace: Optional[TraceCallback] = None,
+        on_run_updated: RunUpdatedCallback | None = None,
+        on_log: LogCallback | None = None,
+        on_trace: TraceCallback | None = None,
     ) -> None:
         """Initialize RunService with runtime factory and trace manager."""
         self.runtime_factory = runtime_factory
         self.trace_manager = trace_manager
-        self.runs: Dict[str, ExecutionRun] = {}
+        self.runs: dict[str, ExecutionRun] = {}
 
         self.on_run_updated = on_run_updated
         self.on_log = on_log
@@ -68,7 +68,7 @@ class RunService:
         self.runs[run.id] = run
         self._emit_run_updated(run)
 
-    def get_run(self, run_id: str) -> Optional[ExecutionRun]:
+    def get_run(self, run_id: str) -> ExecutionRun | None:
         """Get a registered run."""
         return self.runs.get(run_id)
 
@@ -78,7 +78,7 @@ class RunService:
         This is the extracted version of the old `_execute_runtime` method.
         """
         try:
-            execution_input: Optional[dict[str, Any]] = {}
+            execution_input: dict[str, Any] | None = {}
             execution_options: UiPathExecuteOptions = UiPathExecuteOptions()
 
             if run.status == "suspended":
@@ -239,7 +239,7 @@ class RunService:
         if self.on_trace is not None:
             self.on_trace(trace_msg)
 
-    def get_debug_bridge(self, run_id: str) -> Optional[TextualDebugBridge]:
+    def get_debug_bridge(self, run_id: str) -> TextualDebugBridge | None:
         """Get the debug bridge for a run."""
         return self.debug_bridges.get(run_id)
 
