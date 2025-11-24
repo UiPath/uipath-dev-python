@@ -34,6 +34,8 @@ def mock_json_from_schema(schema: dict[str, Any]) -> Any:
 
         # 3) Objects: recurse into mock_json_from_schema
         if t == "object":
+            if "properties" not in sub_schema:
+                return {}
             return mock_json_from_schema(sub_schema)
 
         # 4) Arrays: mock a single item based on "items" schema
@@ -62,7 +64,10 @@ def mock_json_from_schema(schema: dict[str, Any]) -> Any:
         return None
 
     # Top-level: if it's an object with properties, build a dict
-    if schema.get("type") == "object" and "properties" in schema:
+    if schema.get("type") == "object":
+        if "properties" not in schema:
+            return {}
+
         props: dict[str, Any] = schema.get("properties", {})
         required_keys = set(schema.get("required", []))
         result: dict[str, Any] = {}
