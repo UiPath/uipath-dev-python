@@ -77,6 +77,7 @@ class RunService:
 
         This is the extracted version of the old `_execute_runtime` method.
         """
+        new_runtime: UiPathRuntimeProtocol | None = None
         try:
             execution_input: dict[str, Any] | None = {}
             execution_options: UiPathExecuteOptions = UiPathExecuteOptions()
@@ -100,7 +101,8 @@ class RunService:
             )
 
             new_runtime = await self.runtime_factory.new_runtime(
-                entrypoint=run.entrypoint
+                entrypoint=run.entrypoint,
+                runtime_id=run.id,
             )
 
             runtime: UiPathRuntimeProtocol
@@ -177,6 +179,9 @@ class RunService:
                 title=str(e),
                 detail=traceback.format_exc(),
             )
+        finally:
+            if new_runtime is not None:
+                await new_runtime.dispose()
 
         self.runs[run.id] = run
         self._emit_run_updated(run)
