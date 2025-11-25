@@ -7,7 +7,7 @@ from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.reactive import reactive
 from textual.widgets import Button, Select, TabbedContent, TabPane, TextArea
-from uipath.runtime import UiPathRuntimeFactoryProtocol
+from uipath.runtime import UiPathRuntimeFactoryProtocol, UiPathRuntimeProtocol
 
 from uipath.dev.ui.widgets.json_input import JsonInput
 
@@ -182,18 +182,22 @@ class NewRunPanel(Container):
         schema = self.entrypoint_schemas.get(entrypoint)
 
         if schema is None:
+            runtime: UiPathRuntimeProtocol | None = None
             try:
-                runtime = await self._runtime_factory.new_runtime(entrypoint)
+                runtime = await self._runtime_factory.new_runtime(
+                    entrypoint, runtime_id="default"
+                )
                 schema_obj = await runtime.get_schema()
 
                 input_schema = schema_obj.input or {}
                 self.entrypoint_schemas[entrypoint] = input_schema
                 schema = input_schema
-
-                await runtime.dispose()
             except Exception:
                 schema = {}
                 self.entrypoint_schemas[entrypoint] = schema
+            finally:
+                if runtime is not None:
+                    await runtime.dispose()
 
         json_input.text = json.dumps(
             mock_json_from_schema(schema),

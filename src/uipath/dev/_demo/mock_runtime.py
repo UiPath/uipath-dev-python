@@ -26,7 +26,9 @@ logger = logging.getLogger(__name__)
 class MockRuntimeFactory:
     """Runtime factory compatible with UiPathRuntimeFactoryProtocol."""
 
-    async def new_runtime(self, entrypoint: str) -> UiPathRuntimeProtocol:
+    async def new_runtime(
+        self, entrypoint: str, runtime_id: str
+    ) -> UiPathRuntimeProtocol:
         """Create a new runtime instance for the given entrypoint."""
         if entrypoint == ENTRYPOINT_GREETING:
             return MockGreetingRuntime(entrypoint=entrypoint)
