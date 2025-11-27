@@ -1002,7 +1002,7 @@ wheels = [
 
 [[package]]
 name = "uipath-dev"
-version = "0.0.5"
+version = "0.0.6"
 source = { editable = "." }
 dependencies = [
     { name = "pyperclip" },
@@ -1029,7 +1029,7 @@ dev = [
 requires-dist = [
     { name = "pyperclip", specifier = ">=1.11.0,<2.0.0" },
     { name = "textual", specifier = ">=6.6.0,<7.0.0" },
-    { name = "uipath-runtime", specifier = ">=0.0.15,<0.1.0" },
+    { name = "uipath-runtime", specifier = ">=0.0.21,<0.1.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -1049,14 +1049,14 @@ dev = [
 
 [[package]]
 name = "uipath-runtime"
-version = "0.0.15"
+version = "0.0.21"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "uipath-core" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e7/15/0651dda6d93ebce3b99ff72b7a5ccc7d57f9adc01a91b32b51c68e2842d4/uipath_runtime-0.0.15.tar.gz", hash = "sha256:5b505dc9cd1ef2d89b865f5caaa2315a0caeb4d01ed3fee5b236a67ff8ea4c60", size = 85196, upload-time = "2025-11-25T05:33:01.234Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8b/f8/2128bfd7add45e2f596955c03161ed69a365bab68a5d3c6238dcf5e2a548/uipath_runtime-0.0.21.tar.gz", hash = "sha256:9e25051f9168101cceb5e553149519f7d05764a847fea3fa0f4ec25d42e56fcb", size = 87722, upload-time = "2025-11-26T14:44:11.531Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ab/42/68e839f735c90a5495b55775173b619aacbb4da2cc979190ec9a2f092875/uipath_runtime-0.0.15-py3-none-any.whl", hash = "sha256:1c105b84f816051c24f58a8c202d5057b1be0ac4486c767c8149696391700800", size = 32641, upload-time = "2025-11-25T05:32:59.729Z" },
+    { url = "https://files.pythonhosted.org/packages/de/fa/677a787cc6d02791d3c0a25ec0b83dd575e331dcd81bcae92fc668013aac/uipath_runtime-0.0.21-py3-none-any.whl", hash = "sha256:6459c451e707e9bf3308a9cd126a1dde11b9f752af7b2914f2df85561199ee7a", size = 33953, upload-time = "2025-11-26T14:44:09.988Z" },
 ]
 
 [[package]]

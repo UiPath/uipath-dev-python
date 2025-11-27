@@ -45,7 +45,7 @@ class MockRuntimeFactory:
         )
         return MockGreetingRuntime(entrypoint=entrypoint)
 
-    def discover_runtimes(self) -> list[UiPathRuntimeProtocol]:
+    async def discover_runtimes(self) -> list[UiPathRuntimeProtocol]:
         """Return prototype instances for discovery (not really used by the UI)."""
         return [
             MockGreetingRuntime(entrypoint=ENTRYPOINT_GREETING),
@@ -62,3 +62,7 @@ class MockRuntimeFactory:
             ENTRYPOINT_ANALYZE_NUMBERS,
             ENTRYPOINT_SUPPORT_CHAT,
         ]
+
+    async def dispose(self) -> None:
+        """Dispose of any resources (no-op for mock)."""
+        pass
