@@ -1,11 +1,11 @@
 [project]
 name = "uipath-dev"
-version = "0.0.5"
+version = "0.0.6"
 description = "UiPath Developer Console"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
 dependencies = [
-  "uipath-runtime>=0.0.15, <0.1.0",
+  "uipath-runtime>=0.0.21, <0.1.0",
   "textual>=6.6.0, <7.0.0",
   "pyperclip>=1.11.0, <2.0.0",
 ]

@@ -6,7 +6,7 @@ from typing import Any, Tuple, cast
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.reactive import reactive
-from textual.widgets import Button, Select, TabbedContent, TabPane, TextArea
+from textual.widgets import Button, Select, TabbedContent, TabPane
 from uipath.runtime import UiPathRuntimeFactoryProtocol, UiPathRuntimeProtocol
 
 from uipath.dev.ui.widgets.json_input import JsonInput
@@ -149,7 +149,7 @@ class NewRunPanel(Container):
 
         select = self.query_one("#entrypoint-select", Select)
 
-        json_input = self.query_one("#json-input", TextArea)
+        json_input = self.query_one("#json-input", JsonInput)
         run_button = self.query_one("#execute-btn", Button)
 
         if not self.entrypoints:
@@ -166,14 +166,17 @@ class NewRunPanel(Container):
 
         # Use the first entrypoint as default
         self.selected_entrypoint = self.entrypoints[0]
-        select.value = self.selected_entrypoint
 
-        # Lazily fetch schema and populate input
+        # Lazily fetch schema and populate input BEFORE setting select.value
+        # to avoid triggering on_select_changed
         await self._load_schema_and_update_input(self.selected_entrypoint)
+
+        # Set the select value after loading the schema
+        select.value = self.selected_entrypoint
 
     async def _load_schema_and_update_input(self, entrypoint: str) -> None:
         """Ensure schema for entrypoint is loaded, then update JSON input."""
-        json_input = self.query_one("#json-input", TextArea)
+        json_input = self.query_one("#json-input", JsonInput)
 
         if not entrypoint or entrypoint == "no-entrypoints":
             json_input.text = "{}"
@@ -192,33 +195,40 @@ class NewRunPanel(Container):
                 input_schema = schema_obj.input or {}
                 self.entrypoint_schemas[entrypoint] = input_schema
                 schema = input_schema
-            except Exception:
-                schema = {}
-                self.entrypoint_schemas[entrypoint] = schema
+            except Exception as e:
+                json_input.text = "{}"
+                self.app.notify(
+                    f"Error loading schema for '{entrypoint}': {str(e)}",
+                    severity="error",
+                    timeout=5,
+                )
+                return
             finally:
                 if runtime is not None:
                     await runtime.dispose()
 
-        json_input.text = json.dumps(
-            mock_json_from_schema(schema),
-            indent=2,
-        )
+        # Generate mock JSON from schema
+        mock_data = mock_json_from_schema(schema)
+        json_input.text = json.dumps(mock_data, indent=2)
 
     async def on_select_changed(self, event: Select.Changed) -> None:
         """Update JSON input when user selects an entrypoint."""
-        self.selected_entrypoint = cast(str, event.value) if event.value else ""
+        new_entrypoint = cast(str, event.value) if event.value else ""
 
-        await self._load_schema_and_update_input(self.selected_entrypoint)
+        # Only load schema if the entrypoint actually changed
+        if new_entrypoint != self.selected_entrypoint:
+            self.selected_entrypoint = new_entrypoint
+            await self._load_schema_and_update_input(self.selected_entrypoint)
 
     def get_input_values(self) -> Tuple[str, str, bool]:
         """Get the selected entrypoint and JSON input values."""
-        json_input = self.query_one("#json-input", TextArea)
+        json_input = self.query_one("#json-input", JsonInput)
         return self.selected_entrypoint, json_input.text.strip(), self.conversational
 
     def reset_form(self) -> None:
         """Reset selection and JSON input to defaults."""
         select = self.query_one("#entrypoint-select", Select)
-        json_input = self.query_one("#json-input", TextArea)
+        json_input = self.query_one("#json-input", JsonInput)
 
         if not self.entrypoints:
             self.selected_entrypoint = ""
