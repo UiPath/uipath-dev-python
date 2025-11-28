@@ -1,6 +1,7 @@
 # UiPath Developer Console
 
 [![PyPI downloads](https://img.shields.io/pypi/dm/uipath-dev.svg)](https://pypi.org/project/uipath-dev/)
+[![PyPI - Version](https://img.shields.io/pypi/v/uipath-dev)](https://pypi.org/project/uipath-dev/)
 [![Python versions](https://img.shields.io/pypi/pyversions/uipath-dev.svg)](https://pypi.org/project/uipath-dev/)
 
 
@@ -9,14 +10,18 @@ Interactive terminal application for building, testing, and debugging UiPath Pyt
 ## Overview
 
 The Developer Console provides a local environment for developers who are building or experimenting with Python-based UiPath runtimes.
-It integrates with the [`uipath-runtime`](https://pypi.org/project/uipath-runtime/) SDK to execute agents and visualize their behavior in real time using the [`textual`](https://github.com/Textualize/textual) framework.
+It integrates with the [`uipath-runtime`](https://github.com/uipath/uipath-runtime-python) SDK to execute agents and visualize their behavior in real time using the [`textual`](https://github.com/textualize/textual) framework.
 
 This tool is designed for:
 - Developers building **UiPath agents** or **custom runtime integrations**
 - Python engineers testing **standalone automation scripts** before deployment
 - Contributors exploring **runtime orchestration** and **execution traces**
 
-![Runtime Trace Demo](docs/demo_traces.svg)
+## Installation
+
+```bash
+uv add uipath-dev
+```
 
 ## Features
 
@@ -24,11 +29,13 @@ This tool is designed for:
 - View structured logs, output, and OpenTelemetry traces
 - Export and review execution history
 
-## Installation
+---
 
-```bash
-uv add uipath-dev
-```
+![Copy Error Demo](docs/new_mode.svg)
+![Debug Mode Demo](docs/debug_mode.svg)
+![Copy Error Demo](docs/copy_error.svg)
+
+
 
 ## Development
 
