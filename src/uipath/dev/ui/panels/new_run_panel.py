@@ -11,77 +11,7 @@ from uipath.runtime import UiPathRuntimeFactoryProtocol, UiPathRuntimeProtocol
 
 from uipath.dev.ui.widgets.json_input import JsonInput
 
-
-def mock_json_from_schema(schema: dict[str, Any]) -> Any:
-    """Generate a mock JSON value based on a given JSON schema.
-
-    - For object schemas: returns a dict of mocked properties.
-    - For arrays: returns a list with one mocked item.
-    - For primitives: returns a sensible example / default / enum[0].
-    """
-
-    def _mock_value(sub_schema: dict[str, Any], required: bool = True) -> Any:
-        # 1) Default wins
-        if "default" in sub_schema:
-            return sub_schema["default"]
-
-        t = sub_schema.get("type")
-
-        # 2) Enums: pick the first option
-        enum = sub_schema.get("enum")
-        if enum and isinstance(enum, list):
-            return enum[0]
-
-        # 3) Objects: recurse into mock_json_from_schema
-        if t == "object":
-            if "properties" not in sub_schema:
-                return {}
-            return mock_json_from_schema(sub_schema)
-
-        # 4) Arrays: mock a single item based on "items" schema
-        if t == "array":
-            item_schema = sub_schema.get("items", {})
-            # If items is not a dict, just return empty list
-            if not isinstance(item_schema, dict):
-                return []
-            return [_mock_value(item_schema, required=True)]
-
-        # 5) Primitives
-        if t == "string":
-            # If there's a format, we could specialize later (email, date, etc.)
-            return "example" if required else ""
-
-        if t == "integer":
-            return 0
-
-        if t == "number":
-            return 0.0
-
-        if t == "boolean":
-            return True if required else False
-
-        # 6) Fallback
-        return None
-
-    # Top-level: if it's an object with properties, build a dict
-    if schema.get("type") == "object":
-        if "properties" not in schema:
-            return {}
-
-        props: dict[str, Any] = schema.get("properties", {})
-        required_keys = set(schema.get("required", []))
-        result: dict[str, Any] = {}
-
-        for key, prop_schema in props.items():
-            if not isinstance(prop_schema, dict):
-                continue
-            is_required = key in required_keys
-            result[key] = _mock_value(prop_schema, required=is_required)
-
-        return result
-
-    # If it's not an object schema, just mock the value directly
-    return _mock_value(schema, required=True)
+from ._json_schema import mock_json_from_schema
 
 
 class NewRunPanel(Container):
