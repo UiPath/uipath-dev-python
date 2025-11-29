@@ -28,7 +28,7 @@ class ExecutionRun:
         self.conversational = conversational
         self.debug = debug
         self.resume_data: dict[str, Any] | None = None
-        self.output_data: dict[str, Any] | None = None
+        self.output_data: dict[str, Any] | str | None = None
         self.start_time = datetime.now()
         self.end_time: datetime | None = None
         self.status = "pending"  # pending, running, completed, failed, suspended

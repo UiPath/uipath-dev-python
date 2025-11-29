@@ -18,7 +18,7 @@ class TextualDebugBridge:
         """Initialize the debug bridge."""
         self._connected = False
         self._resume_event = asyncio.Event()
-        self._quit_requested = False
+        self._terminate_event = asyncio.Event()
         self._breakpoints: list[str] | Literal["*"] = "*"  # Default: step mode
 
         # Callbacks to UI
@@ -31,13 +31,13 @@ class TextualDebugBridge:
     async def connect(self) -> None:
         """Establish connection to debugger."""
         self._connected = True
-        self._quit_requested = False
         logger.debug("Debug bridge connected")
 
     async def disconnect(self) -> None:
         """Close connection to debugger."""
         self._connected = False
         self._resume_event.set()  # Unblock any waiting tasks
+        self._terminate_event.set()
         logger.debug("Debug bridge disconnected")
 
     async def emit_execution_started(self, **kwargs: Any) -> None:
@@ -83,8 +83,12 @@ class TextualDebugBridge:
         self._resume_event.clear()
         await self._resume_event.wait()
 
-        if self._quit_requested:
+        if self._terminate_event.is_set():
             raise UiPathDebugQuitError("Debug session quit requested")
+
+    async def wait_for_terminate(self) -> None:
+        """Wait for terminate command from debugger."""
+        await self._terminate_event.wait()
 
     def resume(self) -> None:
         """Signal that execution should resume (called from UI buttons)."""
@@ -92,7 +96,7 @@ class TextualDebugBridge:
 
     def quit(self) -> None:
         """Signal that execution should quit (called from UI stop button)."""
-        self._quit_requested = True
+        self._terminate_event.set()
         self._resume_event.set()
 
     def get_breakpoints(self) -> list[str] | Literal["*"]:
