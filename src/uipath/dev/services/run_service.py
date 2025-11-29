@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import traceback
 from datetime import datetime
 from typing import Any, Callable
@@ -17,6 +18,7 @@ from uipath.runtime import (
 )
 from uipath.runtime.debug import UiPathDebugRuntime
 from uipath.runtime.errors import UiPathErrorContract, UiPathRuntimeError
+from uipath.runtime.events import UiPathRuntimeStateEvent
 
 from uipath.dev.infrastructure import RunContextExporter, RunContextLogHandler
 from uipath.dev.models import ExecutionRun, LogMessage, TraceMessage
@@ -111,8 +113,8 @@ class RunService:
                 debug_bridge = TextualDebugBridge()
 
                 # Connect callbacks
-                debug_bridge.on_state_update = lambda event: self._handle_state_update(
-                    run.id, event
+                debug_bridge.on_state_update = lambda state: self._handle_state_update(
+                    run.id, state
                 )
                 debug_bridge.on_breakpoint_hit = lambda bp: self._handle_breakpoint_hit(
                     run.id, bp
@@ -248,10 +250,11 @@ class RunService:
         """Get the debug bridge for a run."""
         return self.debug_bridges.get(run_id)
 
-    def _handle_state_update(self, run_id: str, event) -> None:
+    def _handle_state_update(self, run_id: str, state: UiPathRuntimeStateEvent) -> None:
         """Handle state update from debug runtime."""
-        # You can add more logic here later if needed
-        pass
+        run = self.runs.get(run_id)
+        if run:
+            self._add_info_log(run, json.dumps(state.payload))
 
     def _handle_debug_started(self, run_id: str) -> None:
         """Handle debug started event."""
