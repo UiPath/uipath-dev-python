@@ -4,7 +4,7 @@ import asyncio
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pyperclip  # type: ignore[import-untyped]
 from textual import on
@@ -18,7 +18,14 @@ from uipath.runtime import UiPathRuntimeFactoryProtocol
 from uipath.dev.infrastructure import (
     patch_textual_stderr,
 )
-from uipath.dev.models import ExecutionRun, LogMessage, TraceMessage
+from uipath.dev.models import (
+    ChatMessage,
+    ExecutionMode,
+    ExecutionRun,
+    LogMessage,
+    TraceMessage,
+)
+from uipath.dev.models.chat import get_user_message, get_user_message_event
 from uipath.dev.services import RunService
 from uipath.dev.ui.panels import NewRunPanel, RunDetailsPanel, RunHistoryPanel
 
@@ -64,6 +71,7 @@ class UiPathDeveloperConsole(App[Any]):
             on_run_updated=self._on_run_updated,
             on_log=self._on_log_for_ui,
             on_trace=self._on_trace_for_ui,
+            on_chat=self._on_chat_for_ui,
         )
 
         # Just defaults for convenience
@@ -96,9 +104,11 @@ class UiPathDeveloperConsole(App[Any]):
         if event.button.id == "new-run-btn":
             await self.action_new_run()
         elif event.button.id == "execute-btn":
-            await self.action_execute_run()
+            await self.action_execute_run(mode=ExecutionMode.RUN)
         elif event.button.id == "debug-btn":
-            await self.action_debug_run()
+            await self.action_execute_run(mode=ExecutionMode.DEBUG)
+        elif event.button.id == "chat-btn":
+            await self.action_execute_run(mode=ExecutionMode.CHAT)
         elif event.button.id == "cancel-btn":
             await self.action_cancel()
         elif event.button.id == "debug-step-btn":
@@ -135,9 +145,23 @@ class UiPathDeveloperConsole(App[Any]):
                 return
 
             if details_panel.current_run.status == "suspended":
-                details_panel.current_run.resume_data = {"message": user_text}
+                details_panel.current_run.resume_data = {"value": user_text}
+            else:
+                msg = get_user_message(user_text)
+                msg_ev = get_user_message_event(
+                    user_text, conversation_id=details_panel.current_run.id
+                )
+                self._on_chat_for_ui(
+                    ChatMessage(
+                        event=msg_ev,
+                        message=msg,
+                        run_id=details_panel.current_run.id,
+                    )
+                )
+                details_panel.current_run.input_data = {"messages": [msg]}
 
             asyncio.create_task(self._execute_runtime(details_panel.current_run))
+
             event.input.clear()
 
     async def action_new_run(self) -> None:
@@ -152,10 +176,10 @@ class UiPathDeveloperConsole(App[Any]):
         """Cancel and return to new run view."""
         await self.action_new_run()
 
-    async def action_execute_run(self) -> None:
+    async def action_execute_run(self, mode: ExecutionMode) -> None:
         """Execute a new run based on NewRunPanel inputs."""
         new_run_panel = self.query_one("#new-run-panel", NewRunPanel)
-        entrypoint, input_data, conversational = new_run_panel.get_input_values()
+        entrypoint, input_data = new_run_panel.get_input_values()
 
         if not entrypoint:
             return
@@ -165,7 +189,7 @@ class UiPathDeveloperConsole(App[Any]):
         except json.JSONDecodeError:
             return
 
-        run = ExecutionRun(entrypoint, input_payload, conversational)
+        run = ExecutionRun(entrypoint, input_payload, mode=mode)
 
         history_panel = self.query_one("#history-panel", RunHistoryPanel)
         history_panel.add_run(run)
@@ -174,36 +198,10 @@ class UiPathDeveloperConsole(App[Any]):
 
         self._show_run_details(run)
 
-        if not run.conversational:
-            asyncio.create_task(self._execute_runtime(run))
-        else:
+        if mode == ExecutionMode.CHAT:
             self._focus_chat_input()
-
-    async def action_debug_run(self) -> None:
-        """Execute a new run in debug mode (step-by-step)."""
-        new_run_panel = self.query_one("#new-run-panel", NewRunPanel)
-        entrypoint, input_data, conversational = new_run_panel.get_input_values()
-
-        if not entrypoint:
-            return
-
-        try:
-            input_payload: dict[str, Any] = json.loads(input_data)
-        except json.JSONDecodeError:
-            return
-
-        # Create run with debug=True
-        run = ExecutionRun(entrypoint, input_payload, conversational, debug=True)
-
-        history_panel = self.query_one("#history-panel", RunHistoryPanel)
-        history_panel.add_run(run)
-
-        self.run_service.register_run(run)
-
-        self._show_run_details(run)
-
-        # start execution in debug mode (it will pause immediately)
-        asyncio.create_task(self._execute_runtime(run))
+        else:
+            asyncio.create_task(self._execute_runtime(run))
 
     async def action_debug_step(self) -> None:
         """Step to next breakpoint in debug mode."""
@@ -267,6 +265,14 @@ class UiPathDeveloperConsole(App[Any]):
         details_panel = self.query_one("#details-panel", RunDetailsPanel)
         details_panel.add_trace(trace_msg)
 
+    def _on_chat_for_ui(
+        self,
+        chat_msg: ChatMessage,
+    ) -> None:
+        """Append/refresh chat messages in the UI."""
+        details_panel = self.query_one("#details-panel", RunDetailsPanel)
+        details_panel.add_chat_message(chat_msg)
+
     def _show_run_details(self, run: ExecutionRun) -> None:
         """Show details panel for a specific run."""
         new_panel = self.query_one("#new-run-panel")
@@ -289,7 +295,9 @@ class UiPathDeveloperConsole(App[Any]):
 
         def add_log() -> None:
             details_panel = self.query_one("#details-panel", RunDetailsPanel)
-            run = getattr(details_panel, "current_run", None)
+            run: ExecutionRun = cast(
+                ExecutionRun, getattr(details_panel, "current_run", None)
+            )
             if run:
                 log_msg = LogMessage(run.id, level, message, datetime.now())
                 # Route through RunService so state + UI stay in sync

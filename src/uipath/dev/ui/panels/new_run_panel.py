@@ -33,7 +33,6 @@ class NewRunPanel(Container):
 
         self.entrypoint_schemas: dict[str, dict[str, Any]] = {}
 
-        self.conversational: bool = False
         self.initial_input: str = "{}"
 
     def compose(self) -> ComposeResult:
@@ -62,8 +61,14 @@ class NewRunPanel(Container):
                             classes="action-btn",
                         )
                         yield Button(
-                            "⏯ Debug",
+                            "⏸ Debug",
                             id="debug-btn",
+                            variant="primary",
+                            classes="action-btn",
+                        )
+                        yield Button(
+                            "💬 Chat",
+                            id="chat-btn",
                             variant="primary",
                             classes="action-btn",
                         )
@@ -150,10 +155,10 @@ class NewRunPanel(Container):
             self.selected_entrypoint = new_entrypoint
             await self._load_schema_and_update_input(self.selected_entrypoint)
 
-    def get_input_values(self) -> Tuple[str, str, bool]:
+    def get_input_values(self) -> Tuple[str, str]:
         """Get the selected entrypoint and JSON input values."""
         json_input = self.query_one("#json-input", JsonInput)
-        return self.selected_entrypoint, json_input.text.strip(), self.conversational
+        return self.selected_entrypoint, json_input.text.strip()
 
     def reset_form(self) -> None:
         """Reset selection and JSON input to defaults."""

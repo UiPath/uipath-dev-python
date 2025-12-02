@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import traceback
 from datetime import datetime
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 from pydantic import BaseModel
 from uipath.core.tracing import UiPathTraceManager
@@ -14,19 +14,28 @@ from uipath.runtime import (
     UiPathExecutionRuntime,
     UiPathRuntimeFactoryProtocol,
     UiPathRuntimeProtocol,
+    UiPathRuntimeResult,
     UiPathRuntimeStatus,
+    UiPathStreamOptions,
 )
 from uipath.runtime.debug import UiPathDebugRuntime
 from uipath.runtime.errors import UiPathErrorContract, UiPathRuntimeError
-from uipath.runtime.events import UiPathRuntimeStateEvent
+from uipath.runtime.events import UiPathRuntimeMessageEvent, UiPathRuntimeStateEvent
 
 from uipath.dev.infrastructure import RunContextExporter, RunContextLogHandler
-from uipath.dev.models import ExecutionRun, LogMessage, TraceMessage
+from uipath.dev.models import (
+    ChatMessage,
+    ExecutionMode,
+    ExecutionRun,
+    LogMessage,
+    TraceMessage,
+)
 from uipath.dev.services.debug_bridge import TextualDebugBridge
 
 RunUpdatedCallback = Callable[[ExecutionRun], None]
 LogCallback = Callable[[LogMessage], None]
 TraceCallback = Callable[[TraceMessage], None]
+ChatCallback = Callable[[ChatMessage], None]
 
 
 class RunService:
@@ -45,6 +54,7 @@ class RunService:
         on_run_updated: RunUpdatedCallback | None = None,
         on_log: LogCallback | None = None,
         on_trace: TraceCallback | None = None,
+        on_chat: ChatCallback | None = None,
     ) -> None:
         """Initialize RunService with runtime factory and trace manager."""
         self.runtime_factory = runtime_factory
@@ -54,6 +64,7 @@ class RunService:
         self.on_run_updated = on_run_updated
         self.on_log = on_log
         self.on_trace = on_trace
+        self.on_chat = on_chat
 
         self.trace_manager.add_span_exporter(
             RunContextExporter(
@@ -96,7 +107,6 @@ class RunService:
             run.start_time = datetime.now()
             self._emit_run_updated(run)
 
-            # Attach log handler that goes back into this service
             log_handler = RunContextLogHandler(
                 run_id=run.id,
                 callback=self.handle_log,
@@ -109,10 +119,9 @@ class RunService:
 
             runtime: UiPathRuntimeProtocol
 
-            if run.debug:
+            if run.mode == ExecutionMode.DEBUG:
                 debug_bridge = TextualDebugBridge()
 
-                # Connect callbacks
                 debug_bridge.on_state_update = lambda state: self._handle_state_update(
                     run.id, state
                 )
@@ -126,7 +135,6 @@ class RunService:
                     run, error
                 )
 
-                # Store bridge so UI can access it
                 self.debug_bridges[run.id] = debug_bridge
 
                 runtime = UiPathDebugRuntime(
@@ -143,7 +151,26 @@ class RunService:
                 execution_id=run.id,
             )
 
-            result = await execution_runtime.execute(execution_input, execution_options)
+            if run.mode == ExecutionMode.CHAT:
+                result: UiPathRuntimeResult | None = None
+                async for event in execution_runtime.stream(
+                    execution_input,
+                    options=cast(UiPathStreamOptions, execution_options),
+                ):
+                    if isinstance(event, UiPathRuntimeResult):
+                        result = event
+                    elif isinstance(event, UiPathRuntimeMessageEvent):
+                        if self.on_chat is not None:
+                            chat_msg = ChatMessage(
+                                event=event.payload,
+                                message=run.add_event(event.payload),
+                                run_id=run.id,
+                            )
+                            self.on_chat(chat_msg)
+            else:
+                result = await execution_runtime.execute(
+                    execution_input, execution_options
+                )
 
             if result is not None:
                 if (

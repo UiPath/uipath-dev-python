@@ -12,8 +12,9 @@ from textual.widgets import (
 )
 from textual.widgets.tree import TreeNode
 
-from uipath.dev.models.execution import ExecutionRun
-from uipath.dev.models.messages import LogMessage, TraceMessage
+from uipath.dev.models.execution import ExecutionMode, ExecutionRun
+from uipath.dev.models.messages import ChatMessage, LogMessage, TraceMessage
+from uipath.dev.ui.panels.chat_panel import ChatPanel
 
 
 class SpanDetailsDisplay(Container):
@@ -36,9 +37,8 @@ class SpanDetailsDisplay(Container):
 
         details_log.write(f"[bold cyan]Span: {trace_msg.span_name}[/bold cyan]")
 
-        details_log.write("")  # Empty line
+        details_log.write("")
 
-        # Status with color
         color_map = {
             "started": "blue",
             "running": "yellow",
@@ -49,7 +49,6 @@ class SpanDetailsDisplay(Container):
         color = color_map.get(trace_msg.status.lower(), "white")
         details_log.write(f"Status: [{color}]{trace_msg.status.upper()}[/{color}]")
 
-        # Timestamps
         details_log.write(
             f"Started: [dim]{trace_msg.timestamp.strftime('%H:%M:%S.%f')[:-3]}[/dim]"
         )
@@ -59,16 +58,14 @@ class SpanDetailsDisplay(Container):
                 f"Duration: [yellow]{trace_msg.duration_ms:.2f}ms[/yellow]"
             )
 
-        # Additional attributes if available
         if trace_msg.attributes:
             details_log.write("")
             details_log.write("[bold]Attributes:[/bold]")
             for key, value in trace_msg.attributes.items():
                 details_log.write(f"  {key}: {value}")
 
-        details_log.write("")  # Empty line
+        details_log.write("")
 
-        # Format span details
         details_log.write(f"[dim]Trace ID: {trace_msg.trace_id}[/dim]")
         details_log.write(f"[dim]Span ID: {trace_msg.span_id}[/dim]")
         details_log.write(f"[dim]Run ID: {trace_msg.run_id}[/dim]")
@@ -85,13 +82,12 @@ class RunDetailsPanel(Container):
     def __init__(self, **kwargs):
         """Initialize RunDetailsPanel."""
         super().__init__(**kwargs)
-        self.span_tree_nodes = {}  # Map span_id to tree nodes
-        self.current_run = None  # Store reference to current run
+        self.span_tree_nodes = {}
+        self.current_run = None
 
     def compose(self) -> ComposeResult:
         """Compose the UI layout."""
         with TabbedContent():
-            # Run details tab
             with TabPane("Details", id="run-tab"):
                 yield RichLog(
                     id="run-details-log",
@@ -101,7 +97,6 @@ class RunDetailsPanel(Container):
                     classes="detail-log",
                 )
 
-            # Traces tab
             with TabPane("Traces", id="traces-tab"):
                 with Horizontal(classes="traces-content"):
                     # Left side - Span tree
@@ -114,7 +109,6 @@ class RunDetailsPanel(Container):
                     with Vertical(classes="span-details-section"):
                         yield SpanDetailsDisplay(id="span-details-display")
 
-            # Logs tab
             with TabPane("Logs", id="logs-tab"):
                 yield RichLog(
                     id="logs-log",
@@ -123,6 +117,10 @@ class RunDetailsPanel(Container):
                     markup=True,
                     classes="detail-log",
                 )
+
+            with TabPane("Chat", id="chat-tab"):
+                yield ChatPanel(id="chat-panel")
+
         # Global debug controls (hidden by default, shown when debug mode active)
         with Container(id="debug-controls", classes="debug-controls hidden"):
             with Horizontal(classes="debug-actions-row"):
@@ -157,16 +155,13 @@ class RunDetailsPanel(Container):
 
     def show_run(self, run: ExecutionRun):
         """Display traces and logs for a specific run."""
-        # Populate run details tab
         self._show_run_details(run)
 
-        # Populate logs - convert string logs to display format
         logs_log = self.query_one("#logs-log", RichLog)
         logs_log.clear()
         for log in run.logs:
             self.add_log(log)
 
-        # Clear and rebuild traces tree using TraceMessage objects
         self._rebuild_spans_tree()
 
     def switch_tab(self, tab_id: str) -> None:
@@ -177,7 +172,7 @@ class RunDetailsPanel(Container):
     def update_debug_controls_visibility(self, run: ExecutionRun):
         """Show or hide debug controls based on whether run is in debug mode."""
         debug_controls = self.query_one("#debug-controls", Container)
-        if run.debug:
+        if run.mode == ExecutionMode.DEBUG:
             debug_controls.remove_class("hidden")
             is_enabled = run.status == "suspended"
             for button in debug_controls.query(Button):
@@ -244,11 +239,9 @@ class RunDetailsPanel(Container):
         run_details_log = self.query_one("#run-details-log", RichLog)
         run_details_log.clear()
 
-        # Run header
         run_details_log.write(f"[bold cyan]Run ID: {run.id}[/bold cyan]")
         run_details_log.write("")
 
-        # Run status with color
         status_color_map = {
             "started": "blue",
             "running": "yellow",
@@ -262,7 +255,6 @@ class RunDetailsPanel(Container):
             f"[bold]Status:[/bold] [{color}]{status.upper()}[/{color}]"
         )
 
-        # Timestamps
         if hasattr(run, "start_time") and run.start_time:
             run_details_log.write(
                 f"[bold]Started:[/bold] [dim]{run.start_time.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}[/dim]"
@@ -273,7 +265,6 @@ class RunDetailsPanel(Container):
                 f"[bold]Ended:[/bold] [dim]{run.end_time.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}[/dim]"
             )
 
-        # Duration
         if hasattr(run, "duration_ms") and run.duration_ms is not None:
             run_details_log.write(
                 f"[bold]Duration:[/bold] [yellow]{run.duration_ms:.2f}ms[/yellow]"
@@ -302,7 +293,6 @@ class RunDetailsPanel(Container):
                 run_details_log, "Output", run.output_data, style="magenta"
             )
 
-        # Error section (if applicable)
         if hasattr(run, "error") and run.error:
             run_details_log.write("[bold red]ERROR:[/bold red]")
             run_details_log.write("[dim]" + "=" * 50 + "[/dim]")
@@ -320,13 +310,11 @@ class RunDetailsPanel(Container):
 
         spans_tree.root.remove_children()
 
-        # Only clear the node mapping since we're rebuilding the tree structure
         self.span_tree_nodes.clear()
 
         if not self.current_run or not self.current_run.traces:
             return
 
-        # Build spans tree from TraceMessage objects
         self._build_spans_tree(self.current_run.traces)
 
         # Expand the root "Trace" node
@@ -368,7 +356,6 @@ class RunDetailsPanel(Container):
         children_by_parent: dict[str, list[TraceMessage]],
     ):
         """Recursively add a span and all its children."""
-        # Create the node for this span
         color_map = {
             "started": "🔵",
             "running": "🟡",
@@ -411,7 +398,6 @@ class RunDetailsPanel(Container):
                         break
 
             if trace_msg:
-                # Show span details
                 span_details_display = self.query_one(
                     "#span-details-display", SpanDetailsDisplay
                 )
@@ -423,6 +409,16 @@ class RunDetailsPanel(Container):
             return
 
         self._show_run_details(run)
+
+    def add_chat_message(
+        self,
+        chat_msg: ChatMessage,
+    ) -> None:
+        """Add a chat message to the display."""
+        if not self.current_run or chat_msg.run_id != self.current_run.id:
+            return
+        chat_panel = self.query_one("#chat-panel", ChatPanel)
+        chat_panel.add_chat_message(chat_msg)
 
     def add_trace(self, trace_msg: TraceMessage):
         """Add trace to current run if it matches."""
@@ -474,7 +470,6 @@ class RunDetailsPanel(Container):
         self.current_run = None
         self.span_tree_nodes.clear()
 
-        # Clear span details
         span_details_display = self.query_one(
             "#span-details-display", SpanDetailsDisplay
         )
