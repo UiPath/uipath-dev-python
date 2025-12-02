@@ -297,6 +297,7 @@ Response, Tool {
 
 #chat-container{
     background: $surface;
+    margin-bottom: 1;
 }
 
 #chat-input{
