@@ -2,13 +2,24 @@
 
 import os
 from datetime import datetime
-from typing import Any
+from enum import Enum
+from typing import Any, cast
 from uuid import uuid4
 
 from rich.text import Text
+from uipath.core.chat import UiPathConversationEvent, UiPathConversationMessage
 from uipath.runtime.errors import UiPathErrorContract
 
+from uipath.dev.models.chat import ChatEvents
 from uipath.dev.models.messages import LogMessage, TraceMessage
+
+
+class ExecutionMode(Enum):
+    """Enumeration of execution modes."""
+
+    RUN = "run"
+    DEBUG = "debug"
+    CHAT = "chat"
 
 
 class ExecutionRun:
@@ -18,15 +29,13 @@ class ExecutionRun:
         self,
         entrypoint: str,
         input_data: dict[str, Any],
-        conversational: bool = False,
-        debug: bool = False,
+        mode: ExecutionMode,
     ):
         """Initialize an ExecutionRun instance."""
         self.id = str(uuid4())[:8]
         self.entrypoint = entrypoint
         self.input_data = input_data
-        self.conversational = conversational
-        self.debug = debug
+        self.mode = mode
         self.resume_data: dict[str, Any] | None = None
         self.output_data: dict[str, Any] | str | None = None
         self.start_time = datetime.now()
@@ -35,6 +44,7 @@ class ExecutionRun:
         self.traces: list[TraceMessage] = []
         self.logs: list[LogMessage] = []
         self.error: UiPathErrorContract | None = None
+        self.chat_events = ChatEvents()
 
     @property
     def duration(self) -> str:
@@ -80,3 +90,12 @@ class ExecutionRun:
         text.append(f"[{duration_str:<6}]")
 
         return text
+
+    @property
+    def messages(self) -> list[UiPathConversationMessage]:
+        """Get all conversation messages associated with this run."""
+        return list(self.chat_events.messages.values())
+
+    def add_event(self, event: Any) -> UiPathConversationMessage | None:
+        """Add a conversation event to the run's chat aggregator."""
+        return self.chat_events.add(cast(UiPathConversationEvent, event))

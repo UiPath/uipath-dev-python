@@ -278,4 +278,28 @@ Checkbox{
     align: left middle;
 }
 
+Prompt {
+    border: wide $primary-background;
+    background: $surface;
+    color: $text;
+    margin-right: 8;
+    margin-left: 1;
+    padding: 1 1 0 1;
+}
+Response, Tool {
+    border: wide $primary-background;
+    background: $surface;
+    color: $text;
+    margin: 1;
+    margin-left: 8;
+    padding: 1 1 0 1;
+}
 
+#chat-container{
+    background: $surface;
+}
+
+#chat-input{
+    dock: bottom;
+    margin: 1;
+}

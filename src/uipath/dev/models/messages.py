@@ -5,6 +5,7 @@ from typing import Any
 
 from rich.console import RenderableType
 from textual.message import Message
+from uipath.core.chat import UiPathConversationEvent, UiPathConversationMessage
 
 
 class LogMessage(Message):
@@ -50,4 +51,20 @@ class TraceMessage(Message):
         self.duration_ms = duration_ms
         self.timestamp = timestamp or datetime.now()
         self.attributes = attributes or {}
+        super().__init__()
+
+
+class ChatMessage(Message):
+    """Message sent when a new chat message is created or updated."""
+
+    def __init__(
+        self,
+        event: UiPathConversationEvent | None,
+        message: UiPathConversationMessage | None,
+        run_id: str,
+    ):
+        """Initialize a ChatMessage instance."""
+        self.run_id = run_id
+        self.event = event
+        self.message = message
         super().__init__()
