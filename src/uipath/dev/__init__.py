@@ -151,6 +151,7 @@ class UiPathDeveloperConsole(App[Any]):
                 msg_ev = get_user_message_event(
                     user_text, conversation_id=details_panel.current_run.id
                 )
+
                 self._on_chat_for_ui(
                     ChatMessage(
                         event=msg_ev,
@@ -158,6 +159,7 @@ class UiPathDeveloperConsole(App[Any]):
                         run_id=details_panel.current_run.id,
                     )
                 )
+                details_panel.current_run.add_event(msg_ev)
                 details_panel.current_run.input_data = {"messages": [msg]}
 
             asyncio.create_task(self._execute_runtime(details_panel.current_run))

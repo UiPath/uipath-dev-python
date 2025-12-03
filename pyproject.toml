@@ -1,13 +1,13 @@
 [project]
 name = "uipath-dev"
-version = "0.0.8"
+version = "0.0.9"
 description = "UiPath Developer Console"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
 dependencies = [
   "uipath-core>=0.0.6, <0.1.0",
   "uipath-runtime>=0.1.2, <0.2.0",
-  "textual>=6.6.0, <7.0.0",
+  "textual>=6.7.1, <7.0.0",
   "pyperclip>=1.11.0, <2.0.0",
 ]
 classifiers = [

@@ -157,6 +157,8 @@ class RunDetailsPanel(Container):
         """Display traces and logs for a specific run."""
         self._show_run_details(run)
 
+        self._show_run_chat(run)
+
         logs_log = self.query_one("#logs-log", RichLog)
         logs_log.clear()
         for log in run.logs:
@@ -236,6 +238,7 @@ class RunDetailsPanel(Container):
     def _show_run_details(self, run: ExecutionRun):
         """Display detailed information about the run in the Details tab."""
         self.update_debug_controls_visibility(run)
+
         run_details_log = self.query_one("#run-details-log", RichLog)
         run_details_log.clear()
 
@@ -301,6 +304,10 @@ class RunDetailsPanel(Container):
             run_details_log.write(f"[red]Title: {run.error.title}[/red]")
             run_details_log.write(f"[red]\n{run.error.detail}[/red]")
             run_details_log.write("")
+
+    def _show_run_chat(self, run: ExecutionRun) -> None:
+        chat_panel = self.query_one("#chat-panel", ChatPanel)
+        chat_panel.update_messages(run)
 
     def _rebuild_spans_tree(self):
         """Rebuild the spans tree from current run's traces."""
