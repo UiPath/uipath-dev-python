@@ -9,8 +9,6 @@ from uipath.core.chat import (
     UiPathConversationContentPartEndEvent,
     UiPathConversationContentPartEvent,
     UiPathConversationContentPartStartEvent,
-    UiPathConversationEvent,
-    UiPathConversationExchangeEvent,
     UiPathConversationMessage,
     UiPathConversationMessageEndEvent,
     UiPathConversationMessageEvent,
@@ -30,28 +28,26 @@ class ChatEvents:
         """Initialize the chat events aggregator."""
         self.messages = {}
 
-    def add(self, event: UiPathConversationEvent) -> UiPathConversationMessage | None:
+    def add(
+        self, event: UiPathConversationMessageEvent
+    ) -> UiPathConversationMessage | None:
         """Process an incoming conversation-level event and return the current message snapshot if applicable."""
-        if not event.exchange or not event.exchange.message:
-            return None
-
-        ev = event.exchange.message
-        msg = self.messages.get(ev.message_id)
+        msg = self.messages.get(event.message_id)
 
         if not msg:
             msg = UiPathConversationMessage(
-                message_id=ev.message_id,
-                role=self.get_role(ev),
+                message_id=event.message_id,
+                role=self.get_role(event),
                 content_parts=[],
                 tool_calls=[],
-                created_at=self.get_timestamp(ev),
-                updated_at=self.get_timestamp(ev),
+                created_at=self.get_timestamp(event),
+                updated_at=self.get_timestamp(event),
             )
-            self.messages[ev.message_id] = msg
+            self.messages[event.message_id] = msg
 
         # --- Handle content parts (text, JSON, etc.) ---
-        if ev.content_part:
-            cp_event = ev.content_part
+        if event.content_part:
+            cp_event = event.content_part
 
             existing = next(
                 (
@@ -100,8 +96,8 @@ class ChatEvents:
                 existing.is_incomplete = bool(cp_event.end.interrupted)
 
         # --- Handle tool calls ---
-        if ev.tool_call:
-            tc_event = ev.tool_call
+        if event.tool_call:
+            tc_event = event.tool_call
             existing_tool_call = next(
                 (
                     tc
@@ -152,7 +148,7 @@ class ChatEvents:
                     cancelled=tc_event.end.cancelled,
                 )
 
-        msg.updated_at = self.get_timestamp(ev)
+        msg.updated_at = self.get_timestamp(event)
 
         return msg
 
@@ -187,8 +183,8 @@ def get_user_message(user_text: str) -> UiPathConversationMessage:
 
 
 def get_user_message_event(
-    user_text: str, conversation_id: str, role: str = "user"
-) -> UiPathConversationEvent:
+    user_text: str, role: str = "user"
+) -> UiPathConversationMessageEvent:
     """Build a conversation event representing a user message from text input."""
     message_id = str(uuid4())
     content_part_id = str(uuid4())
@@ -210,23 +206,12 @@ def get_user_message_event(
         end=cp_end,
     )
 
-    msg_event = UiPathConversationMessageEvent(
+    return UiPathConversationMessageEvent(
         message_id=message_id,
         start=msg_start,
         content_part=content_event,
         end=UiPathConversationMessageEndEvent(),
     )
-
-    exchange_event = UiPathConversationExchangeEvent(
-        exchange_id=str(uuid4()),
-        message=msg_event,
-    )
-
-    conversation_event = UiPathConversationEvent(
-        exchange=exchange_event, conversation_id=conversation_id
-    )
-
-    return conversation_event
 
 
 __all__ = [

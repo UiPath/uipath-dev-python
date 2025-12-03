@@ -155,12 +155,7 @@ class ChatPanel(Container):
 
             def should_update() -> bool:
                 event = chat_msg.event
-                finished = (
-                    event
-                    and event.exchange
-                    and event.exchange.message
-                    and event.exchange.message.end is not None
-                )
+                finished = event and event.end is not None
 
                 if finished:
                     # Always paint the final state immediately.
