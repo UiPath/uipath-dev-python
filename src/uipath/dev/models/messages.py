@@ -5,7 +5,7 @@ from typing import Any
 
 from rich.console import RenderableType
 from textual.message import Message
-from uipath.core.chat import UiPathConversationEvent, UiPathConversationMessage
+from uipath.core.chat import UiPathConversationMessage, UiPathConversationMessageEvent
 
 
 class LogMessage(Message):
@@ -59,7 +59,7 @@ class ChatMessage(Message):
 
     def __init__(
         self,
-        event: UiPathConversationEvent | None,
+        event: UiPathConversationMessageEvent | None,
         message: UiPathConversationMessage | None,
         run_id: str,
     ):

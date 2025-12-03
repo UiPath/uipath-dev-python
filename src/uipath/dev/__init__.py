@@ -148,9 +148,7 @@ class UiPathDeveloperConsole(App[Any]):
                 details_panel.current_run.resume_data = {"value": user_text}
             else:
                 msg = get_user_message(user_text)
-                msg_ev = get_user_message_event(
-                    user_text, conversation_id=details_panel.current_run.id
-                )
+                msg_ev = get_user_message_event(user_text)
 
                 self._on_chat_for_ui(
                     ChatMessage(

@@ -7,7 +7,7 @@ from typing import Any, cast
 from uuid import uuid4
 
 from rich.text import Text
-from uipath.core.chat import UiPathConversationEvent, UiPathConversationMessage
+from uipath.core.chat import UiPathConversationMessage, UiPathConversationMessageEvent
 from uipath.runtime.errors import UiPathErrorContract
 
 from uipath.dev.models.chat import ChatEvents
@@ -98,4 +98,4 @@ class ExecutionRun:
 
     def add_event(self, event: Any) -> UiPathConversationMessage | None:
         """Add a conversation event to the run's chat aggregator."""
-        return self.chat_events.add(cast(UiPathConversationEvent, event))
+        return self.chat_events.add(cast(UiPathConversationMessageEvent, event))
