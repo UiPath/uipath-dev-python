@@ -36,7 +36,7 @@ class ExecutionRun:
         self.entrypoint = entrypoint
         self.input_data = input_data
         self.mode = mode
-        self.resume_data: dict[str, Any] | None = None
+        self.resume_data: Any | None = None
         self.output_data: dict[str, Any] | str | None = None
         self.start_time = datetime.now()
         self.end_time: datetime | None = None
@@ -98,4 +98,6 @@ class ExecutionRun:
 
     def add_event(self, event: Any) -> UiPathConversationMessage | None:
         """Add a conversation event to the run's chat aggregator."""
+        if event is None:
+            return None
         return self.chat_events.add(cast(UiPathConversationMessageEvent, event))

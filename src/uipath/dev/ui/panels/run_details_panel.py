@@ -436,6 +436,7 @@ class RunDetailsPanel(Container):
 
         if not self.current_run or chat_msg.run_id != self.current_run.id:
             return
+
         self._chat_panel.add_chat_message(chat_msg)
 
     def add_trace(self, trace_msg: TraceMessage):

@@ -137,15 +137,21 @@ class UiPathDeveloperConsole(App[Any]):
 
         details_panel = self.query_one("#details-panel", RunDetailsPanel)
         if details_panel and details_panel.current_run:
-            status = details_panel.current_run.status
+            current_run = details_panel.current_run
+            status = current_run.status
             if status == "running":
                 self.app.notify(
                     "Wait for agent response...", timeout=1.5, severity="warning"
                 )
                 return
 
-            if details_panel.current_run.status == "suspended":
-                details_panel.current_run.resume_data = {"value": user_text}
+            if current_run.status == "suspended":
+                resume_input: Any = {}
+                try:
+                    resume_input = json.loads(user_text)
+                except json.JSONDecodeError:
+                    resume_input = user_text
+                current_run.resume_data = resume_input
             else:
                 msg = get_user_message(user_text)
                 msg_ev = get_user_message_event(user_text)
@@ -154,13 +160,18 @@ class UiPathDeveloperConsole(App[Any]):
                     ChatMessage(
                         event=msg_ev,
                         message=msg,
-                        run_id=details_panel.current_run.id,
+                        run_id=current_run.id,
                     )
                 )
-                details_panel.current_run.add_event(msg_ev)
-                details_panel.current_run.input_data = {"messages": [msg]}
+                current_run.add_event(msg_ev)
+                current_run.input_data = {"messages": [msg]}
 
-            asyncio.create_task(self._execute_runtime(details_panel.current_run))
+            if current_run.mode == ExecutionMode.DEBUG:
+                asyncio.create_task(
+                    self._resume_runtime(current_run, current_run.resume_data)
+                )
+            else:
+                asyncio.create_task(self._execute_runtime(current_run))
 
             event.input.clear()
 
@@ -243,6 +254,10 @@ class UiPathDeveloperConsole(App[Any]):
     async def _execute_runtime(self, run: ExecutionRun) -> None:
         """Wrapper that delegates execution to RunService."""
         await self.run_service.execute(run)
+
+    async def _resume_runtime(self, run: ExecutionRun, resume_data: Any) -> None:
+        """Wrapper that delegates execution to RunService."""
+        await self.run_service.resume_debug(run, resume_data)
 
     def _on_run_updated(self, run: ExecutionRun) -> None:
         """Called whenever a run changes (status, times, logs, traces)."""
