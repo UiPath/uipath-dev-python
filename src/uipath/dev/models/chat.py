@@ -143,7 +143,7 @@ class ChatEvents:
 
                 existing_tool_call.result = UiPathConversationToolCallResult(
                     timestamp=tc_event.end.timestamp,
-                    value=tc_event.end.result,
+                    value=tc_event.end.output,
                     is_error=tc_event.end.is_error,
                     cancelled=tc_event.end.cancelled,
                 )

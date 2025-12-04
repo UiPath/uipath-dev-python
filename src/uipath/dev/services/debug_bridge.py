@@ -7,6 +7,7 @@ from typing import Any, Callable, Literal
 from uipath.runtime.debug import UiPathBreakpointResult, UiPathDebugQuitError
 from uipath.runtime.events import UiPathRuntimeStateEvent
 from uipath.runtime.result import UiPathRuntimeResult
+from uipath.runtime.resumable import UiPathResumeTriggerType
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,7 @@ class TextualDebugBridge:
         """Initialize the debug bridge."""
         self._connected = False
         self._resume_event = asyncio.Event()
+        self._resume_data: dict[str, Any] | None = None
         self._terminate_event = asyncio.Event()
         self._breakpoints: list[str] | Literal["*"] = "*"  # Default: step mode
 
@@ -60,6 +62,29 @@ class TextualDebugBridge:
         if self.on_breakpoint_hit:
             self.on_breakpoint_hit(breakpoint_result)
 
+    async def emit_execution_suspended(
+        self, runtime_result: UiPathRuntimeResult
+    ) -> None:
+        """Notify debugger that execution is suspended."""
+        logger.debug("Execution suspended")
+        if runtime_result.trigger is None:
+            return
+
+        if runtime_result.trigger.trigger_type == UiPathResumeTriggerType.API:
+            if self.on_breakpoint_hit:
+                self.on_breakpoint_hit(
+                    UiPathBreakpointResult(
+                        breakpoint_node="<suspended>",
+                        breakpoint_type="before",
+                        current_state=runtime_result.output,
+                        next_nodes=[],
+                    )
+                )
+
+    async def emit_execution_resumed(self, resume_data: Any) -> None:
+        """Notify debugger that execution resumed."""
+        logger.debug("Execution resumed")
+
     async def emit_execution_completed(
         self, runtime_result: UiPathRuntimeResult
     ) -> None:
@@ -86,12 +111,15 @@ class TextualDebugBridge:
         if self._terminate_event.is_set():
             raise UiPathDebugQuitError("Debug session quit requested")
 
+        return self._resume_data
+
     async def wait_for_terminate(self) -> None:
         """Wait for terminate command from debugger."""
         await self._terminate_event.wait()
 
-    def resume(self) -> None:
+    def resume(self, resume_data: Any) -> None:
         """Signal that execution should resume (called from UI buttons)."""
+        self._resume_data = resume_data or {}
         self._resume_event.set()
 
     def quit(self) -> None:

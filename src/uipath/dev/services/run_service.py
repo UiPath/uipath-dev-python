@@ -86,13 +86,10 @@ class RunService:
         return self.runs.get(run_id)
 
     async def execute(self, run: ExecutionRun) -> None:
-        """Execute or resume a run.
-
-        This is the extracted version of the old `_execute_runtime` method.
-        """
+        """Execute or resume a run."""
         new_runtime: UiPathRuntimeProtocol | None = None
         try:
-            execution_input: dict[str, Any] | None = {}
+            execution_input: dict[str, Any] | str | None = {}
             execution_options: UiPathExecuteOptions = UiPathExecuteOptions()
 
             if run.status == "suspended":
@@ -179,13 +176,14 @@ class RunService:
                 ):
                     run.status = "suspended"
                 else:
-                    if result.output is None:
-                        run.output_data = {}
-                    elif isinstance(result.output, BaseModel):
-                        run.output_data = result.output.model_dump()
-                    else:
-                        run.output_data = result.output
                     run.status = "completed"
+
+                if result.output is None:
+                    run.output_data = {}
+                elif isinstance(result.output, BaseModel):
+                    run.output_data = result.output.model_dump()
+                else:
+                    run.output_data = result.output
 
                 if run.output_data:
                     self._add_info_log(run, f"Execution result: {run.output_data}")
@@ -218,6 +216,14 @@ class RunService:
         if run.id in self.debug_bridges:
             del self.debug_bridges[run.id]
 
+    async def resume_debug(self, run: ExecutionRun, resume_data: Any) -> None:
+        """Resume debug execution from a breakpoint."""
+        debug_bridge = self.debug_bridges.get(run.id)
+        if debug_bridge:
+            run.status = "running"
+            self._emit_run_updated(run)
+            debug_bridge.resume(resume_data)
+
     def step_debug(self, run: ExecutionRun) -> None:
         """Step to next breakpoint in debug mode."""
         debug_bridge = self.debug_bridges.get(run.id)
@@ -227,7 +233,7 @@ class RunService:
             # Resume execution (will pause at next node)
             run.status = "running"
             self._emit_run_updated(run)
-            debug_bridge.resume()
+            debug_bridge.resume(resume_data={})
 
     def continue_debug(self, run: ExecutionRun) -> None:
         """Continue execution without stopping at breakpoints."""
@@ -238,7 +244,7 @@ class RunService:
             # Resume execution
             run.status = "running"
             self._emit_run_updated(run)
-            debug_bridge.resume()
+            debug_bridge.resume(resume_data={})
 
     def stop_debug(self, run: ExecutionRun) -> None:
         """Stop debug execution."""
