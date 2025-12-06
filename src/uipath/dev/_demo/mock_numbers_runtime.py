@@ -12,7 +12,7 @@ from uipath.runtime import (
 )
 from uipath.runtime.schema import UiPathRuntimeSchema
 
-ENTRYPOINT_ANALYZE_NUMBERS = "analytics/numbers.py:analyze"
+ENTRYPOINT_ANALYZE_NUMBERS = "agent/numbers.py:analyze"
 
 logger = logging.getLogger(__name__)
 

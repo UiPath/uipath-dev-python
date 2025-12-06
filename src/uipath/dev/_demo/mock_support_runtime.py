@@ -12,7 +12,7 @@ from uipath.runtime import (
 )
 from uipath.runtime.schema import UiPathRuntimeSchema
 
-ENTRYPOINT_SUPPORT_CHAT = "agent/support.py:chat"
+ENTRYPOINT_SUPPORT_CHAT = "agent/support.py:main"
 
 logger = logging.getLogger(__name__)
 
