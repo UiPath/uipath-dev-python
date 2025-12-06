@@ -12,15 +12,15 @@ from uipath.runtime import (
 )
 from uipath.runtime.schema import UiPathRuntimeSchema
 
-ENTRYPOINT_CONTEXT = "agent/context.py:run"
+ENTRYPOINT_TELEMETRY = "agent/telemetry.py:run"
 
 logger = logging.getLogger(__name__)
 
 
-class MockContextRuntime:
+class MockTelemetryRuntime:
     """A mock runtime that simulates a multi-step workflow with rich telemetry."""
 
-    def __init__(self, entrypoint: str = ENTRYPOINT_CONTEXT) -> None:
+    def __init__(self, entrypoint: str = ENTRYPOINT_TELEMETRY) -> None:
         self.entrypoint = entrypoint
         self.tracer = trace.get_tracer("uipath.dev.mock.context")
         # State tracking for breakpoints

@@ -1,7 +1,7 @@
 from uipath.core.tracing import UiPathTraceManager
 
 from uipath.dev import UiPathDeveloperConsole
-from uipath.dev._demo.mock_runtime import MockRuntimeFactory
+from uipath.dev._demo.mock_factory import MockRuntimeFactory
 
 
 def main():
