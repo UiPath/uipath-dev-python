@@ -1,3 +1,5 @@
+"""An example mock runtime that analyzes numbers."""
+
 import asyncio
 import logging
 from typing import Any, AsyncGenerator
@@ -12,7 +14,7 @@ from uipath.runtime import (
 )
 from uipath.runtime.schema import UiPathRuntimeSchema
 
-ENTRYPOINT_ANALYZE_NUMBERS = "analytics/numbers.py:analyze"
+ENTRYPOINT_ANALYZE_NUMBERS = "agent/numbers.py:analyze"
 
 logger = logging.getLogger(__name__)
 
@@ -21,10 +23,12 @@ class MockNumberAnalyticsRuntime:
     """Mock runtime that analyzes a list of numbers."""
 
     def __init__(self, entrypoint: str = ENTRYPOINT_ANALYZE_NUMBERS) -> None:
+        """Initialize the MockNumberAnalyticsRuntime."""
         self.entrypoint = entrypoint
         self.tracer = trace.get_tracer("uipath.dev.mock.number-analytics")
 
     async def get_schema(self) -> UiPathRuntimeSchema:
+        """Get the schema for the number analytics runtime."""
         return UiPathRuntimeSchema(
             filePath=self.entrypoint,
             uniqueId="mock-number-analytics-runtime",
@@ -61,6 +65,7 @@ class MockNumberAnalyticsRuntime:
         input: dict[str, Any] | None = None,
         options: UiPathExecuteOptions | None = None,
     ) -> UiPathRuntimeResult:
+        """Execute the number analytics runtime."""
         payload = input or {}
         numbers = payload.get("numbers") or []
         operation = str(payload.get("operation", "sum")).lower()
@@ -137,8 +142,10 @@ class MockNumberAnalyticsRuntime:
         input: dict[str, Any] | None = None,
         options: UiPathStreamOptions | None = None,
     ) -> AsyncGenerator[UiPathRuntimeEvent, None]:
+        """Stream events from the number analytics runtime."""
         logger.info("NumberAnalyticsRuntime: stream() invoked")
         yield await self.execute(input=input, options=options)
 
     async def dispose(self) -> None:
+        """Dispose of any resources used by the number analytics runtime."""
         logger.info("NumberAnalyticsRuntime: dispose() invoked")

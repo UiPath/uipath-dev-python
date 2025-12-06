@@ -1,3 +1,5 @@
+"""Mock runtime that simulates a support chat agent."""
+
 import asyncio
 import logging
 from typing import Any, AsyncGenerator
@@ -12,7 +14,7 @@ from uipath.runtime import (
 )
 from uipath.runtime.schema import UiPathRuntimeSchema
 
-ENTRYPOINT_SUPPORT_CHAT = "agent/support.py:chat"
+ENTRYPOINT_SUPPORT_CHAT = "agent/support.py:main"
 
 logger = logging.getLogger(__name__)
 
@@ -21,10 +23,12 @@ class MockSupportChatRuntime:
     """Mock runtime that simulates a tiny support agent."""
 
     def __init__(self, entrypoint: str = ENTRYPOINT_SUPPORT_CHAT) -> None:
+        """Initialize the MockSupportChatRuntime."""
         self.entrypoint = entrypoint
         self.tracer = trace.get_tracer("uipath.dev.mock.support-chat")
 
     async def get_schema(self) -> UiPathRuntimeSchema:
+        """Get the schema for the support chat runtime."""
         return UiPathRuntimeSchema(
             filePath=self.entrypoint,
             uniqueId="mock-support-chat-runtime",
@@ -60,6 +64,7 @@ class MockSupportChatRuntime:
         input: dict[str, Any] | None = None,
         options: UiPathExecuteOptions | None = None,
     ) -> UiPathRuntimeResult:
+        """Execute the support chat runtime."""
         payload = input or {}
         message = str(payload.get("message", "")).strip()
         previous = payload.get("previousIssues") or []
@@ -139,8 +144,10 @@ class MockSupportChatRuntime:
         input: dict[str, Any] | None = None,
         options: UiPathStreamOptions | None = None,
     ) -> AsyncGenerator[UiPathRuntimeEvent, None]:
+        """Stream events from the support chat runtime."""
         logger.info("SupportChatRuntime: stream() invoked")
         yield await self.execute(input=input, options=options)
 
     async def dispose(self) -> None:
+        """Dispose of any resources used by the support chat runtime."""
         logger.info("SupportChatRuntime: dispose() invoked")

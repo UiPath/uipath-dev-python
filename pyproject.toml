@@ -27,7 +27,7 @@ Repository = "https://github.com/UiPath/uipath-dev-python"
 Documentation = "https://uipath.github.io/uipath-python/"
 
 [project.scripts]
-uipath-dev = "uipath.dev._demo.run_dev_console:main"
+uipath-dev = "uipath.dev.__mock__:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -50,6 +50,9 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/uipath"]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["demo"]
 
 [tool.ruff]
 line-length = 88
