@@ -1,9 +1,8 @@
 # UiPath Developer Console
 
-[![PyPI downloads](https://img.shields.io/pypi/dm/uipath-dev.svg)](https://pypi.org/project/uipath-dev/)
 [![PyPI - Version](https://img.shields.io/pypi/v/uipath-dev)](https://pypi.org/project/uipath-dev/)
+[![PyPI downloads](https://img.shields.io/pypi/dm/uipath-dev.svg)](https://pypi.org/project/uipath-dev/)
 [![Python versions](https://img.shields.io/pypi/pyversions/uipath-dev.svg)](https://pypi.org/project/uipath-dev/)
-
 
 Interactive terminal application for building, testing, and debugging UiPath Python runtimes, agents, and automation scripts.
 
@@ -50,3 +49,11 @@ To run tests:
 ```bash
 pytest
 ```
+
+### :heart: Special Thanks
+
+A huge thank-you to the open-source community and the maintainers of the libraries that make this project possible:
+
+- [OpenTelemetry](https://github.com/open-telemetry/opentelemetry-python) for observability and tracing.
+- [Pyperclip](https://github.com/asweigart/pyperclip) for cross-platform clipboard operations.
+- [Textual](https://github.com/Textualize/textual) for the powerful TUI framework that powers the developer console.

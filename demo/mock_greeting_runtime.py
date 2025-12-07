@@ -1,3 +1,5 @@
+"""Mock Greeting Runtime for demonstration purposes."""
+
 import asyncio
 import logging
 from typing import Any, AsyncGenerator
@@ -21,10 +23,12 @@ class MockGreetingRuntime:
     """Mock runtime that builds a greeting and simulates a small pipeline."""
 
     def __init__(self, entrypoint: str = ENTRYPOINT_GREETING) -> None:
+        """Initialize the MockGreetingRuntime."""
         self.entrypoint = entrypoint
         self.tracer = trace.get_tracer("uipath.dev.mock.greeting")
 
     async def get_schema(self) -> UiPathRuntimeSchema:
+        """Get the schema for the greeting runtime."""
         return UiPathRuntimeSchema(
             filePath=self.entrypoint,
             uniqueId="mock-greeting-runtime",
@@ -62,6 +66,7 @@ class MockGreetingRuntime:
         input: dict[str, Any] | None = None,
         options: UiPathExecuteOptions | None = None,
     ) -> UiPathRuntimeResult:
+        """Execute the greeting runtime."""
         payload = input or {}
         name = str(payload.get("name", "world")).strip() or "world"
         excited = bool(payload.get("excited", True))
@@ -124,8 +129,10 @@ class MockGreetingRuntime:
         input: dict[str, Any] | None = None,
         options: UiPathStreamOptions | None = None,
     ) -> AsyncGenerator[UiPathRuntimeEvent, None]:
+        """Stream events from the greeting runtime."""
         logger.info("GreetingRuntime: stream() invoked")
         yield await self.execute(input=input, options=options)
 
     async def dispose(self) -> None:
+        """Dispose of any resources used by the greeting runtime."""
         logger.info("GreetingRuntime: dispose() invoked")

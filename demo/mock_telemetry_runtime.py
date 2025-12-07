@@ -1,3 +1,5 @@
+"""Mock runtime that simulates a multi-step workflow with rich telemetry."""
+
 import asyncio
 import logging
 from typing import Any, AsyncGenerator
@@ -10,17 +12,19 @@ from uipath.runtime import (
     UiPathRuntimeStatus,
     UiPathStreamOptions,
 )
+from uipath.runtime.debug import UiPathBreakpointResult
 from uipath.runtime.schema import UiPathRuntimeSchema
 
-ENTRYPOINT_CONTEXT = "agent/context.py:run"
+ENTRYPOINT_TELEMETRY = "agent/telemetry.py:run"
 
 logger = logging.getLogger(__name__)
 
 
-class MockContextRuntime:
+class MockTelemetryRuntime:
     """A mock runtime that simulates a multi-step workflow with rich telemetry."""
 
-    def __init__(self, entrypoint: str = ENTRYPOINT_CONTEXT) -> None:
+    def __init__(self, entrypoint: str = ENTRYPOINT_TELEMETRY) -> None:
+        """Initialize the MockTelemetryRuntime."""
         self.entrypoint = entrypoint
         self.tracer = trace.get_tracer("uipath.dev.mock.context")
         # State tracking for breakpoints
@@ -39,6 +43,7 @@ class MockContextRuntime:
         ]
 
     async def get_schema(self) -> UiPathRuntimeSchema:
+        """Get the schema for the mock telemetry runtime."""
         return UiPathRuntimeSchema(
             filePath=self.entrypoint,
             uniqueId="mock-runtime",
@@ -60,8 +65,7 @@ class MockContextRuntime:
         input: dict[str, Any] | None = None,
         options: UiPathExecuteOptions | None = None,
     ) -> UiPathRuntimeResult:
-        from uipath.runtime.debug import UiPathBreakpointResult
-
+        """Execute the mock telemetry runtime."""
         payload = input or {}
         entrypoint = "mock-entrypoint"
         message = str(payload.get("message", ""))
@@ -454,10 +458,12 @@ class MockContextRuntime:
         input: dict[str, Any] | None = None,
         options: UiPathStreamOptions | None = None,
     ) -> AsyncGenerator[UiPathRuntimeEvent, None]:
+        """Stream events from the mock telemetry runtime."""
         logger.info("MockRuntime: stream() invoked")
         print("[MockRuntime] stream() invoked")
         yield await self.execute(input=input, options=options)
 
     async def dispose(self) -> None:
+        """Dispose of any resources used by the mock telemetry runtime."""
         logger.info("MockRuntime: dispose() invoked")
         print("[MockRuntime] dispose() invoked")
