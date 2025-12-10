@@ -187,7 +187,7 @@ class UiPathDeveloperConsole(App[Any]):
         """Cancel and return to new run view."""
         await self.action_new_run()
 
-    async def action_execute_run(self, mode: ExecutionMode) -> None:
+    async def action_execute_run(self, mode: ExecutionMode = ExecutionMode.RUN) -> None:
         """Execute a new run based on NewRunPanel inputs."""
         new_run_panel = self.query_one("#new-run-panel", NewRunPanel)
         entrypoint, input_data = new_run_panel.get_input_values()
