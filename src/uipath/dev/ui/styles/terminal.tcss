@@ -1,13 +1,137 @@
+/* === Base Layout === */
 Screen {
     layout: horizontal;
 }
 
-.run-history {
+.hidden {
+    display: none;
+}
+
+/* === Main Layout Panels === */
+.left-panel {
     width: 30%;
     min-width: 25;
     padding-right: 1;
 }
 
+.main-content {
+    width: 70%;
+    padding-left: 1;
+    height: 100%;
+}
+
+.middle-panel {
+    width: 1fr;
+    height: 100%;
+    overflow: hidden;
+}
+
+.right-edit-panel {
+    width: 1fr;
+    height: 100%;
+    border-left: tall $primary 30%;
+}
+
+/* === Common Widget Overrides === */
+Label {
+    margin: 1 1;
+    width: 100%;
+    height: 100%;
+    border: tall $primary;
+    content-align: center middle;
+}
+
+/* Override Label styles for all eval/detail panels */
+EvalRunDetailsPanel Label,
+EvalSetsTab Label,
+EvaluatorsTab Label,
+SidebarPanel Label {
+    border: none;
+    height: auto;
+    width: auto;
+    margin: 0;
+    content-align: left middle;
+}
+
+TabbedContent {
+    height: 100%;
+}
+
+TabPane {
+    height: 100%;
+    padding: 0;
+}
+
+ContentSwitcher {
+    height: 1fr;
+}
+
+Footer {
+    margin-top: 1;
+    height: auto;
+    dock: bottom;
+}
+
+Checkbox {
+    margin-top: 1;
+}
+
+TextArea.invalid {
+    border: tall red;
+}
+
+/* === All TabbedContent containers === */
+#new-run-tabs,
+#eval-tabs,
+#edit-tabs,
+#create-tabs,
+#right-eval-tabs,
+#evaluator-create-tabs,
+#eval-run-tabs,
+#eval-run-details-tabs {
+    height: 100%;
+}
+
+/* Hide the outer tab bar for eval-run-tabs so only inner tabs show */
+#eval-run-tabs > ContentSwitcher {
+    height: 100%;
+}
+
+#eval-run-tabs > Tabs {
+    display: none;
+}
+
+#eval-run-details-panel {
+    height: 100%;
+}
+
+/* All TabPane containers */
+#new-run-tabs TabPane,
+#eval-tabs TabPane,
+#edit-tabs TabPane,
+#create-tabs TabPane,
+#right-eval-tabs TabPane,
+#evaluator-create-tabs TabPane,
+#eval-run-tabs TabPane,
+#eval-run-details-tabs TabPane {
+    height: 100%;
+    padding: 0 1;
+}
+
+/* Individual tab IDs */
+#new-run-tab,
+#evaluations-tab,
+#evaluators-tab,
+#edit-tab,
+#create-tab,
+#eval-run-tab,
+#eval-details-tab,
+#eval-traces-tab,
+#eval-logs-tab {
+    height: 100%;
+}
+
+/* === Run History List === */
 .run-list {
     height: 1fr;
     margin-bottom: 1;
@@ -42,112 +166,134 @@ Screen {
     color: #ff4444;
 }
 
+/* === Buttons === */
 .new-run-btn {
     width: 100%;
     margin-bottom: 1;
     border: none;
     text-style: bold;
 }
-.main-content {
-    width: 70%;
+
+.action-btn {
+    min-width: 10;
+    padding: 0 2;
+    text-style: bold;
+    border: none;
+    margin-right: 2;
+}
+
+.small-btn {
+    min-width: 5;
+    margin-right: 1;
+    padding: 0 1;
+    border: none;
+}
+
+.tiny-btn {
+    min-width: 4;
+    margin-right: 1;
+    padding: 0;
+    border: none;
+}
+
+.close-btn {
+    min-width: 3;
+    dock: right;
+    padding: 0;
+    border: none;
+}
+
+/* === Text Styles === */
+.panel-title {
+    text-style: bold;
+    padding: 0 0;
+    margin-bottom: 1;
+    height: auto;
+    width: 100%;
+}
+
+.section-header {
+    text-style: bold;
+    margin-top: 1;
+    margin-bottom: 0;
+    color: $primary;
+    height: auto;
+}
+
+.helper-text {
+    margin-bottom: 1;
+    height: auto;
+}
+
+/* === Form Elements === */
+.json-input {
+    margin-top: 1;
+    height: auto;
+}
+
+/* === Detail Panel Common Styles === */
+.detail-row {
+    height: auto;
+    margin: 0;
+}
+
+.detail-row-small {
+    height: auto;
+    margin: 0;
     padding-left: 1;
 }
 
-.new-run-title {
-    text-style: bold;
-    padding: 0 1;
-    height: 1;
-    margin-bottom: 0;
+.detail-json {
+    height: 8;
+    margin-bottom: 1;
 }
 
-.new-run-panel {
-    height: 100%;
+.detail-json-large {
+    height: auto;
+    min-height: 5;
+    max-height: 30;
+    margin-bottom: 1;
 }
 
-.field-label {
-    text-style: bold;
+.detail-input {
+    height: auto;
+    margin-bottom: 1;
 }
 
+/* === Run Actions === */
 .run-actions {
     dock: bottom;
     height: auto;
+    padding: 1;
     align: left middle;
 }
 
-.action-btn {
-    margin-right: 2;
-    min-width: 8;
-    border: none;
-    text-style: bold;
-}
-
-.details-content {
-    height: 1fr;
-}
-
-.traces-section,
-.logs-section {
-    width: 50%;
-    height: 100%;
-}
-
-.traces-section {
-    width: 50%;
-}
-
-.logs-section {
-    width: 50%;
-}
-
-.detail-log {
-    height: 1fr;
-    padding: 1;
-    padding-top: 0;
+.run-info-section {
+    height: auto;
     margin-bottom: 1;
 }
-.span-detail-log {
+
+/* === Lists === */
+.eval-items-list {
     height: 1fr;
-    padding: 1;
-    padding-top: 0;
+    min-height: 5;
 }
 
-.status-running {
-    background: #ffaa00;
-    color: #000000;
-    border: solid #ffaa00;
-}
-
-.status-success {
-    background: #00ff88;
-    color: #000000;
-    border: solid #00ff88;
-}
-
-.status-error {
-    background: #ff4444;
-    color: #ffffff;
-    border: solid #ff4444;
-}
-
-.hidden {
-    display: none;
-}
-
-Footer {
-    margin-top:1;
+.eval-list-item {
     height: auto;
-    dock: bottom;
 }
 
-TabbedContent {
+.list-actions-row {
+    height: 2;
+    width: 100%;
+}
+
+/* === New Run Panel === */
+.new-run-panel-content {
     height: 100%;
 }
 
-TabPane {
-    height: 100%;
-    padding: 0;
-}
-
+/* === Traces & Logs === */
 .traces-content {
     height: 100%;
     margin-bottom: 1;
@@ -171,102 +317,24 @@ TabPane {
     padding-top: 0;
 }
 
-Label {
-    margin: 1 1;
-    width: 100%;
-    height: 100%;
-    border: tall $primary;
-    content-align: center middle;
-}
-
-ContentSwitcher {
+.detail-log,
+.span-detail-log {
     height: 1fr;
+    padding: 1;
+    padding-top: 0;
 }
 
-SpanDetailsDisplay {
-    height: 100%;
+.detail-log {
+    margin-bottom: 1;
 }
 
-#span-details-display {
-    height: 100%;
-}
-
+SpanDetailsDisplay,
+#span-details-display,
 #span-details {
     height: 100%;
 }
 
-.new-run-panel {
-    height: 100%;
-}
-
-.new-run-title {
-    text-style: bold;
-    padding: 0 1;
-    height: 2;
-    content-align: left middle;
-}
-
-.field-label {
-    text-style: bold;
-    margin: 1 0;
-}
-
-.script-input {
-    height: 3;
-}
-
-.json-input {
-    margin-top: 1;
-    height: auto;
-}
-
-.run-actions {
-    height: auto;
-    padding: 1;
-}
-
-.action-btn {
-    min-width: 10;
-    padding: 0 2;
-    text-style: bold;
-    border: none;
-}
-
-TextArea.invalid {
-    border: tall red;
-}
-
-
-Prompt {
-    border: wide $primary-background;
-    background: $surface;
-    color: $text;
-    margin-right: 8;
-    margin-left: 1;
-    padding: 1 1 0 1;
-}
-Response, Tool {
-    border: wide $primary-background;
-    background: $surface;
-    color: $text;
-    margin: 1;
-    margin-left: 8;
-    padding: 1 1 0 1;
-}
-
-#chat-container{
-    background: $surface;
-}
-
-#chat-input{
-    dock: bottom;
-    margin: 1;
-}
-
-Checkbox{
-    margin-top: 1;
-}
-
+/* === Debug Controls === */
 #debug-controls {
     height: auto;
     dock: bottom;
@@ -278,6 +346,7 @@ Checkbox{
     align: left middle;
 }
 
+/* === Chat === */
 Prompt {
     border: wide $primary-background;
     background: $surface;
@@ -286,6 +355,7 @@ Prompt {
     margin-left: 1;
     padding: 1 1 0 1;
 }
+
 Response, Tool {
     border: wide $primary-background;
     background: $surface;
@@ -295,12 +365,142 @@ Response, Tool {
     padding: 1 1 0 1;
 }
 
-#chat-container{
+#chat-container {
     background: $surface;
     margin-bottom: 1;
 }
 
-#chat-input{
+#chat-input {
     dock: bottom;
     margin: 1;
+}
+
+#eval-details-placeholder,
+#eval-set-detail-placeholder {
+    text-align: center;
+    padding: 2;
+    color: $text-muted;
+}
+
+#eval-details-content {
+    height: 100%;
+}
+
+.eval-error {
+    margin: 0;
+}
+
+/* === Eval Sets Panel === */
+.eval-sets-main {
+    width: 100%;
+    height: 100%;
+    padding: 0 1;
+}
+
+.eval-sets-form {
+    height: 1fr;
+    padding: 0;
+}
+
+#eval-sets-tab {
+    padding: 0;
+}
+
+.opt-input-small {
+    width: 8;
+    height: 3;
+    margin-bottom: 0;
+}
+
+.field-label-inline {
+    height: 1;
+    margin: 0;
+}
+
+.opt-checkbox {
+    height: 3;
+    margin: 0;
+}
+
+/* Evaluator criteria section */
+.ev-row {
+    height: auto;
+    width: 100%;
+    align: left top;
+    margin-bottom: 1;
+}
+
+.ev-cb {
+    margin: 0;
+    width: auto;
+    height: auto;
+}
+
+.ev-collapse {
+    width: 1fr;
+    height: auto;
+}
+
+.ev-desc {
+    height: auto;
+    margin-bottom: 1;
+}
+
+.ev-criteria-header {
+    height: auto;
+    margin-bottom: 1;
+    color: $primary;
+}
+
+.ev-field-lbl {
+    height: auto;
+    margin: 0;
+    margin-top: 1;
+}
+
+.ev-field-input {
+    height: auto;
+    margin-bottom: 0;
+    margin-right: 2;
+}
+
+.button-row {
+    height: auto;
+    margin-top: 1;
+}
+
+.button-row Button {
+    margin-right: 1;
+}
+
+/* === Edit Panel Content === */
+#edit-panel-content {
+    height: 1fr;
+    padding: 0 1;
+}
+
+#edit-panel-content .close-btn {
+    dock: right;
+    min-width: 3;
+    padding: 0;
+    border: none;
+}
+
+#edit-panel-content Collapsible {
+    height: auto;
+    margin: 0 0 1 0;
+    padding: 0;
+    border: none;
+}
+
+#edit-panel-content CollapsibleTitle {
+    padding: 1 1;
+    margin: 0;
+    height: auto;
+    width: 100%;
+}
+
+#edit-panel-content Collapsible > Contents {
+    height: auto;
+    padding: 1 1 1 1;
 }
