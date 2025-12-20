@@ -113,7 +113,7 @@ class ChatEvents:
                     new_tc = UiPathConversationToolCall(
                         tool_call_id=tc_event.tool_call_id,
                         name=tc_event.start.tool_name,
-                        arguments=None,  # args will arrive as JSON content part
+                        input=None,  # input will arrive as JSON content part
                         timestamp=tc_event.start.timestamp,
                         result=None,
                     )
@@ -135,7 +135,7 @@ class ChatEvents:
                     existing_tool_call = UiPathConversationToolCall(
                         tool_call_id=tc_event.tool_call_id,
                         name="",  # unknown until start seen
-                        arguments=None,
+                        input=None,
                     )
                     if msg.tool_calls is None:
                         msg.tool_calls = []

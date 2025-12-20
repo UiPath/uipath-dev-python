@@ -124,7 +124,7 @@ class ChatPanel(Container):
                     if isinstance(part.data, UiPathInlineValue):
                         parts.append(part.data.inline or "")
                     elif isinstance(part.data, UiPathExternalValue):
-                        parts.append(f"[external: {part.data.url}]")
+                        parts.append(f"[external: {part.data.uri}]")
 
         text_block = "\n".join(parts).strip()
         content_lines = [f"{text_block}"] if text_block else []
