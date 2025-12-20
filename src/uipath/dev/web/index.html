@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LangGraph Agent Debugger</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            height: 100vh;
+            display: flex;
+            background: #e5e7eb;
+            overflow: hidden;
+        }
+
+        /* ---------- Panels ---------- */
+        .panel {
+            background: white;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .panel-header {
+            padding: 12px 16px;
+            background: #f9fafb;
+            border-bottom: 1px solid #e5e7eb;
+            font-weight: 600;
+            font-size: 14px;
+            color: #374151;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex: 0 0 auto;
+        }
+
+        .panel-content {
+            flex: 1 1 auto;
+            overflow: auto;
+            padding: 16px;
+            min-height: 0;
+        }
+
+        /* Allow handles to extend beyond edge */
+        .resizable-panel {
+            overflow: visible;
+        }
+
+        /* Column sizing */
+        #runs-panel {
+            flex: 0 0 320px;
+            min-width: 220px;
+            border-right: 1px solid #e5e7eb;
+        }
+
+        #center-panel {
+            flex: 1 1 auto;
+            min-width: 360px;
+            border-right: 1px solid #e5e7eb;
+        }
+
+        #otel-panel {
+            flex: 0 0 320px;
+            min-width: 220px;
+            border-right: 1px solid #e5e7eb;
+        }
+
+        #chat-panel {
+            flex: 0 0 360px;
+            min-width: 240px;
+        }
+
+        /* ---------- Resize Handles (all borders draggable) ---------- */
+        .resize-handle {
+            position: absolute;
+            z-index: 200;
+            background: transparent;
+            touch-action: none;
+        }
+
+        /* Vertical handle on right edge of a panel (drags that panel width) */
+        .resize-handle.vertical.right {
+            top: 0;
+            bottom: 0;
+            width: 10px;
+            right: 0;
+            transform: translateX(50%);
+            cursor: col-resize;
+        }
+
+        /* Vertical handle on left edge of a panel (drags that panel width) */
+        .resize-handle.vertical.left {
+            top: 0;
+            bottom: 0;
+            width: 10px;
+            left: 0;
+            transform: translateX(-50%);
+            cursor: col-resize;
+        }
+
+        /* Horizontal handle (optional, used inside runs) */
+        .resize-handle.horizontal.bottom {
+            left: 0;
+            right: 0;
+            height: 10px;
+            bottom: 0;
+            transform: translateY(50%);
+            cursor: row-resize;
+        }
+
+        .resize-handle:hover,
+        .resize-handle.dragging {
+            background: #3b82f6;
+            opacity: 0.9;
+        }
+
+        body.resizing {
+            user-select: none;
+        }
+
+        /* ---------- Runs panel split: run history + config ---------- */
+        #runs-history {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #runs-content {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: auto;
+            padding: 16px;
+        }
+
+        #runs-config {
+            flex: 0 0 320px;
+            min-height: 180px;
+            border-top: 1px solid #e5e7eb;
+            background: white;
+            overflow: auto;
+            padding: 16px;
+            position: relative;
+        }
+
+        /* Optional: allow resizing between run list and config */
+        /* If you don't want this, remove the handle from HTML below */
+        #runs-config .resize-handle.horizontal.bottom {
+            top: 0;
+            bottom: auto;
+            transform: translateY(-50%);
+            cursor: row-resize;
+        }
+
+        /* ---------- Run items ---------- */
+        .run-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .run-item:hover {
+            background: #f3f4f6;
+            border-color: #d1d5db;
+        }
+
+        .run-item.active {
+            background: #dbeafe;
+            border-color: #3b82f6;
+        }
+
+        .run-name {
+            font-weight: 600;
+            font-size: 13px;
+            margin-bottom: 4px;
+            color: #111827;
+        }
+
+        .run-meta {
+            font-size: 11px;
+            color: #6b7280;
+        }
+
+        .run-status {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-top: 6px;
+        }
+
+        .run-status.success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .run-status.running {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .run-status.failed {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .run-status.paused {
+            background: #e0e7ff;
+            color: #3730a3;
+        }
+
+        /* ---------- Config form ---------- */
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 6px;
+        }
+
+        .form-group select,
+        .form-group textarea,
+        .form-group input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 13px;
+            font-family: inherit;
+        }
+
+        .form-group textarea {
+            font-family: 'Courier New', monospace;
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        .form-group select:focus,
+        .form-group textarea:focus,
+        .form-group input:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+
+        .btn-secondary {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #d97706;
+        }
+
+        .btn:disabled {
+            background: #e5e7eb;
+            color: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        /* ---------- Center: Graph + Breakpoints only ---------- */
+        #graph-wrap {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #canvas-container {
+            flex: 1 1 auto;
+            min-height: 0;
+            position: relative;
+            background: #fafafa;
+            overflow: hidden;
+        }
+
+        #graph-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .graph-controls {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            display: flex;
+            gap: 8px;
+            z-index: 10;
+        }
+
+        .control-btn {
+            padding: 8px 12px;
+            background: white;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            color: #374151;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        .control-btn:hover {
+            background: #f9fafb;
+        }
+
+        #breakpoints-section {
+            background: #f9fafb;
+            border-top: 1px solid #e5e7eb;
+            padding: 12px 16px;
+            max-height: 220px;
+            overflow-y: auto;
+            flex: 0 0 auto;
+        }
+
+        .breakpoints-header {
+            font-weight: 600;
+            font-size: 12px;
+            margin-bottom: 8px;
+            color: #374151;
+        }
+
+        .breakpoint-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+            margin-bottom: 6px;
+            font-size: 12px;
+        }
+
+        .breakpoint-item.enabled {
+            border-color: #3b82f6;
+            background: #eff6ff;
+        }
+
+        .breakpoint-toggle {
+            padding: 4px 8px;
+            background: #e5e7eb;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .breakpoint-toggle.enabled {
+            background: #3b82f6;
+            color: white;
+        }
+
+        /* ---------- OTEL ---------- */
+        .span-tree {
+            padding-left: 0;
+        }
+
+        .span-tree-item {
+            margin-bottom: 4px;
+        }
+
+        .span-tree-children {
+            padding-left: 20px;
+            border-left: 2px solid #e5e7eb;
+            margin-left: 10px;
+        }
+
+        .span-item {
+            padding: 10px;
+            margin-bottom: 4px;
+            background: #f9fafb;
+            border-left: 3px solid #3b82f6;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .span-item:hover {
+            background: #f3f4f6;
+        }
+
+        .span-name {
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 4px;
+        }
+
+        .span-detail {
+            color: #6b7280;
+            font-size: 11px;
+            margin: 2px 0;
+        }
+
+        .span-duration {
+            display: inline-block;
+            background: #dbeafe;
+            color: #1e40af;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-top: 4px;
+        }
+
+        .trace-id {
+            font-family: monospace;
+            font-size: 10px;
+            color: #9ca3af;
+        }
+
+        /* ---------- Chat ---------- */
+        #chat-messages {
+            flex: 1 1 auto;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            min-height: 0;
+        }
+
+        .message {
+            padding: 10px 12px;
+            border-radius: 8px;
+            max-width: 85%;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .message.user {
+            align-self: flex-end;
+            background: #3b82f6;
+            color: white;
+        }
+
+        .message.assistant {
+            align-self: flex-start;
+            background: #f3f4f6;
+            color: #111827;
+        }
+
+        .message.system {
+            align-self: center;
+            background: #fef3c7;
+            color: #92400e;
+            font-size: 12px;
+            max-width: 100%;
+            text-align: center;
+        }
+
+        #chat-input-container {
+            padding: 12px;
+            background: #f9fafb;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            gap: 8px;
+            flex: 0 0 auto;
+        }
+
+        #chat-input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 13px;
+            font-family: inherit;
+        }
+
+        #chat-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+
+        #chat-send {
+            padding: 8px 16px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        #chat-send:hover {
+            background: #2563eb;
+        }
+
+        /* ---------- Graph SVG styles ---------- */
+        .graph-node {
+            fill: white;
+            stroke: #3b82f6;
+            stroke-width: 2;
+        }
+
+        .graph-node.__start__ {
+            fill: #10b981;
+            stroke: #059669;
+        }
+
+        .graph-node.__end__ {
+            fill: #ef4444;
+            stroke: #dc2626;
+        }
+
+        .graph-node.tool {
+            fill: #f59e0b;
+            stroke: #d97706;
+        }
+
+        .graph-node.breakpoint {
+            stroke: #ef4444;
+            stroke-width: 3;
+            stroke-dasharray: 5, 5;
+        }
+
+        .graph-edge {
+            stroke: #9ca3af;
+            stroke-width: 2;
+            fill: none;
+            marker-end: url(#arrowhead);
+        }
+
+        .graph-node-text {
+            font-size: 12px;
+            font-weight: 600;
+            fill: #111827;
+            text-anchor: middle;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #9ca3af;
+            font-size: 13px;
+            padding: 32px 16px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- RUNS (left) -->
+    <div id="runs-panel" class="panel resizable-panel">
+        <!-- Border: runs => center (draggable) -->
+        <div class="resize-handle vertical right" data-panel="runs-panel" data-edge="right"></div>
+
+        <div id="runs-history">
+            <div class="panel-header">Run History</div>
+            <div id="runs-content"></div>
+        </div>
+
+        <div id="runs-config">
+            <!-- Optional: resize between history and config (remove if you don't want it) -->
+            <div class="resize-handle horizontal bottom" data-panel="runs-config" data-edge="top"></div>
+
+            <div style="font-weight: 600; font-size: 14px; margin-bottom: 12px; color: #374151;">
+                New Run Configuration
+            </div>
+
+            <div class="form-group">
+                <label for="entrypoint-select">Entrypoint</label>
+                <select id="entrypoint-select">
+                    <option value="">Select an entrypoint...</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="input-data">Input Data (JSON)</label>
+                <textarea id="input-data"
+                    placeholder='{"messages": [{"type": "human", "content": "Hello"}]}'></textarea>
+            </div>
+
+            <div class="button-group">
+                <button class="btn btn-primary" id="run-btn">Run</button>
+                <button class="btn btn-secondary" id="debug-btn">Debug (Step)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CENTER (graph + breakpoints only) -->
+    <div id="center-panel" class="panel">
+        <div class="panel-header">Agent Graph</div>
+
+        <div id="graph-wrap">
+            <div id="canvas-container">
+                <svg id="graph-canvas"></svg>
+                <div class="graph-controls">
+                    <button class="control-btn" id="zoom-in-btn">Zoom In</button>
+                    <button class="control-btn" id="zoom-out-btn">Zoom Out</button>
+                    <button class="control-btn" id="reset-zoom-btn">Reset</button>
+                </div>
+            </div>
+
+            <div id="breakpoints-section">
+                <div class="breakpoints-header">Breakpoints (Click nodes to toggle)</div>
+                <div id="breakpoints-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- OTEL -->
+    <div id="otel-panel" class="panel resizable-panel">
+        <!-- Border: center => otel (draggable) -->
+        <div class="resize-handle vertical left" data-panel="otel-panel" data-edge="left"></div>
+        <!-- Border: otel => chat (draggable) -->
+        <div class="resize-handle vertical right" data-panel="otel-panel" data-edge="right"></div>
+
+        <div class="panel-header">OpenTelemetry Traces</div>
+        <div class="panel-content" id="otel-content">
+            <div class="empty-state">No active run. Start a run to see traces.</div>
+        </div>
+    </div>
+
+    <!-- CHAT -->
+    <div id="chat-panel" class="panel resizable-panel">
+        <!-- Border: otel => chat (draggable) -->
+        <div class="resize-handle vertical left" data-panel="chat-panel" data-edge="left"></div>
+
+        <div class="panel-header">Debug Chat</div>
+        <div id="chat-messages"></div>
+        <div id="chat-input-container">
+            <input type="text" id="chat-input" placeholder="Ask about the agent..." />
+            <button id="chat-send">Send</button>
+        </div>
+    </div>
+
+    <script>
+        // ===== State Management =====
+        const state = {
+            entrypoints: [],
+            runs: [],
+            activeRunId: null,
+            breakpoints: new Set(),
+            spans: [],
+            graphData: null,
+            zoomLevel: 1,
+            panOffset: { x: 0, y: 0 }
+        };
+
+        // ===== Mock Data =====
+        const mockEntrypoints = [
+            {
+                "filePath": "agent",
+                "uniqueId": "2c4662e6-2ffe-4cd6-b127-61a8b2025fde",
+                "type": "agent",
+                "input": {
+                    "type": "object",
+                    "properties": {
+                        "messages": { "type": "array", "items": { "type": "object" } }
+                    }
+                },
+                "graph": {
+                    "nodes": [
+                        { "id": "__start__", "name": "__start__", "type": "__start__" },
+                        { "id": "model", "name": "model", "type": "model", "metadata": { "model_name": "claude-3-7-sonnet-latest" } },
+                        { "id": "tools", "name": "tools", "type": "tool", "metadata": { "tool_names": ["tavily_search"] } },
+                        { "id": "__end__", "name": "__end__", "type": "__end__" }
+                    ],
+                    "edges": [
+                        { "source": "__start__", "target": "model" },
+                        { "source": "model", "target": "__end__" },
+                        { "source": "model", "target": "tools" },
+                        { "source": "tools", "target": "model" }
+                    ]
+                }
+            }
+        ];
+
+        // ===== Initialization =====
+        function init() {
+            state.entrypoints = mockEntrypoints;
+            populateEntrypoints();
+            setupEventListeners();
+            setupResizableHandles();
+            addChatMessage('Debug assistant ready. Start a run to begin debugging.', 'system');
+        }
+
+        // ===== Resizable Handles =====
+        function setupResizableHandles() {
+            const handles = document.querySelectorAll('.resize-handle');
+
+            handles.forEach(handle => {
+                handle.addEventListener('pointerdown', (e) => {
+                    const panelId = handle.dataset.panel;
+                    const edge = handle.dataset.edge || 'right';
+                    const panel = document.getElementById(panelId);
+
+                    const isVertical = handle.classList.contains('vertical');
+                    const isHorizontal = handle.classList.contains('horizontal');
+
+                    const startRect = panel.getBoundingClientRect();
+                    const startPos = isVertical ? e.clientX : e.clientY;
+                    const startSize = isVertical ? startRect.width : startRect.height;
+
+                    const minSize = parseInt(getComputedStyle(panel)[isVertical ? 'minWidth' : 'minHeight']) || 150;
+
+                    handle.classList.add('dragging');
+                    document.body.classList.add('resizing');
+                    document.body.style.cursor = isVertical ? 'col-resize' : 'row-resize';
+
+                    handle.setPointerCapture(e.pointerId);
+
+                    const onMove = (ev) => {
+                        const curPos = isVertical ? ev.clientX : ev.clientY;
+                        const delta = curPos - startPos;
+
+                        let newSize = startSize;
+
+                        // Right/bottom grows with +delta
+                        if (edge === 'right' || edge === 'bottom') newSize = startSize + delta;
+                        // Left/top grows with -delta
+                        if (edge === 'left' || edge === 'top') newSize = startSize - delta;
+
+                        newSize = Math.max(minSize, newSize);
+
+                        if (isVertical) {
+                            // stable with flex layouts
+                            panel.style.flex = `0 0 ${newSize}px`;
+                            panel.style.width = `${newSize}px`;
+                            renderGraph(); // keep graph fitting while resizing columns
+                        } else if (isHorizontal) {
+                            panel.style.flex = `0 0 ${newSize}px`;
+                            panel.style.height = `${newSize}px`;
+                        }
+                    };
+
+                    const onUp = () => {
+                        handle.classList.remove('dragging');
+                        document.body.classList.remove('resizing');
+                        document.body.style.cursor = '';
+                        handle.removeEventListener('pointermove', onMove);
+
+                        if (state.graphData) renderGraph();
+                    };
+
+                    handle.addEventListener('pointermove', onMove);
+                    handle.addEventListener('pointerup', onUp, { once: true });
+                    handle.addEventListener('pointercancel', onUp, { once: true });
+
+                    e.preventDefault();
+                });
+            });
+        }
+
+        function populateEntrypoints() {
+            const select = document.getElementById('entrypoint-select');
+            state.entrypoints.forEach(ep => {
+                const option = document.createElement('option');
+                option.value = ep.uniqueId;
+                option.textContent = `${ep.filePath} (${ep.type})`;
+                select.appendChild(option);
+            });
+        }
+
+        function setupEventListeners() {
+            document.getElementById('entrypoint-select').addEventListener('change', handleEntrypointChange);
+            document.getElementById('run-btn').addEventListener('click', () => startRun(false));
+            document.getElementById('debug-btn').addEventListener('click', () => startRun(true));
+            document.getElementById('chat-send').addEventListener('click', sendChatMessage);
+            document.getElementById('chat-input').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') sendChatMessage();
+            });
+            document.getElementById('zoom-in-btn').addEventListener('click', () => zoom(1.2));
+            document.getElementById('zoom-out-btn').addEventListener('click', () => zoom(0.8));
+            document.getElementById('reset-zoom-btn').addEventListener('click', resetZoom);
+        }
+
+        function handleEntrypointChange(e) {
+            const entrypoint = state.entrypoints.find(ep => ep.uniqueId === e.target.value);
+            if (entrypoint && entrypoint.graph) {
+                state.graphData = entrypoint.graph;
+                renderGraph();
+                renderBreakpoints();
+            }
+        }
+
+        // ===== Run Management =====
+        function startRun(debugMode) {
+            const entrypointId = document.getElementById('entrypoint-select').value;
+            const inputDataText = document.getElementById('input-data').value;
+
+            if (!entrypointId) {
+                addChatMessage('Please select an entrypoint first.', 'system');
+                return;
+            }
+
+            let inputData;
+            try {
+                inputData = JSON.parse(inputDataText || '{}');
+            } catch (err) {
+                addChatMessage('Invalid JSON in input data.', 'system');
+                return;
+            }
+
+            const entrypoint = state.entrypoints.find(ep => ep.uniqueId === entrypointId);
+            const run = {
+                id: Date.now(),
+                name: `${entrypoint.filePath} - Run`,
+                timestamp: new Date().toLocaleString(),
+                status: debugMode ? 'paused' : 'running',
+                entrypoint: entrypoint.filePath,
+                inputData: inputData,
+                debugMode: debugMode
+            };
+
+            state.runs.unshift(run);
+            state.activeRunId = run.id;
+
+            renderRuns();
+            simulateRunExecution(run);
+            addChatMessage(`Started ${debugMode ? 'debug' : 'run'} for ${entrypoint.filePath}`, 'system');
+        }
+
+        function simulateRunExecution(run) {
+            state.spans = [];
+            const nodes = state.graphData?.nodes || [];
+
+            let delay = 0;
+            nodes.forEach((node, idx) => {
+                if (node.type !== '__start__' && node.type !== '__end__') {
+                    setTimeout(() => {
+                        const span = {
+                            name: node.name,
+                            traceId: `trace-${run.id}`,
+                            spanId: `span-${idx}-${Date.now()}`,
+                            duration: `${Math.floor(Math.random() * 500) + 50}ms`,
+                            status: 'ok',
+                            nodeId: node.id
+                        };
+                        state.spans.push(span);
+                        renderSpans();
+
+                        if (run.debugMode && state.breakpoints.has(node.id)) {
+                            run.status = 'paused';
+                            renderRuns();
+                            addChatMessage(`Paused at breakpoint: ${node.name}`, 'system');
+                        }
+                    }, delay);
+                    delay += run.debugMode ? 2000 : 500;
+                }
+            });
+
+            setTimeout(() => {
+                if (run.status !== 'paused') {
+                    run.status = 'success';
+                    renderRuns();
+                    addChatMessage(`Run completed successfully.`, 'system');
+                }
+            }, delay + 500);
+        }
+
+        function renderRuns() {
+            const container = document.getElementById('runs-content');
+            if (state.runs.length === 0) {
+                container.innerHTML = '<div class="empty-state">No runs yet. Configure and start a run below.</div>';
+                return;
+            }
+
+            container.innerHTML = '';
+            state.runs.forEach(run => {
+                const runEl = document.createElement('div');
+                runEl.className = `run-item ${run.id === state.activeRunId ? 'active' : ''}`;
+                runEl.innerHTML = `
+          <div class="run-name">${run.name}</div>
+          <div class="run-meta">${run.timestamp}</div>
+          <div class="run-meta">Entry: ${run.entrypoint}</div>
+          <div class="run-status ${run.status}">${run.status.toUpperCase()}</div>
+        `;
+                runEl.onclick = () => selectRun(run.id);
+                container.appendChild(runEl);
+            });
+        }
+
+        function selectRun(runId) {
+            state.activeRunId = runId;
+            renderRuns();
+            addChatMessage(`Viewing run ${runId}`, 'system');
+        }
+
+        // ===== Graph Rendering =====
+        function renderGraph() {
+            if (!state.graphData) return;
+
+            const svg = document.getElementById('graph-canvas');
+            const container = document.getElementById('canvas-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            svg.setAttribute('width', width);
+            svg.setAttribute('height', height);
+            svg.innerHTML = '';
+
+            const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+            defs.innerHTML = `
+        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill="#9ca3af" />
+        </marker>
+      `;
+            svg.appendChild(defs);
+
+            const nodes = state.graphData.nodes;
+            const edges = state.graphData.edges;
+
+            const nodePositions = {};
+            const nodeWidth = 120;
+            const nodeHeight = 60;
+            const verticalSpacing = 100;
+            const horizontalSpacing = 200;
+
+            // naive leveling
+            const levels = {};
+            nodes.forEach(n => { if (n.type === '__start__') levels[n.id] = 0; });
+
+            let changed = true;
+            while (changed) {
+                changed = false;
+                edges.forEach(edge => {
+                    if (levels[edge.source] !== undefined && levels[edge.target] === undefined) {
+                        levels[edge.target] = levels[edge.source] + 1;
+                        changed = true;
+                    }
+                });
+            }
+
+            const levelGroups = {};
+            Object.keys(levels).forEach(nodeId => {
+                const level = levels[nodeId];
+                if (!levelGroups[level]) levelGroups[level] = [];
+                levelGroups[level].push(nodeId);
+            });
+
+            const startY = 80;
+            Object.keys(levelGroups).forEach(level => {
+                const nodesInLevel = levelGroups[level];
+                const totalWidth = nodesInLevel.length * nodeWidth + (nodesInLevel.length - 1) * horizontalSpacing;
+                const startX = (width - totalWidth) / 2;
+
+                nodesInLevel.forEach((nodeId, idx) => {
+                    nodePositions[nodeId] = {
+                        x: startX + idx * (nodeWidth + horizontalSpacing) + nodeWidth / 2,
+                        y: startY + level * (nodeHeight + verticalSpacing)
+                    };
+                });
+            });
+
+            // edges
+            edges.forEach(edge => {
+                const source = nodePositions[edge.source];
+                const target = nodePositions[edge.target];
+                if (!source || !target) return;
+
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                const d = `M ${source.x} ${source.y + nodeHeight / 2} L ${target.x} ${target.y - nodeHeight / 2}`;
+                line.setAttribute('d', d);
+                line.setAttribute('class', 'graph-edge');
+                svg.appendChild(line);
+            });
+
+            // nodes
+            nodes.forEach(node => {
+                const pos = nodePositions[node.id];
+                if (!pos) return;
+
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                g.style.cursor = 'pointer';
+
+                const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                rect.setAttribute('x', pos.x - nodeWidth / 2);
+                rect.setAttribute('y', pos.y - nodeHeight / 2);
+                rect.setAttribute('width', nodeWidth);
+                rect.setAttribute('height', nodeHeight);
+                rect.setAttribute('rx', 8);
+
+                const typeClass =
+                    node.type === '__start__' ? '__start__' :
+                        node.type === '__end__' ? '__end__' :
+                            node.type;
+
+                rect.setAttribute(
+                    'class',
+                    `graph-node ${typeClass} ${state.breakpoints.has(node.id) ? 'breakpoint' : ''}`
+                );
+
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', pos.x);
+                text.setAttribute('y', pos.y + 5);
+                text.setAttribute('class', 'graph-node-text');
+                text.textContent = node.name;
+
+                g.appendChild(rect);
+                g.appendChild(text);
+
+                g.addEventListener('click', () => toggleBreakpoint(node.id, node.name));
+                svg.appendChild(g);
+            });
+        }
+
+        // ===== Breakpoints =====
+        function toggleBreakpoint(nodeId, nodeName) {
+            if (state.breakpoints.has(nodeId)) {
+                state.breakpoints.delete(nodeId);
+                addChatMessage(`Removed breakpoint from ${nodeName}`, 'system');
+            } else {
+                state.breakpoints.add(nodeId);
+                addChatMessage(`Added breakpoint to ${nodeName}`, 'system');
+            }
+            renderGraph();
+            renderBreakpoints();
+        }
+
+        function renderBreakpoints() {
+            const container = document.getElementById('breakpoints-list');
+            if (!state.graphData || state.breakpoints.size === 0) {
+                container.innerHTML = '<div style="color: #9ca3af; font-size: 12px;">No breakpoints set. Click on nodes to add.</div>';
+                return;
+            }
+
+            container.innerHTML = '';
+            state.graphData.nodes.forEach(node => {
+                if (!state.breakpoints.has(node.id)) return;
+
+                const item = document.createElement('div');
+                item.className = 'breakpoint-item enabled';
+                item.innerHTML = `
+          <span>${node.name}</span>
+          <button class="breakpoint-toggle enabled" onclick="toggleBreakpoint('${node.id}', '${node.name.replace(/'/g, "\\'")}')">
+            Enabled
+          </button>
+        `;
+                container.appendChild(item);
+            });
+        }
+
+        // ===== OTEL Spans =====
+        function renderSpans() {
+            const container = document.getElementById('otel-content');
+            if (state.spans.length === 0) {
+                container.innerHTML = '<div class="empty-state">No spans yet.</div>';
+                return;
+            }
+
+            const traceGroups = {};
+            state.spans.forEach(span => {
+                if (!traceGroups[span.traceId]) traceGroups[span.traceId] = [];
+                traceGroups[span.traceId].push(span);
+            });
+
+            container.innerHTML = '';
+
+            Object.keys(traceGroups).forEach(traceId => {
+                const traceDiv = document.createElement('div');
+                traceDiv.className = 'span-tree';
+
+                const traceHeader = document.createElement('div');
+                traceHeader.style.cssText =
+                    'font-weight: 600; font-size: 13px; margin-bottom: 8px; color: #111827; padding: 8px; background: #f3f4f6; border-radius: 4px;';
+                traceHeader.innerHTML = `
+          <div>Trace: <span class="trace-id">${traceId}</span></div>
+          <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">${traceGroups[traceId].length} spans</div>
+        `;
+                traceDiv.appendChild(traceHeader);
+
+                const spansContainer = document.createElement('div');
+                spansContainer.className = 'span-tree-children';
+
+                traceGroups[traceId].forEach((span, idx) => {
+                    spansContainer.appendChild(createSpanTreeItem(span, idx));
+                });
+
+                traceDiv.appendChild(spansContainer);
+                container.appendChild(traceDiv);
+            });
+
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function createSpanTreeItem(span, index) {
+            const item = document.createElement('div');
+            item.className = 'span-tree-item';
+
+            const spanDiv = document.createElement('div');
+            spanDiv.className = 'span-item';
+            spanDiv.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="color: #9ca3af; font-size: 10px;">#${index + 1}</span>
+          <div style="flex: 1;">
+            <div class="span-name">${span.name}</div>
+            <div class="span-detail">ID: <span class="trace-id">${span.spanId}</span></div>
+            <div class="span-duration">${span.duration}</div>
+          </div>
+        </div>
+      `;
+            item.appendChild(spanDiv);
+            return item;
+        }
+
+        // ===== Chat =====
+        function addChatMessage(text, sender) {
+            const messagesContainer = document.getElementById('chat-messages');
+            const msgEl = document.createElement('div');
+            msgEl.className = `message ${sender}`;
+            msgEl.textContent = text;
+            messagesContainer.appendChild(msgEl);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function sendChatMessage() {
+            const input = document.getElementById('chat-input');
+            const text = input.value.trim();
+            if (!text) return;
+
+            addChatMessage(text, 'user');
+            input.value = '';
+
+            setTimeout(() => {
+                const responses = [
+                    'The agent is currently processing through the model node.',
+                    'Breakpoint hit at tools node. Execution paused.',
+                    'Last span took 245ms to complete.',
+                    'The agent has made 3 tool calls in this run.',
+                    'Current execution is waiting at model for next decision.'
+                ];
+                addChatMessage(responses[Math.floor(Math.random() * responses.length)], 'assistant');
+            }, 500);
+        }
+
+        // ===== Zoom Controls (kept, but only re-renders) =====
+        function zoom(factor) {
+            state.zoomLevel *= factor;
+            state.zoomLevel = Math.max(0.5, Math.min(3, state.zoomLevel));
+            renderGraph();
+        }
+
+        function resetZoom() {
+            state.zoomLevel = 1;
+            state.panOffset = { x: 0, y: 0 };
+            renderGraph();
+        }
+
+        window.addEventListener('load', init);
+        window.addEventListener('resize', () => { if (state.graphData) renderGraph(); });
+    </script>
+</body>
+
+</html>

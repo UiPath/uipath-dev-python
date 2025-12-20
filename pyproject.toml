@@ -8,6 +8,8 @@ dependencies = [
   "uipath-runtime>=0.2.0, <0.3.0",
   "textual>=6.7.1, <7.0.0",
   "pyperclip>=1.11.0, <2.0.0",
+  "uvicorn>=0.38.0",
+  "fastapi>=0.124.4",
 ]
 classifiers = [
   "Intended Audience :: Developers",
@@ -27,7 +29,8 @@ Repository = "https://github.com/UiPath/uipath-dev-python"
 Documentation = "https://uipath.github.io/uipath-python/"
 
 [project.scripts]
-uipath-dev = "uipath.dev.__mock__:main"
+uipath-dev-console = "uipath.dev.__mock_console__:main"
+uipath-dev-server = "uipath.dev.__mock_server__:main"
 
 [build-system]
 requires = ["hatchling"]
