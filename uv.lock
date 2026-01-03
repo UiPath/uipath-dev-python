@@ -879,7 +879,7 @@ wheels = [
 
 [[package]]
 name = "textual"
-version = "6.11.0"
+version = "6.12.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "markdown-it-py", extra = ["linkify"] },
@@ -889,9 +889,9 @@ dependencies = [
     { name = "rich" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/55/06/906f86bbc59ec7cd3fb424250e19ce670406d1f28e49e86c2221e9fd7ed2/textual-6.11.0.tar.gz", hash = "sha256:08237ebda0cfbbfd1a4e2fd3039882b35894a73994f6f0fcc12c5b0d78acf3cc", size = 1584292, upload-time = "2025-12-18T10:48:38.033Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/39/55/29416ef63de4c37b37da217b94439a28496a4dc585209f5bf1437a61d120/textual-6.12.0.tar.gz", hash = "sha256:a32e8edbf6abdb0c42d486e96bdf419eb3aa378edb1b1271b84637f3dbd64c73", size = 1584182, upload-time = "2026-01-02T09:42:30.415Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b5/fc/5e2988590ff2e0128eea6446806c904445a44e17256c67141573ea16b5a5/textual-6.11.0-py3-none-any.whl", hash = "sha256:9e663b73ed37123a9b13c16a0c85e09ef917a4cfded97814361ed5cccfa40f89", size = 714886, upload-time = "2025-12-18T10:48:36.269Z" },
+    { url = "https://files.pythonhosted.org/packages/13/f8/2a6a6ff1d07788f635493867d5a4003dfecacad16af1fdc9814d10daca3d/textual-6.12.0-py3-none-any.whl", hash = "sha256:cf9ea9a54d213c7736efe9fef440c7f49218d4e6ab75279afd060eded9c567ec", size = 714912, upload-time = "2026-01-02T09:42:28.786Z" },
 ]
 
 [[package]]
@@ -1006,7 +1006,7 @@ wheels = [
 
 [[package]]
 name = "uipath-dev"
-version = "0.0.14"
+version = "0.0.15"
 source = { editable = "." }
 dependencies = [
     { name = "pyperclip" },
@@ -1032,8 +1032,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "pyperclip", specifier = ">=1.11.0,<2.0.0" },
-    { name = "textual", specifier = ">=6.11.0,<7.0.0" },
-    { name = "uipath-runtime", specifier = ">=0.3.0,<0.4.0" },
+    { name = "textual", specifier = ">=6.12.0,<7.0.0" },
+    { name = "uipath-runtime", specifier = ">=0.4.0,<0.5.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -1053,14 +1053,14 @@ dev = [
 
 [[package]]
 name = "uipath-runtime"
-version = "0.3.0"
+version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "uipath-core" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/3e/43/da9d5fef33d6a2423bc856a97a777efc1e0050db3ce649c44cd4a86f6b2c/uipath_runtime-0.3.0.tar.gz", hash = "sha256:0c68b583a56a84bdf75c911bdb9bfb9503836471be80e761a5ecf6cf4d8ead75", size = 97202, upload-time = "2025-12-18T09:01:53.557Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/78/6f/683b258720c18f8ec0e68ec712a05f42ede6ecf63e75710aa555b8d52092/uipath_runtime-0.4.0.tar.gz", hash = "sha256:129933b08c6f589d13c2c0e7045ddf61ca144029340c1482134d127dd15563e3", size = 99934, upload-time = "2026-01-03T05:44:33.712Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1c/63/71f6f11478eaec4a016fa190d282634dc017bf54f69dd301e820bb74a157/uipath_runtime-0.3.0-py3-none-any.whl", hash = "sha256:1b3d13f9d7af41b691e9d29392f6e632df3221b5312adc0579c4d81cb5543dce", size = 37673, upload-time = "2025-12-18T09:01:49.983Z" },
+    { url = "https://files.pythonhosted.org/packages/45/46/402708653a197c7f0b1d9de66b235f8a5798f814c775bab575cd2d7e2539/uipath_runtime-0.4.0-py3-none-any.whl", hash = "sha256:f49a23ed24f7cfaa736f99a5763bcf314234c67b727c40ec891a0a3d10140027", size = 38359, upload-time = "2026-01-03T05:44:31.817Z" },
 ]
 
 [[package]]
