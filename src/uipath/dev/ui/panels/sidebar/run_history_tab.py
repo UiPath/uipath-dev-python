@@ -1,45 +1,64 @@
 """Panel for displaying execution run history."""
 
+from typing import Callable
+
 from rich.text import Text
 from textual.app import ComposeResult
-from textual.containers import Container, Vertical
-from textual.widgets import (
-    Button,
-    ListItem,
-    ListView,
-    Static,
-    TabbedContent,
-    TabPane,
-)
+from textual.containers import Vertical
+from textual.widgets import Button, ListItem, ListView, Static
 
 from uipath.dev.models.execution import ExecutionRun
 
 
-class RunHistoryPanel(Container):
+class RunHistoryTab(Vertical):
     """Left panel showing execution run history."""
 
-    def __init__(self, **kwargs):
-        """Initialize RunHistoryPanel with empty run list."""
+    def __init__(
+        self,
+        on_run_selected: Callable[[ExecutionRun], None] | None = None,
+        on_new_run_clicked: Callable[[], None] | None = None,
+        **kwargs,
+    ):
+        """Initialize the run history tab.
+
+        Args:
+            on_run_selected: Callback when a run is selected.
+            on_new_run_clicked: Callback when the "+ New" button is clicked.
+        """
         super().__init__(**kwargs)
         self.runs: list[ExecutionRun] = []
         self.selected_run: ExecutionRun | None = None
+        self.on_run_selected = on_run_selected
+        self.on_new_run_clicked = on_new_run_clicked
 
     def compose(self) -> ComposeResult:
         """Compose the RunHistoryPanel layout."""
-        with TabbedContent():
-            with TabPane("History", id="history-tab"):
-                with Vertical():
-                    yield ListView(id="run-list", classes="run-list")
-                    yield Button(
-                        "+ New",
-                        id="new-run-btn",
-                        variant="primary",
-                        classes="new-run-btn",
-                    )
+        yield ListView(id="run-list", classes="run-list")
+        yield Button(
+            "+ New",
+            id="new-run-btn",
+            variant="primary",
+            classes="new-run-btn",
+        )
 
     def on_mount(self) -> None:
         """Set up periodic refresh for running items."""
         self.set_interval(5.0, self._refresh_running_items)
+
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses."""
+        if event.button.id == "new-run-btn":
+            if self.on_new_run_clicked:
+                self.on_new_run_clicked()
+
+    async def on_list_view_selected(self, event: ListView.Selected) -> None:
+        """Handle list selection."""
+        if event.list_view.id == "run-list" and event.item:
+            run_id = getattr(event.item, "run_id", None)
+            if run_id:
+                run = self.get_run_by_id(run_id)
+                if run and self.on_run_selected:
+                    self.on_run_selected(run)
 
     def add_run(self, run: ExecutionRun) -> None:
         """Add a new run to history (at the top)."""
@@ -56,7 +75,7 @@ class RunHistoryPanel(Container):
         # If run not found, just ignore; creation is done via add_run()
 
     def get_run_by_id(self, run_id: str) -> ExecutionRun | None:
-        """Get a run."""
+        """Get a run by ID."""
         for run in self.runs:
             if run.id == run_id:
                 return run
@@ -68,11 +87,7 @@ class RunHistoryPanel(Container):
         self._rebuild_list()
 
     def _format_run_label(self, run: ExecutionRun) -> Text:
-        """Format the label for a run item.
-
-        - Preserves styling from `ExecutionRun.display_name` (rich.Text)
-        - Ensures exactly one leading space before the content
-        """
+        """Format the label for a run item."""
         base = run.display_name
 
         # Ensure we have a Text object
@@ -91,12 +106,16 @@ class RunHistoryPanel(Container):
         return text
 
     def _rebuild_list(self) -> None:
-        run_list = self.query_one("#run-list", ListView)
-        run_list.clear()
+        """Rebuild the entire list."""
+        try:
+            run_list = self.query_one("#run-list", ListView)
+            run_list.clear()
 
-        for run in self.runs:
-            item = self._create_list_item(run)
-            run_list.append(item)
+            for run in self.runs:
+                item = self._create_list_item(run)
+                run_list.append(item)
+        except Exception:
+            pass
 
     def _create_list_item(self, run: ExecutionRun) -> ListItem:
         item = ListItem(

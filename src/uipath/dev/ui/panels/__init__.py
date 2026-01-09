@@ -1,11 +1,22 @@
 """UiPath Dev Console panels module initialization."""
 
-from uipath.dev.ui.panels.new_run_panel import NewRunPanel
-from uipath.dev.ui.panels.run_details_panel import RunDetailsPanel
-from uipath.dev.ui.panels.run_history_panel import RunHistoryPanel
+from uipath.dev.ui.panels.evals import EvalRunDetailsPanel
+from uipath.dev.ui.panels.evaluators import EvaluatorFormPanel
+from uipath.dev.ui.panels.runs import NewRunPanel, RunDetailsPanel
+from uipath.dev.ui.panels.sidebar import (
+    EvalSetsTab,
+    EvaluatorsTab,
+    RunHistoryTab,
+    SidebarPanel,
+)
 
 __all__ = [
+    "EvalRunDetailsPanel",
+    "EvalSetsTab",
+    "EvaluatorFormPanel",
+    "EvaluatorsTab",
     "NewRunPanel",
     "RunDetailsPanel",
-    "RunHistoryPanel",
+    "RunHistoryTab",
+    "SidebarPanel",
 ]

@@ -6,12 +6,11 @@ from typing import Any, Tuple, cast
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.reactive import reactive
-from textual.widgets import Button, Select, TabbedContent, TabPane
+from textual.widgets import Button, Select
 from uipath.runtime import UiPathRuntimeFactoryProtocol, UiPathRuntimeProtocol
 
+from uipath.dev.ui.panels._json_schema import mock_json_from_schema
 from uipath.dev.ui.widgets.json_input import JsonInput
-
-from ._json_schema import mock_json_from_schema
 
 
 class NewRunPanel(Container):
@@ -37,41 +36,40 @@ class NewRunPanel(Container):
 
     def compose(self) -> ComposeResult:
         """Compose the UI layout."""
-        with TabbedContent():
-            with TabPane("New run", id="new-tab"):
-                with Vertical():
-                    yield Select(
-                        options=[],
-                        id="entrypoint-select",
-                        allow_blank=True,
-                    )
+        with Vertical():
+            yield Select(
+                options=[],
+                id="entrypoint-select",
+                allow_blank=True,
+            )
 
-                    yield JsonInput(
-                        text=self.initial_input,
-                        language="json",
-                        id="json-input",
-                        classes="input-field json-input",
-                    )
+            yield JsonInput(
+                text=self.initial_input,
+                language="json",
+                id="json-input",
+                classes="input-field json-input",
+            )
 
-                    with Horizontal(classes="run-actions"):
-                        yield Button(
-                            "▶ Run",
-                            id="execute-btn",
-                            variant="primary",
-                            classes="action-btn",
-                        )
-                        yield Button(
-                            "⏸ Debug",
-                            id="debug-btn",
-                            variant="primary",
-                            classes="action-btn",
-                        )
-                        yield Button(
-                            "💬 Chat",
-                            id="chat-btn",
-                            variant="primary",
-                            classes="action-btn",
-                        )
+            with Horizontal(classes="run-actions"):
+                yield Button(
+                    "▶ Run",
+                    id="execute-btn",
+                    variant="primary",
+                    classes="action-btn",
+                )
+                yield Button(
+                    "⏸ Debug",
+                    id="debug-btn",
+                    variant="primary",
+                    classes="action-btn",
+                )
+                yield Button(
+                    "💬 Chat",
+                    id="chat-btn",
+                    variant="primary",
+                    classes="action-btn",
+                )
+
 
     async def on_mount(self) -> None:
         """Discover entrypoints once, and set the first as default."""
@@ -148,6 +146,9 @@ class NewRunPanel(Container):
 
     async def on_select_changed(self, event: Select.Changed) -> None:
         """Update JSON input when user selects an entrypoint."""
+        if event.select.id != "entrypoint-select":
+            return
+
         new_entrypoint = cast(str, event.value) if event.value else ""
 
         # Only load schema if the entrypoint actually changed
