@@ -9,7 +9,65 @@ def mock_json_from_schema(schema: dict[str, Any]) -> Any:
     - For primitives: returns a sensible example / default / enum[0].
     - Handles oneOf/anyOf by choosing the first option.
     - Special handling for LangChain message types.
+    - Special handling for UiPath conversational agent input schemas.
     """
+
+    def _is_uipath_conversational_input(s: dict[str, Any]) -> bool:
+        """Check if this schema represents a UiPath conversational agent input."""
+        if s.get("type") != "object":
+            return False
+        props = s.get("properties", {})
+        # Check for the characteristic fields of ConversationalAgentInput
+        has_messages = "messages" in props
+        has_user_settings = "userSettings" in props
+
+        if not (has_messages and has_user_settings):
+            return False
+
+        # Additional check: messages should be an array
+        messages_prop = props.get("messages", {})
+        if messages_prop.get("type") != "array":
+            return False
+
+        # Check if $defs contains UiPath message types
+        defs = s.get("$defs", {})
+        uipath_types = [
+            "UiPathConversationMessage",
+            "UiPathConversationContentPart",
+            "UiPathInlineValue",
+        ]
+        has_uipath_defs = any(t in defs for t in uipath_types)
+
+        return has_uipath_defs
+
+    def _mock_uipath_conversational_input() -> dict[str, Any]:
+        """Generate a user-friendly mock for UiPath conversational agent input."""
+        return {
+            "messages": [
+                {
+                    "messageId": "msg-001",
+                    "role": "user",
+                    "contentParts": [
+                        {
+                            "contentPartId": "part-001",
+                            "mimeType": "text/plain",
+                            "data": {"inline": "Hello, how can you help me today?"},
+                        }
+                    ],
+                    "createdAt": "2025-01-19T10:00:00Z",
+                    "updatedAt": "2025-01-19T10:00:00Z",
+                }
+            ],
+            "userSettings": {
+                "name": "John Doe",
+                "email": "john.doe@example.com",
+                "role": "Software Engineer",
+                "department": "Engineering",
+                "company": "Acme Corp",
+                "country": "United States",
+                "timezone": "America/New_York",
+            },
+        }
 
     def _is_langchain_messages_array(sub_schema: dict[str, Any]) -> bool:
         """Check if this is a LangChain messages array."""
@@ -109,6 +167,10 @@ def mock_json_from_schema(schema: dict[str, Any]) -> Any:
 
         # 9) Fallback
         return None
+
+    # Check for UiPath conversational input schema first
+    if _is_uipath_conversational_input(schema):
+        return _mock_uipath_conversational_input()
 
     # Top-level: if it's an object with properties, build a dict
     if schema.get("type") == "object":
