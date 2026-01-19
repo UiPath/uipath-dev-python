@@ -97,7 +97,7 @@ class RunService:
                 execution_options.resume = True
                 self._add_info_log(run, f"Resuming execution: {run.entrypoint}")
             else:
-                execution_input = run.input_data
+                execution_input = run.input_data.copy()
                 self._add_info_log(run, f"Starting execution: {run.entrypoint}")
 
             run.status = "running"
