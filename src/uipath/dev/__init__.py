@@ -164,7 +164,7 @@ class UiPathDeveloperConsole(App[Any]):
                     )
                 )
                 current_run.add_event(msg_ev)
-                current_run.input_data = {"messages": [msg]}
+                current_run.input_data = {"messages": [msg.model_dump(by_alias=True)]}
 
             if current_run.mode == ExecutionMode.DEBUG:
                 asyncio.create_task(

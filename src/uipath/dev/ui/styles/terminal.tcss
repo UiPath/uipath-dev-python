@@ -217,7 +217,9 @@ SpanDetailsDisplay {
 
 .json-input {
     margin-top: 1;
-    height: auto;
+    margin-bottom: 3;
+    height: 100%;
+    overflow-y: auto;
 }
 
 .run-actions {
