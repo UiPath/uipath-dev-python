@@ -129,6 +129,16 @@ Screen {
     border: solid #ff4444;
 }
 
+.error-message {
+    color: $error;
+    background: $surface;
+    padding: 1 2;
+    border: solid $error;
+    height: auto;
+    max-height: 50%;
+    overflow-y: auto;
+}
+
 .hidden {
     display: none;
 }
