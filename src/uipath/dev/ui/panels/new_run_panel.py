@@ -3,10 +3,11 @@
 import json
 from typing import Any, Tuple, cast
 
+from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.reactive import reactive
-from textual.widgets import Button, Select, TabbedContent, TabPane
+from textual.widgets import Button, Select, Static, TabbedContent, TabPane
 from uipath.runtime import UiPathRuntimeFactoryProtocol, UiPathRuntimeProtocol
 
 from uipath.dev.ui.widgets.json_input import JsonInput
@@ -44,6 +45,12 @@ class NewRunPanel(Container):
                         options=[],
                         id="entrypoint-select",
                         allow_blank=True,
+                    )
+
+                    yield Static(
+                        "",
+                        id="error-message",
+                        classes="error-message hidden",
                     )
 
                     yield JsonInput(
@@ -112,6 +119,13 @@ class NewRunPanel(Container):
     async def _load_schema_and_update_input(self, entrypoint: str) -> None:
         """Ensure schema for entrypoint is loaded, then update JSON input."""
         json_input = self.query_one("#json-input", JsonInput)
+        error_message = self.query_one("#error-message", Static)
+        select = self.query_one("#entrypoint-select", Select)
+
+        # Hide error, show input by default
+        error_message.add_class("hidden")
+        json_input.remove_class("hidden")
+        select.remove_class("hidden")
 
         if not entrypoint or entrypoint == "no-entrypoints":
             json_input.text = "{}"
@@ -131,12 +145,12 @@ class NewRunPanel(Container):
                 self.entrypoint_schemas[entrypoint] = input_schema
                 schema = input_schema
             except Exception as e:
-                json_input.text = "{}"
-                self.app.notify(
-                    f"Error loading schema for '{entrypoint}': {str(e)}",
-                    severity="error",
-                    timeout=5,
+                json_input.add_class("hidden")
+                select.add_class("hidden")
+                error_message.update(
+                    Text(f"Error loading schema for '{entrypoint}':\n\n{str(e)}")
                 )
+                error_message.remove_class("hidden")
                 return
             finally:
                 if runtime is not None:
