@@ -4,7 +4,9 @@ import logging
 from pathlib import Path
 
 from uipath.runtime import (
+    UiPathRuntimeFactorySettings,
     UiPathRuntimeProtocol,
+    UiPathRuntimeStorageProtocol,
 )
 
 from demo.mock_greeting_runtime import (
@@ -75,25 +77,13 @@ class MockRuntimeFactory:
         )
         return MockGreetingRuntime(entrypoint=entrypoint)
 
-    async def discover_runtimes(self) -> list[UiPathRuntimeProtocol]:
-        """Return prototype instances for discovery (not really used by the UI)."""
-        runtimes: list[UiPathRuntimeProtocol] = [
-            MockGreetingRuntime(entrypoint=ENTRYPOINT_GREETING),
-            MockNumberAnalyticsRuntime(entrypoint=ENTRYPOINT_ANALYZE_NUMBERS),
-            MockSupportChatRuntime(entrypoint=ENTRYPOINT_SUPPORT_CHAT),
-            MockTelemetryRuntime(entrypoint=ENTRYPOINT_TELEMETRY),
-        ]
+    async def get_settings(self) -> UiPathRuntimeFactorySettings | None:
+        """Return factory settings (no-op for mock)."""
+        return UiPathRuntimeFactorySettings()
 
-        for entrypoint in TEMPLATE_RUNTIMES.keys():
-            try:
-                runtime: UiPathRuntimeProtocol = await self.new_runtime(
-                    entrypoint, runtime_id="discovery"
-                )
-                runtimes.append(runtime)
-            except Exception as e:
-                logger.error(f"Failed to load template runtime '{entrypoint}': {e}")
-
-        return runtimes
+    async def get_storage(self) -> UiPathRuntimeStorageProtocol | None:
+        """Return factory storage (no-op for mock)."""
+        return None
 
     def discover_entrypoints(self) -> list[str]:
         """Return all available entrypoints."""
