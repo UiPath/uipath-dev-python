@@ -261,6 +261,9 @@ class UiPathDeveloperConsole(App[Any]):
 
     def _on_run_updated(self, run: ExecutionRun) -> None:
         """Called whenever a run changes (status, times, logs, traces)."""
+        if not self.is_running:
+            return
+
         # Update the run in history
         history_panel = self.query_one("#history-panel", RunHistoryPanel)
         history_panel.update_run(run)
@@ -272,11 +275,17 @@ class UiPathDeveloperConsole(App[Any]):
 
     def _on_log_for_ui(self, log_msg: LogMessage) -> None:
         """Append a log message to the logs UI."""
+        if not self.is_running:
+            return
+
         details_panel = self.query_one("#details-panel", RunDetailsPanel)
         details_panel.add_log(log_msg)
 
     def _on_trace_for_ui(self, trace_msg: TraceMessage) -> None:
         """Append/refresh traces in the UI."""
+        if not self.is_running:
+            return
+
         details_panel = self.query_one("#details-panel", RunDetailsPanel)
         details_panel.add_trace(trace_msg)
 
@@ -285,6 +294,9 @@ class UiPathDeveloperConsole(App[Any]):
         chat_msg: ChatMessage,
     ) -> None:
         """Append/refresh chat messages in the UI."""
+        if not self.is_running:
+            return
+
         details_panel = self.query_one("#details-panel", RunDetailsPanel)
         details_panel.add_chat_message(chat_msg)
 
