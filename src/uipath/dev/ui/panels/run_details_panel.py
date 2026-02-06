@@ -1,5 +1,6 @@
 """Panel for displaying execution run details, traces, and logs."""
 
+from collections import deque
 from typing import Any
 
 from textual.app import ComposeResult
@@ -29,6 +30,7 @@ class SpanDetailsDisplay(Container):
             max_lines=1000,
             highlight=True,
             markup=True,
+            auto_scroll=False,
             classes="span-detail-log",
         )
 
@@ -75,6 +77,26 @@ class SpanDetailsDisplay(Container):
         if trace_msg.parent_span_id:
             details_log.write(f"[dim]Parent Span: {trace_msg.parent_span_id}[/dim]")
 
+        details_log.scroll_home(animate=False)
+
+
+_STATUS_ICONS: dict[str, str] = {
+    "started": "🔵",
+    "running": "🟡",
+    "completed": "🟢",
+    "failed": "🔴",
+    "error": "🔴",
+}
+
+
+def _span_label(trace_msg: TraceMessage) -> str:
+    """Build the display label for a span tree node."""
+    status_icon = _STATUS_ICONS.get(trace_msg.status.lower(), "⚪")
+    duration_str = (
+        f" ({trace_msg.duration_ms:.1f}ms)" if trace_msg.duration_ms is not None else ""
+    )
+    return f"{status_icon} {trace_msg.span_name}{duration_str}"
+
 
 class RunDetailsPanel(Container):
     """Panel showing traces and logs for selected run with tabbed interface."""
@@ -84,7 +106,15 @@ class RunDetailsPanel(Container):
     def __init__(self, **kwargs):
         """Initialize RunDetailsPanel."""
         super().__init__(**kwargs)
-        self.span_tree_nodes = {}
+        # Maps span_id -> TreeNode for incremental updates
+        self.span_tree_nodes: dict[str, TreeNode[str]] = {}
+        # Maps span_id -> last-seen TraceMessage to detect label changes
+        self._span_trace_cache: dict[str, TraceMessage] = {}
+        # Maps span_id -> last-computed label string (avoids recomputing for comparisons)
+        self._span_label_cache: dict[str, str] = {}
+        # Maps expected parent_span_id -> [child span_ids] for orphans
+        # (children that arrived before their parent)
+        self._orphaned_spans: dict[str, list[str]] = {}
         self.current_run = None
         self._chat_panel: ChatPanel | None = None
         self._spans_tree: Tree[Any] | None = None
@@ -180,7 +210,8 @@ class RunDetailsPanel(Container):
         for log in run.logs:
             self.add_log(log)
 
-        self._rebuild_spans_tree()
+        # Full rebuild only on run switch
+        self._full_rebuild_spans_tree()
 
     def switch_tab(self, tab_id: str) -> None:
         """Switch to a specific tab by id (e.g. 'run-tab', 'traces-tab')."""
@@ -320,22 +351,26 @@ class RunDetailsPanel(Container):
 
         self._chat_panel.refresh_messages(run)
 
-    def _rebuild_spans_tree(self):
-        """Rebuild the spans tree from current run's traces."""
+    def _full_rebuild_spans_tree(self):
+        """Full rebuild of spans tree — only used on run switch."""
         if self._spans_tree is None or self._spans_tree.root is None:
             return
 
-        self._spans_tree.root.remove_children()
+        # Batch all tree mutations into a single repaint cycle
+        with self.app.batch_update():
+            self._spans_tree.root.remove_children()
+            self.span_tree_nodes.clear()
+            self._span_trace_cache.clear()
+            self._span_label_cache.clear()
+            self._orphaned_spans.clear()
 
-        self.span_tree_nodes.clear()
+            if not self.current_run or not self.current_run.traces:
+                return
 
-        if not self.current_run or not self.current_run.traces:
-            return
+            self._build_spans_tree(self.current_run.traces)
 
-        self._build_spans_tree(self.current_run.traces)
-
-        # Expand the root "Trace" node
-        self._spans_tree.root.expand()
+            # Expand the root "Trace" node
+            self._spans_tree.root.expand()
 
     def _build_spans_tree(self, trace_messages: list[TraceMessage]):
         """Build the spans tree from trace messages."""
@@ -374,28 +409,135 @@ class RunDetailsPanel(Container):
         children_by_parent: dict[str, list[TraceMessage]],
     ):
         """Recursively add a span and all its children."""
-        color_map = {
-            "started": "🔵",
-            "running": "🟡",
-            "completed": "🟢",
-            "failed": "🔴",
-            "error": "🔴",
-        }
-        status_icon = color_map.get(trace_msg.status.lower(), "⚪")
-        duration_str = (
-            f" ({trace_msg.duration_ms:.1f}ms)" if trace_msg.duration_ms else ""
-        )
-        label = f"{status_icon} {trace_msg.span_name}{duration_str}"
+        label = _span_label(trace_msg)
 
         node = parent_node.add(label)
         node.data = trace_msg.span_id
         self.span_tree_nodes[trace_msg.span_id] = node
+        self._span_trace_cache[trace_msg.span_id] = trace_msg
+        self._span_label_cache[trace_msg.span_id] = label
         node.expand()
 
         # Get children from prebuilt mapping - O(1) lookup
         children = children_by_parent.get(trace_msg.span_id, [])
         for child in sorted(children, key=lambda x: x.timestamp):
             self._add_span_with_children(node, child, children_by_parent)
+
+    def _incremental_add_trace(self, trace_msg: TraceMessage):
+        """Incrementally add or update a single trace span in the tree.
+
+        Handles OTel export ordering where children end (and export) before
+        parents.  When a child arrives before its parent, it is temporarily
+        parked under root.  When the parent finally arrives, orphaned children
+        are re-parented under it.
+
+        All tree mutations are wrapped in batch_update() so Textual coalesces
+        the N invalidate/refresh cycles into a single repaint.
+        """
+        if self._spans_tree is None:
+            return
+
+        span_id = trace_msg.span_id
+
+        # --- UPDATE existing node (cheap: no tree structure change) ---
+        if span_id in self.span_tree_nodes:
+            new_label = _span_label(trace_msg)
+            if new_label != self._span_label_cache.get(span_id):
+                self.span_tree_nodes[span_id].set_label(new_label)
+                self._span_label_cache[span_id] = new_label
+            self._span_trace_cache[span_id] = trace_msg
+            return
+
+        # --- SKIP artificial root spans (no parent) ---
+        # But first, re-parent any orphans that were waiting for this span.
+        # Their parent_span_id points here; they're currently parked under
+        # the tree root which is visually correct, so just clean up the dict.
+        if trace_msg.parent_span_id is None:
+            self._orphaned_spans.pop(span_id, None)
+            return
+
+        # --- INSERT new node (+ possible re-parenting of orphans) ---
+        # Batch all tree mutations into a single repaint cycle.
+        with self.app.batch_update():
+            is_orphan = False
+            if trace_msg.parent_span_id in self.span_tree_nodes:
+                parent_node = self.span_tree_nodes[trace_msg.parent_span_id]
+            else:
+                # Parent not in tree yet — park under root temporarily
+                parent_node = self._spans_tree.root
+                is_orphan = True
+
+            label = _span_label(trace_msg)
+            node = parent_node.add(label)
+            node.data = span_id
+            self.span_tree_nodes[span_id] = node
+            self._span_trace_cache[span_id] = trace_msg
+            self._span_label_cache[span_id] = label
+            node.expand()
+            parent_node.expand()
+
+            # Track as orphan so we can re-parent when the real parent arrives
+            if is_orphan:
+                self._orphaned_spans.setdefault(trace_msg.parent_span_id, []).append(
+                    span_id
+                )
+
+            # --- RE-PARENT any orphans waiting for this span as their parent ---
+            if span_id in self._orphaned_spans:
+                orphan_ids = self._orphaned_spans.pop(span_id)
+                for orphan_id in orphan_ids:
+                    self._reparent_node(orphan_id, node)
+
+    def _collect_subtree_span_ids(self, node: TreeNode[str]) -> list[str]:
+        """Collect all span_ids in a subtree in BFS order (parent before children)."""
+        result: list[str] = []
+        queue: deque[TreeNode[str]] = deque([node])
+        while queue:
+            current = queue.popleft()
+            if current.data:
+                result.append(current.data)
+            queue.extend(current.children)
+        return result
+
+    def _reparent_node(self, span_id: str, new_parent_node: TreeNode[str]) -> None:
+        """Move a node (and its entire subtree) under a new parent.
+
+        Textual's Tree has no move/reparent API, so we collect the subtree,
+        remove the old node, and re-add everything under the new parent.
+        """
+        old_node = self.span_tree_nodes.get(span_id)
+        if old_node is None:
+            return
+
+        # Collect the full subtree in BFS order *before* removing
+        subtree_ids = self._collect_subtree_span_ids(old_node)
+
+        # Remove old node (takes all its children with it)
+        old_node.remove()
+
+        # Re-add every node in BFS order (parents are processed before children
+        # so the parent TreeNode always exists when we add a child)
+        for sid in subtree_ids:
+            trace = self._span_trace_cache.get(sid)
+            if trace is None:
+                continue
+
+            # Reuse cached label instead of recomputing
+            label = self._span_label_cache.get(sid)
+            if label is None:
+                label = _span_label(trace)
+                self._span_label_cache[sid] = label
+            if sid == span_id:
+                target_parent = new_parent_node
+            else:
+                target_parent = self.span_tree_nodes.get(
+                    trace.parent_span_id or "", new_parent_node
+                )
+
+            new_node = target_parent.add(label)
+            new_node.data = sid
+            self.span_tree_nodes[sid] = new_node
+            new_node.expand()
 
     def on_tree_node_selected(self, event: Tree.NodeSelected[str]) -> None:
         """Handle span selection in the tree."""
@@ -406,13 +548,7 @@ class RunDetailsPanel(Container):
         # Get the selected span data
         if hasattr(event.node, "data") and event.node.data:
             span_id = event.node.data
-            # Find the trace in current_run.traces
-            trace_msg = None
-            if self.current_run:
-                for trace in self.current_run.traces:
-                    if trace.span_id == span_id:
-                        trace_msg = trace
-                        break
+            trace_msg = self._span_trace_cache.get(span_id)
 
             if trace_msg:
                 span_details_display = self.query_one(
@@ -444,8 +580,8 @@ class RunDetailsPanel(Container):
         if not self.current_run or trace_msg.run_id != self.current_run.id:
             return
 
-        # Rebuild the tree to include new trace
-        self._rebuild_spans_tree()
+        # Incremental update instead of full rebuild
+        self._incremental_add_trace(trace_msg)
 
     def add_log(self, log_msg: LogMessage):
         """Add log to current run if it matches."""
@@ -489,6 +625,9 @@ class RunDetailsPanel(Container):
 
         self.current_run = None
         self.span_tree_nodes.clear()
+        self._span_trace_cache.clear()
+        self._span_label_cache.clear()
+        self._orphaned_spans.clear()
 
         span_details_display = self.query_one(
             "#span-details-display", SpanDetailsDisplay
