@@ -7,6 +7,8 @@ from rich.console import RenderableType
 from textual.message import Message
 from uipath.core.chat import UiPathConversationMessage, UiPathConversationMessageEvent
 
+from uipath.dev.models.data import ChatData, LogData, TraceData
+
 
 class LogMessage(Message):
     """Message sent when a new log entry is created."""
@@ -24,6 +26,16 @@ class LogMessage(Message):
         self.message = message
         self.timestamp = timestamp or datetime.now()
         super().__init__()
+
+    @classmethod
+    def from_data(cls, data: LogData) -> "LogMessage":
+        """Create a LogMessage from a LogData instance."""
+        return cls(
+            run_id=data.run_id,
+            level=data.level,
+            message=data.message,
+            timestamp=data.timestamp,
+        )
 
 
 class TraceMessage(Message):
@@ -53,6 +65,21 @@ class TraceMessage(Message):
         self.attributes = attributes or {}
         super().__init__()
 
+    @classmethod
+    def from_data(cls, data: TraceData) -> "TraceMessage":
+        """Create a TraceMessage from a TraceData instance."""
+        return cls(
+            run_id=data.run_id,
+            span_name=data.span_name,
+            span_id=data.span_id,
+            parent_span_id=data.parent_span_id,
+            trace_id=data.trace_id,
+            status=data.status,
+            duration_ms=data.duration_ms,
+            timestamp=data.timestamp,
+            attributes=data.attributes,
+        )
+
 
 class ChatMessage(Message):
     """Message sent when a new chat message is created or updated."""
@@ -68,3 +95,12 @@ class ChatMessage(Message):
         self.event = event
         self.message = message
         super().__init__()
+
+    @classmethod
+    def from_data(cls, data: ChatData) -> "ChatMessage":
+        """Create a ChatMessage from a ChatData instance."""
+        return cls(
+            event=data.event,
+            message=data.message,
+            run_id=data.run_id,
+        )

@@ -28,3 +28,9 @@ wheels/
 
 .cache/*
 .cache
+
+# Node
+node_modules/
+
+# Claude Code
+.claude/

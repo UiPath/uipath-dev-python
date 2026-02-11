@@ -15,8 +15,8 @@ from textual.widgets import (
 )
 from textual.widgets.tree import TreeNode
 
+from uipath.dev.models.data import ChatData, LogData, TraceData
 from uipath.dev.models.execution import ExecutionMode, ExecutionRun
-from uipath.dev.models.messages import ChatMessage, LogMessage, TraceMessage
 from uipath.dev.ui.panels.chat_panel import ChatPanel
 
 
@@ -34,12 +34,12 @@ class SpanDetailsDisplay(Container):
             classes="span-detail-log",
         )
 
-    def show_span_details(self, trace_msg: TraceMessage):
+    def show_span_details(self, trace_data: TraceData):
         """Display detailed information about a trace span."""
         details_log = self.query_one("#span-details", RichLog)
         details_log.clear()
 
-        details_log.write(f"[bold cyan]Span: {trace_msg.span_name}[/bold cyan]")
+        details_log.write(f"[bold cyan]Span: {trace_data.span_name}[/bold cyan]")
 
         details_log.write("")
 
@@ -50,32 +50,32 @@ class SpanDetailsDisplay(Container):
             "failed": "red",
             "error": "red",
         }
-        color = color_map.get(trace_msg.status.lower(), "white")
-        details_log.write(f"Status: [{color}]{trace_msg.status.upper()}[/{color}]")
+        color = color_map.get(trace_data.status.lower(), "white")
+        details_log.write(f"Status: [{color}]{trace_data.status.upper()}[/{color}]")
 
         details_log.write(
-            f"Started: [dim]{trace_msg.timestamp.strftime('%H:%M:%S.%f')[:-3]}[/dim]"
+            f"Started: [dim]{trace_data.timestamp.strftime('%H:%M:%S.%f')[:-3]}[/dim]"
         )
 
-        if trace_msg.duration_ms is not None:
+        if trace_data.duration_ms is not None:
             details_log.write(
-                f"Duration: [yellow]{trace_msg.duration_ms:.2f}ms[/yellow]"
+                f"Duration: [yellow]{trace_data.duration_ms:.2f}ms[/yellow]"
             )
 
-        if trace_msg.attributes:
+        if trace_data.attributes:
             details_log.write("")
             details_log.write("[bold]Attributes:[/bold]")
-            for key, value in trace_msg.attributes.items():
+            for key, value in trace_data.attributes.items():
                 details_log.write(f"  {key}: {value}")
 
         details_log.write("")
 
-        details_log.write(f"[dim]Trace ID: {trace_msg.trace_id}[/dim]")
-        details_log.write(f"[dim]Span ID: {trace_msg.span_id}[/dim]")
-        details_log.write(f"[dim]Run ID: {trace_msg.run_id}[/dim]")
+        details_log.write(f"[dim]Trace ID: {trace_data.trace_id}[/dim]")
+        details_log.write(f"[dim]Span ID: {trace_data.span_id}[/dim]")
+        details_log.write(f"[dim]Run ID: {trace_data.run_id}[/dim]")
 
-        if trace_msg.parent_span_id:
-            details_log.write(f"[dim]Parent Span: {trace_msg.parent_span_id}[/dim]")
+        if trace_data.parent_span_id:
+            details_log.write(f"[dim]Parent Span: {trace_data.parent_span_id}[/dim]")
 
         details_log.scroll_home(animate=False)
 
@@ -89,13 +89,15 @@ _STATUS_ICONS: dict[str, str] = {
 }
 
 
-def _span_label(trace_msg: TraceMessage) -> str:
+def _span_label(trace_data: TraceData) -> str:
     """Build the display label for a span tree node."""
-    status_icon = _STATUS_ICONS.get(trace_msg.status.lower(), "⚪")
+    status_icon = _STATUS_ICONS.get(trace_data.status.lower(), "⚪")
     duration_str = (
-        f" ({trace_msg.duration_ms:.1f}ms)" if trace_msg.duration_ms is not None else ""
+        f" ({trace_data.duration_ms:.1f}ms)"
+        if trace_data.duration_ms is not None
+        else ""
     )
-    return f"{status_icon} {trace_msg.span_name}{duration_str}"
+    return f"{status_icon} {trace_data.span_name}{duration_str}"
 
 
 class RunDetailsPanel(Container):
@@ -108,8 +110,8 @@ class RunDetailsPanel(Container):
         super().__init__(**kwargs)
         # Maps span_id -> TreeNode for incremental updates
         self.span_tree_nodes: dict[str, TreeNode[str]] = {}
-        # Maps span_id -> last-seen TraceMessage to detect label changes
-        self._span_trace_cache: dict[str, TraceMessage] = {}
+        # Maps span_id -> last-seen TraceData to detect label changes
+        self._span_trace_cache: dict[str, TraceData] = {}
         # Maps span_id -> last-computed label string (avoids recomputing for comparisons)
         self._span_label_cache: dict[str, str] = {}
         # Maps expected parent_span_id -> [child span_ids] for orphans
@@ -372,30 +374,30 @@ class RunDetailsPanel(Container):
             # Expand the root "Trace" node
             self._spans_tree.root.expand()
 
-    def _build_spans_tree(self, trace_messages: list[TraceMessage]):
-        """Build the spans tree from trace messages."""
+    def _build_spans_tree(self, trace_data_list: list[TraceData]):
+        """Build the spans tree from trace data."""
         assert self._spans_tree is not None
 
         root = self._spans_tree.root
 
         # Filter out spans without parents (artificial root spans)
         spans_by_id = {
-            msg.span_id: msg for msg in trace_messages if msg.parent_span_id is not None
+            td.span_id: td for td in trace_data_list if td.parent_span_id is not None
         }
 
         # Build parent-to-children mapping once upfront
-        children_by_parent: dict[str, list[TraceMessage]] = {}
-        for msg in spans_by_id.values():
-            if msg.parent_span_id:
-                if msg.parent_span_id not in children_by_parent:
-                    children_by_parent[msg.parent_span_id] = []
-                children_by_parent[msg.parent_span_id].append(msg)
+        children_by_parent: dict[str, list[TraceData]] = {}
+        for td in spans_by_id.values():
+            if td.parent_span_id:
+                if td.parent_span_id not in children_by_parent:
+                    children_by_parent[td.parent_span_id] = []
+                children_by_parent[td.parent_span_id].append(td)
 
         # Find root spans (parent doesn't exist in our filtered data)
         root_spans = [
-            msg
-            for msg in trace_messages
-            if msg.parent_span_id and msg.parent_span_id not in spans_by_id
+            td
+            for td in trace_data_list
+            if td.parent_span_id and td.parent_span_id not in spans_by_id
         ]
 
         # Build tree recursively for each root span
@@ -405,25 +407,25 @@ class RunDetailsPanel(Container):
     def _add_span_with_children(
         self,
         parent_node: TreeNode[str],
-        trace_msg: TraceMessage,
-        children_by_parent: dict[str, list[TraceMessage]],
+        trace_data: TraceData,
+        children_by_parent: dict[str, list[TraceData]],
     ):
         """Recursively add a span and all its children."""
-        label = _span_label(trace_msg)
+        label = _span_label(trace_data)
 
         node = parent_node.add(label)
-        node.data = trace_msg.span_id
-        self.span_tree_nodes[trace_msg.span_id] = node
-        self._span_trace_cache[trace_msg.span_id] = trace_msg
-        self._span_label_cache[trace_msg.span_id] = label
+        node.data = trace_data.span_id
+        self.span_tree_nodes[trace_data.span_id] = node
+        self._span_trace_cache[trace_data.span_id] = trace_data
+        self._span_label_cache[trace_data.span_id] = label
         node.expand()
 
         # Get children from prebuilt mapping - O(1) lookup
-        children = children_by_parent.get(trace_msg.span_id, [])
+        children = children_by_parent.get(trace_data.span_id, [])
         for child in sorted(children, key=lambda x: x.timestamp):
             self._add_span_with_children(node, child, children_by_parent)
 
-    def _incremental_add_trace(self, trace_msg: TraceMessage):
+    def _incremental_add_trace(self, trace_data: TraceData):
         """Incrementally add or update a single trace span in the tree.
 
         Handles OTel export ordering where children end (and export) before
@@ -437,22 +439,22 @@ class RunDetailsPanel(Container):
         if self._spans_tree is None:
             return
 
-        span_id = trace_msg.span_id
+        span_id = trace_data.span_id
 
         # --- UPDATE existing node (cheap: no tree structure change) ---
         if span_id in self.span_tree_nodes:
-            new_label = _span_label(trace_msg)
+            new_label = _span_label(trace_data)
             if new_label != self._span_label_cache.get(span_id):
                 self.span_tree_nodes[span_id].set_label(new_label)
                 self._span_label_cache[span_id] = new_label
-            self._span_trace_cache[span_id] = trace_msg
+            self._span_trace_cache[span_id] = trace_data
             return
 
         # --- SKIP artificial root spans (no parent) ---
         # But first, re-parent any orphans that were waiting for this span.
         # Their parent_span_id points here; they're currently parked under
         # the tree root which is visually correct, so just clean up the dict.
-        if trace_msg.parent_span_id is None:
+        if trace_data.parent_span_id is None:
             self._orphaned_spans.pop(span_id, None)
             return
 
@@ -460,25 +462,25 @@ class RunDetailsPanel(Container):
         # Batch all tree mutations into a single repaint cycle.
         with self.app.batch_update():
             is_orphan = False
-            if trace_msg.parent_span_id in self.span_tree_nodes:
-                parent_node = self.span_tree_nodes[trace_msg.parent_span_id]
+            if trace_data.parent_span_id in self.span_tree_nodes:
+                parent_node = self.span_tree_nodes[trace_data.parent_span_id]
             else:
                 # Parent not in tree yet — park under root temporarily
                 parent_node = self._spans_tree.root
                 is_orphan = True
 
-            label = _span_label(trace_msg)
+            label = _span_label(trace_data)
             node = parent_node.add(label)
             node.data = span_id
             self.span_tree_nodes[span_id] = node
-            self._span_trace_cache[span_id] = trace_msg
+            self._span_trace_cache[span_id] = trace_data
             self._span_label_cache[span_id] = label
             node.expand()
             parent_node.expand()
 
             # Track as orphan so we can re-parent when the real parent arrives
             if is_orphan:
-                self._orphaned_spans.setdefault(trace_msg.parent_span_id, []).append(
+                self._orphaned_spans.setdefault(trace_data.parent_span_id, []).append(
                     span_id
                 )
 
@@ -548,13 +550,13 @@ class RunDetailsPanel(Container):
         # Get the selected span data
         if hasattr(event.node, "data") and event.node.data:
             span_id = event.node.data
-            trace_msg = self._span_trace_cache.get(span_id)
+            trace_data = self._span_trace_cache.get(span_id)
 
-            if trace_msg:
+            if trace_data:
                 span_details_display = self.query_one(
                     "#span-details-display", SpanDetailsDisplay
                 )
-                span_details_display.show_span_details(trace_msg)
+                span_details_display.show_span_details(trace_data)
 
     def update_run_details(self, run: ExecutionRun):
         """Update run details if it matches the current run."""
@@ -565,29 +567,29 @@ class RunDetailsPanel(Container):
 
     def add_chat_message(
         self,
-        chat_msg: ChatMessage,
+        chat_data: ChatData,
     ) -> None:
         """Add a chat message to the display."""
         assert self._chat_panel is not None
 
-        if not self.current_run or chat_msg.run_id != self.current_run.id:
+        if not self.current_run or chat_data.run_id != self.current_run.id:
             return
 
-        self._chat_panel.add_chat_message(chat_msg)
+        self._chat_panel.add_chat_message(chat_data)
 
-    def add_trace(self, trace_msg: TraceMessage):
+    def add_trace(self, trace_data: TraceData):
         """Add trace to current run if it matches."""
-        if not self.current_run or trace_msg.run_id != self.current_run.id:
+        if not self.current_run or trace_data.run_id != self.current_run.id:
             return
 
         # Incremental update instead of full rebuild
-        self._incremental_add_trace(trace_msg)
+        self._incremental_add_trace(trace_data)
 
-    def add_log(self, log_msg: LogMessage):
+    def add_log(self, log_data: LogData):
         """Add log to current run if it matches."""
         assert self._logs is not None
 
-        if not self.current_run or log_msg.run_id != self.current_run.id:
+        if not self.current_run or log_data.run_id != self.current_run.id:
             return
 
         color_map = {
@@ -599,19 +601,16 @@ class RunDetailsPanel(Container):
             "CRITICAL": "bold red",
         }
 
-        color = color_map.get(log_msg.level.upper(), "white")
-        timestamp_str = log_msg.timestamp.strftime("%H:%M:%S")
-        level_short = log_msg.level[:4].upper()
+        color = color_map.get(log_data.level.upper(), "white")
+        timestamp_str = log_data.timestamp.strftime("%H:%M:%S")
+        level_short = log_data.level[:4].upper()
 
-        if isinstance(log_msg.message, str):
-            log_text = (
-                f"[dim]{timestamp_str}[/dim] "
-                f"[{color}]{level_short}[/{color}] "
-                f"{log_msg.message}"
-            )
-            self._logs.write(log_text)
-        else:
-            self._logs.write(log_msg.message)
+        log_text = (
+            f"[dim]{timestamp_str}[/dim] "
+            f"[{color}]{level_short}[/{color}] "
+            f"{log_data.message}"
+        )
+        self._logs.write(log_text)
 
     def clear_display(self):
         """Clear both traces and logs display."""

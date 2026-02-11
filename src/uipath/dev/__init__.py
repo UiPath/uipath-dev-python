@@ -19,13 +19,11 @@ from uipath.dev.infrastructure import (
     patch_textual_stderr,
 )
 from uipath.dev.models import (
-    ChatMessage,
     ExecutionMode,
     ExecutionRun,
-    LogMessage,
-    TraceMessage,
 )
 from uipath.dev.models.chat import get_user_message, get_user_message_event
+from uipath.dev.models.data import ChatData, LogData, TraceData
 from uipath.dev.services import RunService
 from uipath.dev.ui.panels import NewRunPanel, RunDetailsPanel, RunHistoryPanel
 
@@ -65,6 +63,7 @@ class UiPathDeveloperConsole(App[Any]):
         self.trace_manager = trace_manager
 
         # Core service: owns run state, logs, traces
+        # Adapter layer: wrap data classes into Textual messages for UI
         self.run_service = RunService(
             runtime_factory=self.runtime_factory,
             trace_manager=self.trace_manager,
@@ -156,13 +155,13 @@ class UiPathDeveloperConsole(App[Any]):
                 msg = get_user_message(user_text)
                 msg_ev = get_user_message_event(user_text)
 
-                self._on_chat_for_ui(
-                    ChatMessage(
-                        event=msg_ev,
-                        message=msg,
-                        run_id=current_run.id,
-                    )
+                # Route through adapter: data class -> Textual message
+                chat_data = ChatData(
+                    event=msg_ev,
+                    message=msg,
+                    run_id=current_run.id,
                 )
+                self._on_chat_for_ui(chat_data)
                 current_run.add_event(msg_ev)
                 current_run.input_data = {"messages": [msg.model_dump(by_alias=True)]}
 
@@ -273,32 +272,29 @@ class UiPathDeveloperConsole(App[Any]):
         if details_panel.current_run and details_panel.current_run.id == run.id:
             details_panel.update_run_details(run)
 
-    def _on_log_for_ui(self, log_msg: LogMessage) -> None:
-        """Append a log message to the logs UI."""
+    def _on_log_for_ui(self, log_data: LogData) -> None:
+        """Adapter: wrap LogData into LogMessage and append to UI."""
         if not self.is_running:
             return
 
         details_panel = self.query_one("#details-panel", RunDetailsPanel)
-        details_panel.add_log(log_msg)
+        details_panel.add_log(log_data)
 
-    def _on_trace_for_ui(self, trace_msg: TraceMessage) -> None:
-        """Append/refresh traces in the UI."""
+    def _on_trace_for_ui(self, trace_data: TraceData) -> None:
+        """Adapter: wrap TraceData into TraceMessage and append to UI."""
         if not self.is_running:
             return
 
         details_panel = self.query_one("#details-panel", RunDetailsPanel)
-        details_panel.add_trace(trace_msg)
+        details_panel.add_trace(trace_data)
 
-    def _on_chat_for_ui(
-        self,
-        chat_msg: ChatMessage,
-    ) -> None:
-        """Append/refresh chat messages in the UI."""
+    def _on_chat_for_ui(self, chat_data: ChatData) -> None:
+        """Adapter: wrap ChatData into ChatMessage and append to UI."""
         if not self.is_running:
             return
 
         details_panel = self.query_one("#details-panel", RunDetailsPanel)
-        details_panel.add_chat_message(chat_msg)
+        details_panel.add_chat_message(chat_data)
 
     def _show_run_details(self, run: ExecutionRun) -> None:
         """Show details panel for a specific run."""
@@ -326,8 +322,8 @@ class UiPathDeveloperConsole(App[Any]):
                 ExecutionRun, getattr(details_panel, "current_run", None)
             )
             if run:
-                log_msg = LogMessage(run.id, level, message, datetime.now())
+                log_data = LogData(run.id, level, message, datetime.now())
                 # Route through RunService so state + UI stay in sync
-                self.run_service.handle_log(log_msg)
+                self.run_service.handle_log(log_data)
 
         self.call_from_thread(add_log)

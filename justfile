@@ -23,3 +23,18 @@ install:
 # Test the custom linter
 test-lint-httpx:
     python scripts/test_httpx_linter.py
+
+# Validate server module (imports, serializers, app factory)
+validate-server:
+    python scripts/validate_server.py
+
+# Validate frontend structure (no build)
+validate-frontend:
+    python scripts/validate_frontend.py
+
+# Validate frontend structure + build
+validate-frontend-build:
+    python scripts/validate_frontend.py --build
+
+# Run all validations (no frontend build)
+validate-all: validate validate-server validate-frontend

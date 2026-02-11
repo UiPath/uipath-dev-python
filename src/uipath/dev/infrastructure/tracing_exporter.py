@@ -9,7 +9,7 @@ from opentelemetry.sdk.trace import Event, ReadableSpan
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 from opentelemetry.trace import StatusCode
 
-from uipath.dev.models.messages import LogMessage, TraceMessage
+from uipath.dev.models.data import LogData, TraceData
 
 
 class RunContextExporter(SpanExporter):
@@ -17,8 +17,8 @@ class RunContextExporter(SpanExporter):
 
     def __init__(
         self,
-        on_trace: Callable[[TraceMessage], None],
-        on_log: Callable[[LogMessage], None],
+        on_trace: Callable[[TraceData], None],
+        on_log: Callable[[LogData], None],
     ):
         """Initialize RunContextExporter with callbacks for trace and log messages."""
         self.on_trace = on_trace
@@ -70,8 +70,8 @@ class RunContextExporter(SpanExporter):
         if hasattr(span, "parent") and span.parent:
             parent_span_id = f"{span.parent.span_id:016x}"
 
-        # Create trace message with all required fields
-        trace_msg = TraceMessage(
+        # Create trace data with all required fields
+        trace_data = TraceData(
             run_id=run_id_val,
             span_name=span.name,
             span_id=span_id,
@@ -84,19 +84,19 @@ class RunContextExporter(SpanExporter):
         )
 
         # Send to UI
-        self.on_trace(trace_msg)
+        self.on_trace(trace_data)
 
         # Also send logs if there are events
         if hasattr(span, "events") and span.events:
             for event in span.events:
                 log_level = self._determine_log_level(event, span.status)
-                log_msg = LogMessage(
+                log_data = LogData(
                     run_id=run_id_val,
                     level=log_level,
                     message=event.name,
                     timestamp=datetime.fromtimestamp(event.timestamp / 1_000_000_000),
                 )
-                self.on_log(log_msg)
+                self.on_log(log_data)
 
     def _determine_log_level(self, event: Event, span_status: trace.Status) -> str:
         """Determine log level from span event."""

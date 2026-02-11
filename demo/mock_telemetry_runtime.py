@@ -13,7 +13,12 @@ from uipath.runtime import (
     UiPathStreamOptions,
 )
 from uipath.runtime.debug import UiPathBreakpointResult
-from uipath.runtime.schema import UiPathRuntimeSchema
+from uipath.runtime.schema import (
+    UiPathRuntimeEdge,
+    UiPathRuntimeGraph,
+    UiPathRuntimeNode,
+    UiPathRuntimeSchema,
+)
 
 ENTRYPOINT_TELEMETRY = "agent/telemetry.py:run"
 
@@ -58,6 +63,113 @@ class MockTelemetryRuntime:
                 "properties": {"result": {"type": "string"}},
                 "required": ["result"],
             },
+            graph=UiPathRuntimeGraph(
+                nodes=[
+                    UiPathRuntimeNode(id="__start__", name="__start__", type="node"),
+                    UiPathRuntimeNode(id="input", name="input", type="node"),
+                    UiPathRuntimeNode(
+                        id="supervisor",
+                        name="supervisor",
+                        type="model",
+                        metadata={
+                            "model_name": "claude-3-7-sonnet-latest",
+                            "max_tokens": 64000,
+                        },
+                    ),
+                    UiPathRuntimeNode(
+                        id="researcher",
+                        name="researcher",
+                        type="node",
+                        subgraph=UiPathRuntimeGraph(
+                            nodes=[
+                                UiPathRuntimeNode(
+                                    id="__start__", name="__start__", type="node"
+                                ),
+                                UiPathRuntimeNode(
+                                    id="model",
+                                    name="model",
+                                    type="model",
+                                    metadata={
+                                        "model_name": "claude-3-7-sonnet-latest",
+                                        "max_tokens": 64000,
+                                    },
+                                ),
+                                UiPathRuntimeNode(
+                                    id="tools",
+                                    name="tools",
+                                    type="tool",
+                                    metadata={
+                                        "tool_names": ["tavily_search"],
+                                        "tool_count": 1,
+                                    },
+                                ),
+                                UiPathRuntimeNode(
+                                    id="__end__", name="__end__", type="node"
+                                ),
+                            ],
+                            edges=[
+                                UiPathRuntimeEdge(source="__start__", target="model"),
+                                UiPathRuntimeEdge(source="model", target="__end__"),
+                                UiPathRuntimeEdge(source="model", target="tools"),
+                                UiPathRuntimeEdge(source="tools", target="model"),
+                            ],
+                        ),
+                    ),
+                    UiPathRuntimeNode(
+                        id="coder",
+                        name="coder",
+                        type="node",
+                        subgraph=UiPathRuntimeGraph(
+                            nodes=[
+                                UiPathRuntimeNode(
+                                    id="__start__", name="__start__", type="node"
+                                ),
+                                UiPathRuntimeNode(
+                                    id="model",
+                                    name="model",
+                                    type="model",
+                                    metadata={
+                                        "model_name": "claude-3-7-sonnet-latest",
+                                        "max_tokens": 64000,
+                                    },
+                                ),
+                                UiPathRuntimeNode(
+                                    id="tools",
+                                    name="tools",
+                                    type="tool",
+                                    metadata={
+                                        "tool_names": ["python_repl_tool"],
+                                        "tool_count": 1,
+                                    },
+                                ),
+                                UiPathRuntimeNode(
+                                    id="__end__", name="__end__", type="node"
+                                ),
+                            ],
+                            edges=[
+                                UiPathRuntimeEdge(source="__start__", target="model"),
+                                UiPathRuntimeEdge(source="model", target="__end__"),
+                                UiPathRuntimeEdge(source="model", target="tools"),
+                                UiPathRuntimeEdge(source="tools", target="model"),
+                            ],
+                        ),
+                    ),
+                    UiPathRuntimeNode(id="output", name="output", type="node"),
+                    UiPathRuntimeNode(id="__end__", name="__end__", type="__end__"),
+                ],
+                edges=[
+                    UiPathRuntimeEdge(source="__start__", target="input"),
+                    UiPathRuntimeEdge(source="coder", target="supervisor"),
+                    UiPathRuntimeEdge(source="input", target="supervisor"),
+                    UiPathRuntimeEdge(source="researcher", target="supervisor"),
+                    UiPathRuntimeEdge(source="supervisor", target="coder"),
+                    UiPathRuntimeEdge(
+                        source="supervisor", target="output", label="__end__"
+                    ),
+                    UiPathRuntimeEdge(source="supervisor", target="researcher"),
+                    UiPathRuntimeEdge(source="output", target="__end__"),
+                ],
+            ),
         )
 
     async def execute(

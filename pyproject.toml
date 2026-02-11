@@ -1,6 +1,6 @@
 [project]
 name = "uipath-dev"
-version = "0.0.22"
+version = "0.0.23"
 description = "UiPath Developer Console"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
@@ -21,6 +21,12 @@ maintainers = [
   { name = "Cristian Pufu", email = "cristian.pufu@uipath.com" },
 ]
 
+[project.optional-dependencies]
+server = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.34.0",
+]
+
 [project.urls]
 Homepage = "https://uipath.com"
 Repository = "https://github.com/UiPath/uipath-dev-python"
@@ -28,6 +34,7 @@ Documentation = "https://uipath.github.io/uipath-python/"
 
 [project.scripts]
 uipath-dev = "uipath.dev.__mock__:main"
+uipath-dev-server = "uipath.dev.__mock_server__:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -52,6 +59,7 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/uipath"]
+artifacts = ["src/uipath/dev/server/static/**"]
 
 [tool.hatch.build.targets.sdist]
 exclude = ["demo"]
