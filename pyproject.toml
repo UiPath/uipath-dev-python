@@ -1,12 +1,12 @@
 [project]
 name = "uipath-dev"
-version = "0.0.24"
+version = "0.0.25"
 description = "UiPath Developer Console"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
 dependencies = [
   "uipath-runtime>=0.7.0, <0.8.0",
-  "textual>=7.2.0, <8.0.0",
+  "textual>=7.5.0, <8.0.0",
   "pyperclip>=1.11.0, <2.0.0",
 ]
 classifiers = [
@@ -23,8 +23,8 @@ maintainers = [
 
 [project.optional-dependencies]
 server = [
-  "fastapi>=0.115.0",
-  "uvicorn[standard]>=0.34.0",
+  "fastapi>=0.128.8",
+  "uvicorn[standard]>=0.40.0",
 ]
 
 [project.urls]

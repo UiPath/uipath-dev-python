@@ -3,6 +3,8 @@
 from datetime import datetime
 from unittest.mock import MagicMock
 
+import pytest
+
 
 def test_data_models_import_without_textual():
     """Data models should import without Textual dependency."""
@@ -148,3 +150,43 @@ def test_frontend_build_module():
 
     assert callable(needs_build)
     assert callable(ensure_frontend_built)
+
+
+def test_create_app_raises_when_extras_missing():
+    """create_app() should raise ImportError when server extras are missing."""
+    import uipath.dev.server as server_mod
+
+    mock_server = MagicMock()
+    mock_server.run_service = MagicMock()
+    mock_server.connection_manager = MagicMock()
+    mock_server.runtime_factory = MagicMock()
+    mock_server.trace_manager = MagicMock()
+
+    original = server_mod.HAS_EXTRAS
+    try:
+        server_mod.HAS_EXTRAS = False
+        with pytest.raises(ImportError, match="pip install uipath-dev\\[server\\]"):
+            mock_server.create_app = server_mod.UiPathDeveloperServer.create_app
+            mock_server.create_app(mock_server)
+    finally:
+        server_mod.HAS_EXTRAS = original
+
+
+@pytest.mark.asyncio
+async def test_run_async_raises_when_extras_missing():
+    """run_async() should raise ImportError when server extras are missing."""
+    import uipath.dev.server as server_mod
+
+    mock_server = MagicMock()
+    mock_server.run_service = MagicMock()
+    mock_server.connection_manager = MagicMock()
+    mock_server.runtime_factory = MagicMock()
+    mock_server.trace_manager = MagicMock()
+
+    original = server_mod.HAS_EXTRAS
+    try:
+        server_mod.HAS_EXTRAS = False
+        with pytest.raises(ImportError, match="pip install uipath-dev\\[server\\]"):
+            await server_mod.UiPathDeveloperServer.run_async(mock_server)
+    finally:
+        server_mod.HAS_EXTRAS = original

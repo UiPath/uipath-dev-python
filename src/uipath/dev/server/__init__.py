@@ -18,6 +18,18 @@ from uipath.dev.services.run_service import RunService
 
 logger = logging.getLogger(__name__)
 
+try:
+    import fastapi  # noqa: F401
+    import uvicorn  # noqa: F401
+
+    HAS_EXTRAS = True
+except ModuleNotFoundError:
+    HAS_EXTRAS = False
+
+_MISSING_EXTRAS_MSG = (
+    "Server extras are not installed. Install them with: pip install uipath-dev[server]"
+)
+
 
 class UiPathDeveloperServer:
     """Web server mode for the UiPath Developer Console.
@@ -66,6 +78,9 @@ class UiPathDeveloperServer:
 
     def create_app(self) -> Any:
         """Create and return a FastAPI application."""
+        if not HAS_EXTRAS:
+            raise ImportError(_MISSING_EXTRAS_MSG)
+
         from uipath.dev.server.app import create_app
 
         return create_app(self)
@@ -76,7 +91,8 @@ class UiPathDeveloperServer:
         This is the main entry point — mirrors UiPathDeveloperConsole.run_async().
         Blocks until the server is shut down (Ctrl-C / SIGINT).
         """
-        import uvicorn
+        if not HAS_EXTRAS:
+            raise ImportError(_MISSING_EXTRAS_MSG)
 
         app = self.create_app()
 
