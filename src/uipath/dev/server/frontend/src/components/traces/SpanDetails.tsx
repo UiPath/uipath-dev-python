@@ -424,14 +424,12 @@ export default function SpanDetails({ span }: Props) {
                 }}
               >
                 <span
-                  className="font-mono font-semibold shrink-0 pt-px"
+                  className="font-mono font-semibold shrink-0 pt-px truncate"
                   style={{
                     color: "var(--info)",
-                    minWidth: "30%",
-                    maxWidth: "40%",
-                    wordBreak: "break-all",
-                    overflowWrap: "break-word",
+                    width: "35%",
                   }}
+                  title={key}
                 >
                   {key}
                 </span>
