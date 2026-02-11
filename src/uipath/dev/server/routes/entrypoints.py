@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import traceback
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -68,9 +69,13 @@ async def get_entrypoint_schema(request: Request, entrypoint: str) -> dict[str, 
             )
     except Exception as exc:
         logger.exception("Failed to get schema for %s", entrypoint)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to load schema for '{entrypoint}'"
-        ) from exc
+        error_detail = {
+            "message": f"Failed to load schema for '{entrypoint}'",
+            "error": str(exc),
+            "type": type(exc).__name__,
+            "traceback": traceback.format_exc(),
+        }
+        raise HTTPException(status_code=500, detail=error_detail) from exc
     finally:
         if runtime is not None:
             try:
@@ -105,10 +110,13 @@ async def get_entrypoint_mock_input(
         return {"entrypoint": entrypoint, "mock_input": mock_data}
     except Exception as exc:
         logger.exception("Failed to generate mock input for %s", entrypoint)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to generate mock input for '{entrypoint}'",
-        ) from exc
+        error_detail = {
+            "message": f"Failed to generate mock input for '{entrypoint}'",
+            "error": str(exc),
+            "type": type(exc).__name__,
+            "traceback": traceback.format_exc(),
+        }
+        raise HTTPException(status_code=500, detail=error_detail) from exc
     finally:
         if runtime is not None:
             try:

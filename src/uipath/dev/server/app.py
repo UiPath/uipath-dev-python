@@ -109,14 +109,16 @@ def create_app(server: UiPathDeveloperServer) -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Favicon — inline SVG so the browser doesn't 404
+    # Favicon — UiPath orange branded icon
     _favicon_svg = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
-        '<rect width="32" height="32" rx="6" fill="#3b82f6"/>'
-        '<text x="16" y="24" font-size="22" text-anchor="middle" fill="white" '
-        'font-family="sans-serif" font-weight="bold">U</text></svg>'
+        '<rect width="32" height="32" rx="6" fill="#FA4616"/>'
+        '<text x="16" y="24" font-size="22" text-anchor="middle" fill="#FFFFFF" '
+        'font-family="system-ui, -apple-system, sans-serif" font-weight="700">U</text>'
+        "</svg>"
     )
-    _favicon_bytes = _favicon_svg.encode()
+    _favicon_bytes = _favicon_svg.encode("utf-8")
 
     @app.get("/favicon.ico", include_in_schema=False)
     async def _favicon_ico():

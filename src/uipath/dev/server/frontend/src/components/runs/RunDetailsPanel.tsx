@@ -13,13 +13,17 @@ interface Props {
   ws: WsClient;
 }
 
+// Stable empty arrays to avoid infinite re-renders
+const EMPTY_TRACES: never[] = [];
+const EMPTY_LOGS: never[] = [];
+
 export default function RunDetailsPanel({ run }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("details");
   const [graphHeight, setGraphHeight] = useState(280);
   const containerRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
-  const traces = useRunStore((s) => s.traces[run.id] ?? []);
-  const logs = useRunStore((s) => s.logs[run.id] ?? []);
+  const traces = useRunStore((s) => s.traces[run.id] || EMPTY_TRACES);
+  const logs = useRunStore((s) => s.logs[run.id] || EMPTY_LOGS);
 
   const onResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
