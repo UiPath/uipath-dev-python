@@ -12,7 +12,12 @@ from uipath.runtime import (
     UiPathRuntimeStatus,
     UiPathStreamOptions,
 )
-from uipath.runtime.schema import UiPathRuntimeSchema
+from uipath.runtime.schema import (
+    UiPathRuntimeEdge,
+    UiPathRuntimeGraph,
+    UiPathRuntimeNode,
+    UiPathRuntimeSchema,
+)
 
 ENTRYPOINT_GREETING = "agent/greeting.py:main"
 
@@ -59,6 +64,34 @@ class MockGreetingRuntime:
                 },
                 "required": ["greeting"],
             },
+            graph=UiPathRuntimeGraph(
+                nodes=[
+                    UiPathRuntimeNode(
+                        id="__start__", name="__start__", type="__start__"
+                    ),
+                    UiPathRuntimeNode(
+                        id="normalize_name", name="normalize_name", type="node"
+                    ),
+                    UiPathRuntimeNode(
+                        id="build_message",
+                        name="build_message",
+                        type="model",
+                        metadata={"model_name": "greeting-builder"},
+                    ),
+                    UiPathRuntimeNode(
+                        id="compute_metadata", name="compute_metadata", type="node"
+                    ),
+                    UiPathRuntimeNode(id="__end__", name="__end__", type="__end__"),
+                ],
+                edges=[
+                    UiPathRuntimeEdge(source="__start__", target="normalize_name"),
+                    UiPathRuntimeEdge(source="normalize_name", target="build_message"),
+                    UiPathRuntimeEdge(
+                        source="build_message", target="compute_metadata"
+                    ),
+                    UiPathRuntimeEdge(source="compute_metadata", target="__end__"),
+                ],
+            ),
         )
 
     async def execute(

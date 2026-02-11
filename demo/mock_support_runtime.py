@@ -12,7 +12,12 @@ from uipath.runtime import (
     UiPathRuntimeStatus,
     UiPathStreamOptions,
 )
-from uipath.runtime.schema import UiPathRuntimeSchema
+from uipath.runtime.schema import (
+    UiPathRuntimeEdge,
+    UiPathRuntimeGraph,
+    UiPathRuntimeNode,
+    UiPathRuntimeSchema,
+)
 
 ENTRYPOINT_SUPPORT_CHAT = "agent/support.py:main"
 
@@ -57,6 +62,85 @@ class MockSupportChatRuntime:
                 },
                 "required": ["reply"],
             },
+            graph=UiPathRuntimeGraph(
+                nodes=[
+                    UiPathRuntimeNode(id="__start__", name="__start__", type="node"),
+                    UiPathRuntimeNode(
+                        id="model",
+                        name="model",
+                        type="model",
+                        metadata={
+                            "model_name": "claude-haiku-4-5",
+                            "max_tokens": 64000,
+                        },
+                    ),
+                    UiPathRuntimeNode(
+                        id="tools",
+                        name="tools",
+                        type="tool",
+                        metadata={
+                            "tool_names": [
+                                "write_todos",
+                                "ls",
+                                "read_file",
+                                "write_file",
+                                "edit_file",
+                                "glob",
+                                "grep",
+                                "execute",
+                                "task",
+                                "tavily_search",
+                            ],
+                            "tool_count": 10,
+                        },
+                    ),
+                    UiPathRuntimeNode(
+                        id="TodoListMiddleware.after_model",
+                        name="TodoListMiddleware.after_model",
+                        type="node",
+                    ),
+                    UiPathRuntimeNode(
+                        id="SummarizationMiddleware.before_model",
+                        name="SummarizationMiddleware.before_model",
+                        type="node",
+                    ),
+                    UiPathRuntimeNode(
+                        id="PatchToolCallsMiddleware.before_agent",
+                        name="PatchToolCallsMiddleware.before_agent",
+                        type="node",
+                    ),
+                    UiPathRuntimeNode(id="__end__", name="__end__", type="node"),
+                ],
+                edges=[
+                    UiPathRuntimeEdge(
+                        source="PatchToolCallsMiddleware.before_agent",
+                        target="SummarizationMiddleware.before_model",
+                    ),
+                    UiPathRuntimeEdge(
+                        source="SummarizationMiddleware.before_model", target="model"
+                    ),
+                    UiPathRuntimeEdge(
+                        source="TodoListMiddleware.after_model",
+                        target="SummarizationMiddleware.before_model",
+                    ),
+                    UiPathRuntimeEdge(
+                        source="TodoListMiddleware.after_model", target="__end__"
+                    ),
+                    UiPathRuntimeEdge(
+                        source="TodoListMiddleware.after_model", target="tools"
+                    ),
+                    UiPathRuntimeEdge(
+                        source="__start__",
+                        target="PatchToolCallsMiddleware.before_agent",
+                    ),
+                    UiPathRuntimeEdge(
+                        source="model", target="TodoListMiddleware.after_model"
+                    ),
+                    UiPathRuntimeEdge(
+                        source="tools", target="SummarizationMiddleware.before_model"
+                    ),
+                ],
+            ),
         )
 
     async def execute(

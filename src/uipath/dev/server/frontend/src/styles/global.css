@@ -1,0 +1,125 @@
+@import "tailwindcss";
+
+/* UiPath Dark Theme (default) */
+:root,
+[data-theme="dark"] {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --bg-hover: #1e293b;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --border: #334155;
+  --accent: #fa4616;
+  --accent-hover: #e03d12;
+  --accent-light: #ff6a3d;
+  --success: #22c55e;
+  --warning: #eab308;
+  --error: #ef4444;
+  --info: #3b82f6;
+  --sidebar-bg: #0c1222;
+  --card-bg: #1e293b;
+  --input-bg: #0f172a;
+  --tab-active: #fa4616;
+  --tab-text: #94a3b8;
+  --tab-text-active: #fa4616;
+  --node-bg: #1e293b;
+  --node-border: #475569;
+  color-scheme: dark;
+}
+
+/* UiPath Light Theme */
+[data-theme="light"] {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #e2e8f0;
+  --bg-hover: #f1f5f9;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --border: #e2e8f0;
+  --accent: #fa4616;
+  --accent-hover: #e03d12;
+  --accent-light: #ff6a3d;
+  --success: #16a34a;
+  --warning: #ca8a04;
+  --error: #dc2626;
+  --info: #2563eb;
+  --sidebar-bg: #ffffff;
+  --card-bg: #ffffff;
+  --input-bg: #f8fafc;
+  --tab-active: #fa4616;
+  --tab-text: #64748b;
+  --tab-text-active: #fa4616;
+  --node-bg: #ffffff;
+  --node-border: #cbd5e1;
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+#root {
+  height: 100vh;
+  display: flex;
+}
+
+/* React Flow overrides */
+.react-flow__node {
+  font-size: 12px;
+}
+
+.react-flow__node-default {
+  background: var(--node-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--node-border) !important;
+}
+
+.react-flow__background {
+  background: var(--bg-primary) !important;
+}
+
+.react-flow__controls button {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+}
+
+.react-flow__controls button:hover {
+  background: var(--bg-hover) !important;
+}
+
+.react-flow__controls button svg {
+  fill: var(--text-primary) !important;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+}
+
+/* Select dropdown fix */
+select {
+  appearance: auto;
+}
+
+select option {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}

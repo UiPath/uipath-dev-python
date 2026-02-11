@@ -12,7 +12,12 @@ from uipath.runtime import (
     UiPathRuntimeStatus,
     UiPathStreamOptions,
 )
-from uipath.runtime.schema import UiPathRuntimeSchema
+from uipath.runtime.schema import (
+    UiPathRuntimeEdge,
+    UiPathRuntimeGraph,
+    UiPathRuntimeNode,
+    UiPathRuntimeSchema,
+)
 
 ENTRYPOINT_ANALYZE_NUMBERS = "agent/numbers.py:analyze"
 
@@ -58,6 +63,27 @@ class MockNumberAnalyticsRuntime:
                 },
                 "required": ["operation", "result"],
             },
+            graph=UiPathRuntimeGraph(
+                nodes=[
+                    UiPathRuntimeNode(
+                        id="__start__", name="__start__", type="__start__"
+                    ),
+                    UiPathRuntimeNode(
+                        id="validate_input", name="validate_input", type="node"
+                    ),
+                    UiPathRuntimeNode(id="compute", name="compute", type="node"),
+                    UiPathRuntimeNode(
+                        id="postprocess", name="postprocess", type="node"
+                    ),
+                    UiPathRuntimeNode(id="__end__", name="__end__", type="__end__"),
+                ],
+                edges=[
+                    UiPathRuntimeEdge(source="__start__", target="validate_input"),
+                    UiPathRuntimeEdge(source="validate_input", target="compute"),
+                    UiPathRuntimeEdge(source="compute", target="postprocess"),
+                    UiPathRuntimeEdge(source="postprocess", target="__end__"),
+                ],
+            ),
         )
 
     async def execute(

@@ -11,7 +11,8 @@ from uipath.core.chat import (
     UiPathInlineValue,
 )
 
-from uipath.dev.models import ChatMessage, ExecutionRun
+from uipath.dev.models.data import ChatData
+from uipath.dev.models.execution import ExecutionRun
 
 # Tunables for streaming performance
 STREAM_MIN_INTERVAL = 0.08  # seconds between updates while streaming
@@ -82,7 +83,7 @@ class ChatPanel(Container):
 
         for chat_msg in run.messages:
             self.add_chat_message(
-                ChatMessage(message=chat_msg, event=None, run_id=run.id),
+                ChatData(message=chat_msg, event=None, run_id=run.id),
                 auto_scroll=False,
             )
 
@@ -91,7 +92,7 @@ class ChatPanel(Container):
 
     def add_chat_message(
         self,
-        chat_msg: ChatMessage,
+        chat_data: ChatData,
         auto_scroll: bool = True,
     ) -> None:
         """Add or update a chat message bubble."""
@@ -100,7 +101,7 @@ class ChatPanel(Container):
 
         should_autoscroll = auto_scroll and not chat_view.is_vertical_scrollbar_grabbed
 
-        message = chat_msg.message
+        message = chat_data.message
         if message is None:
             return
 
@@ -154,7 +155,7 @@ class ChatPanel(Container):
             delta_len = len(content) - prev_content_len
 
             def should_update() -> bool:
-                event = chat_msg.event
+                event = chat_data.event
                 finished = event and event.end is not None
 
                 if finished:

@@ -23,19 +23,14 @@ from uipath.runtime.errors import UiPathErrorContract, UiPathRuntimeError
 from uipath.runtime.events import UiPathRuntimeMessageEvent, UiPathRuntimeStateEvent
 
 from uipath.dev.infrastructure import RunContextExporter, RunContextLogHandler
-from uipath.dev.models import (
-    ChatMessage,
-    ExecutionMode,
-    ExecutionRun,
-    LogMessage,
-    TraceMessage,
-)
+from uipath.dev.models.data import ChatData, LogData, TraceData
+from uipath.dev.models.execution import ExecutionMode, ExecutionRun
 from uipath.dev.services.debug_bridge import TextualDebugBridge
 
 RunUpdatedCallback = Callable[[ExecutionRun], None]
-LogCallback = Callable[[LogMessage], None]
-TraceCallback = Callable[[TraceMessage], None]
-ChatCallback = Callable[[ChatMessage], None]
+LogCallback = Callable[[LogData], None]
+TraceCallback = Callable[[TraceData], None]
+ChatCallback = Callable[[ChatData], None]
 
 
 class RunService:
@@ -158,12 +153,12 @@ class RunService:
                         result = event
                     elif isinstance(event, UiPathRuntimeMessageEvent):
                         if self.on_chat is not None:
-                            chat_msg = ChatMessage(
+                            chat_data = ChatData(
                                 event=event.payload,
                                 message=run.add_event(event.payload),
                                 run_id=run.id,
                             )
-                            self.on_chat(chat_msg)
+                            self.on_chat(chat_data)
             else:
                 result = await execution_runtime.execute(
                     execution_input, execution_options
@@ -252,32 +247,32 @@ class RunService:
         if debug_bridge:
             debug_bridge.quit()
 
-    def handle_log(self, log_msg: LogMessage) -> None:
+    def handle_log(self, log_data: LogData) -> None:
         """Entry point for all logs (runtime, traces, stderr)."""
-        run = self.runs.get(log_msg.run_id)
+        run = self.runs.get(log_data.run_id)
         if run is not None:
-            run.logs.append(log_msg)
+            run.logs.append(log_data)
             self._emit_run_updated(run)
 
         if self.on_log is not None:
-            self.on_log(log_msg)
+            self.on_log(log_data)
 
-    def handle_trace(self, trace_msg: TraceMessage) -> None:
+    def handle_trace(self, trace_data: TraceData) -> None:
         """Entry point for traces (from RunContextExporter)."""
-        run = self.runs.get(trace_msg.run_id)
+        run = self.runs.get(trace_data.run_id)
         if run is not None:
             # Update or append trace
             for i, existing_trace in enumerate(run.traces):
-                if existing_trace.span_id == trace_msg.span_id:
-                    run.traces[i] = trace_msg
+                if existing_trace.span_id == trace_data.span_id:
+                    run.traces[i] = trace_data
                     break
             else:
-                run.traces.append(trace_msg)
+                run.traces.append(trace_data)
 
             self._emit_run_updated(run)
 
         if self.on_trace is not None:
-            self.on_trace(trace_msg)
+            self.on_trace(trace_data)
 
     def get_debug_bridge(self, run_id: str) -> TextualDebugBridge | None:
         """Get the debug bridge for a run."""
@@ -310,33 +305,39 @@ class RunService:
             self.on_run_updated(run)
 
     def _add_info_log(self, run: ExecutionRun, message: str) -> None:
-        log_msg = LogMessage(
+        log_data = LogData(
             run_id=run.id,
             level="INFO",
             message=message,
             timestamp=datetime.now(),
         )
-        self.handle_log(log_msg)
+        self.handle_log(log_data)
 
     def _add_error_log(self, run: ExecutionRun, error: str | None = None) -> None:
         if error is None:
+            # Serialize traceback to plain text for the data class
+            import io
+
+            from rich.console import Console
             from rich.traceback import Traceback
 
-            tb = Traceback(
-                show_locals=False,
-                max_frames=4,
-            )
-            log_msg = LogMessage(
+            tb = Traceback(show_locals=False, max_frames=4)
+            str_io = io.StringIO()
+            console = Console(file=str_io, width=120, no_color=True)
+            console.print(tb)
+            error_text = str_io.getvalue()
+
+            log_data = LogData(
                 run_id=run.id,
                 level="ERROR",
-                message=tb,
+                message=error_text,
                 timestamp=datetime.now(),
             )
         else:
-            log_msg = LogMessage(
+            log_data = LogData(
                 run_id=run.id,
                 level="ERROR",
                 message=error,
                 timestamp=datetime.now(),
             )
-        self.handle_log(log_msg)
+        self.handle_log(log_data)

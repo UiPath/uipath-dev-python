@@ -1,0 +1,19 @@
+export type ServerEventType = "run.updated" | "log" | "trace" | "chat";
+
+export interface ServerMessage {
+  type: ServerEventType;
+  payload: Record<string, unknown>;
+}
+
+export type ClientCommandType =
+  | "subscribe"
+  | "unsubscribe"
+  | "chat.message"
+  | "debug.step"
+  | "debug.continue"
+  | "debug.stop";
+
+export interface ClientMessage {
+  type: ClientCommandType;
+  payload: Record<string, unknown>;
+}

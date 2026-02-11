@@ -11,7 +11,7 @@ from typing import Callable, Pattern
 
 from uipath.runtime.logging import UiPathRuntimeExecutionLogHandler
 
-from uipath.dev.models.messages import LogMessage
+from uipath.dev.models.data import LogData
 
 
 class RunContextLogHandler(UiPathRuntimeExecutionLogHandler):
@@ -20,7 +20,7 @@ class RunContextLogHandler(UiPathRuntimeExecutionLogHandler):
     def __init__(
         self,
         run_id: str,
-        callback: Callable[[LogMessage], None],
+        callback: Callable[[LogData], None],
     ):
         """Initialize RunContextLogHandler with run and callback."""
         super().__init__(run_id)
@@ -31,13 +31,13 @@ class RunContextLogHandler(UiPathRuntimeExecutionLogHandler):
     def emit(self, record: logging.LogRecord):
         """Emit a log record to CLI UI."""
         try:
-            log_msg = LogMessage(
+            log_data = LogData(
                 run_id=self.run_id,
                 level=record.levelname,
                 message=self.format(record),
                 timestamp=datetime.fromtimestamp(record.created),
             )
-            self.callback(log_msg)
+            self.callback(log_data)
         except Exception:
             # Don't let logging errors crash the app
             pass
