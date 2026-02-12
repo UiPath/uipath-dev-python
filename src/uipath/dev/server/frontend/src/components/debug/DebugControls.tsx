@@ -23,40 +23,46 @@ export default function DebugControls({ runId, entrypoint, status, ws, breakpoin
 
   return (
     <div
-      className="flex items-center gap-2 px-3 py-1.5 border-b shrink-0"
+      className="flex items-center gap-1 px-4 border-b shrink-0 h-[33px]"
       style={{ borderColor: "var(--border)", background: "var(--bg-secondary)" }}
     >
-      <button
-        onClick={() => syncBreakpointsThenSend("step")}
-        disabled={!isSuspended}
-        className="px-3 py-1 text-xs text-white rounded transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-        style={{ background: isSuspended ? "var(--info)" : "var(--bg-tertiary)" }}
-      >
-        Step
-      </button>
-      <button
-        onClick={() => syncBreakpointsThenSend("continue")}
-        disabled={!isSuspended}
-        className="px-3 py-1 text-xs text-white rounded transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-        style={{ background: isSuspended ? "var(--success)" : "var(--bg-tertiary)" }}
-      >
-        Continue
-      </button>
-      <button
-        onClick={() => syncBreakpointsThenSend("stop")}
-        disabled={!isSuspended}
-        className="px-3 py-1 text-xs text-white rounded transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-        style={{ background: isSuspended ? "var(--error)" : "var(--bg-tertiary)" }}
-      >
-        Stop
-      </button>
-      <span className="text-xs ml-2" style={{ color: isSuspended ? "var(--warning)" : "var(--text-muted)" }}>
+      <span className="text-[10px] uppercase tracking-wider font-semibold mr-1" style={{ color: "var(--text-muted)" }}>
+        Debug
+      </span>
+      <DebugBtn label="Step" onClick={() => syncBreakpointsThenSend("step")} disabled={!isSuspended} color="var(--info)" active={isSuspended} />
+      <DebugBtn label="Continue" onClick={() => syncBreakpointsThenSend("continue")} disabled={!isSuspended} color="var(--success)" active={isSuspended} />
+      <DebugBtn label="Stop" onClick={() => syncBreakpointsThenSend("stop")} disabled={!isSuspended} color="var(--error)" active={isSuspended} />
+      <span className="text-[10px] ml-auto truncate" style={{ color: isSuspended ? "var(--warning)" : "var(--text-muted)" }}>
         {isSuspended
           ? breakpointNode
-            ? `Paused at: ${breakpointNode}`
-            : "Paused — click Continue to start"
-          : `Status: ${status}`}
+            ? `Paused at ${breakpointNode}`
+            : "Paused"
+          : status}
       </span>
     </div>
+  );
+}
+
+function DebugBtn({ label, onClick, disabled, color, active }: {
+  label: string; onClick: () => void; disabled: boolean; color: string; active: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="px-2.5 py-0.5 h-5 text-[10px] uppercase tracking-wider font-semibold rounded transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+      style={{
+        color: active ? color : "var(--text-muted)",
+        background: active ? `color-mix(in srgb, ${color} 10%, transparent)` : "transparent",
+      }}
+      onMouseEnter={(e) => {
+        if (!disabled) e.currentTarget.style.background = `color-mix(in srgb, ${color} 20%, transparent)`;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = active ? `color-mix(in srgb, ${color} 10%, transparent)` : "transparent";
+      }}
+    >
+      {label}
+    </button>
   );
 }

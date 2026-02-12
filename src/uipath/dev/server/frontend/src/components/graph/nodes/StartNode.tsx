@@ -41,8 +41,8 @@ export default function StartNode({ data }: NodeProps) {
         <div
           className="absolute"
           style={{
-            top: -5,
-            left: -5,
+            top: 2,
+            left: 2,
             width: 12,
             height: 12,
             borderRadius: "50%",

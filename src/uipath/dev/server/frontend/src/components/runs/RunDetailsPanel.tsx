@@ -224,7 +224,7 @@ export default function RunDetailsPanel({ run, ws, activeTab, onTabChange }: Pro
                   }}
                 >
                   <div
-                    className="px-4 py-2 text-xs font-semibold uppercase border-b flex items-center gap-2"
+                    className="px-4 text-xs font-semibold uppercase border-b flex items-center gap-2 h-[33px]"
                     style={{
                       color: "var(--text-muted)",
                       borderColor: "var(--border)",
