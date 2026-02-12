@@ -383,12 +383,15 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
 
   // Highlight the node where execution is paused at a breakpoint
   useEffect(() => {
+    const bpNames = breakpointNode
+      ? new Set(breakpointNode.split(",").map((s) => s.trim()).filter(Boolean))
+      : null;
     setNodes((nds) =>
       nds.map((n) => {
         if (n.type === "groupNode") return n;
         const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
         const label = n.data?.label as string | undefined;
-        const paused = breakpointNode != null && (plainId === breakpointNode || label === breakpointNode);
+        const paused = bpNames != null && (bpNames.has(plainId) || (label != null && bpNames.has(label)));
         return paused !== !!n.data?.isPausedHere
           ? { ...n, data: { ...n.data, isPausedHere: paused } }
           : n;
