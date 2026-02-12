@@ -9,19 +9,25 @@ from uipath.runtime.events import UiPathRuntimeStateEvent
 from uipath.runtime.result import UiPathRuntimeResult
 from uipath.runtime.resumable import UiPathResumeTriggerType
 
+from uipath.dev.models.execution import ExecutionMode
+
 logger = logging.getLogger(__name__)
 
 
 class TextualDebugBridge:
     """Bridge between Textual UI and UiPathDebugRuntime."""
 
-    def __init__(self):
+    def __init__(self, mode: ExecutionMode = ExecutionMode.DEBUG):
         """Initialize the debug bridge."""
+        self._mode = mode
+        self._auto_resume = mode == ExecutionMode.RUN
         self._connected = False
         self._resume_event = asyncio.Event()
         self._resume_data: dict[str, Any] | None = None
         self._terminate_event = asyncio.Event()
-        self._breakpoints: list[str] | Literal["*"] = "*"  # Default: step mode
+        self._breakpoints: list[str] | Literal["*"] = (
+            [] if mode == ExecutionMode.RUN else "*"
+        )
 
         # Callbacks to UI
         self.on_execution_started: Callable[[], None] | None = None
@@ -105,6 +111,10 @@ class TextualDebugBridge:
         Raises:
             UiPathDebugQuitError: If quit was requested
         """
+        if self._auto_resume:
+            self._auto_resume = False
+            return {}
+
         self._resume_event.clear()
         await self._resume_event.wait()
 

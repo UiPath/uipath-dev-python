@@ -72,7 +72,7 @@ class UiPathDeveloperConsole(App[Any]):
             on_log=self._on_log_for_ui,
             on_trace=self._on_trace_for_ui,
             on_chat=self._on_chat_for_ui,
-            debug_bridge_factory=lambda mode: TextualDebugBridge(),
+            debug_bridge_factory=lambda mode: TextualDebugBridge(mode=mode),
         )
 
         # Just defaults for convenience

@@ -1,5 +1,9 @@
 # CLAUDE.md
 
+## Workflow Rules
+- NEVER commit, push, or create PRs unless explicitly asked to do so.
+- Always wait for explicit user confirmation before any git operations that affect the repository.
+
 ## Project Structure
 - Monorepo: Python backend (`src/uipath/dev/`) + React frontend (`src/uipath/dev/server/frontend/`)
 - Frontend: Vite + React 19 + React Flow v11 + Tailwind v4 + Zustand
