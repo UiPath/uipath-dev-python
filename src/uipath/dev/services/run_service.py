@@ -141,7 +141,10 @@ class RunService:
 
             runtime: UiPathRuntimeProtocol
 
-            if run.mode in (ExecutionMode.DEBUG, ExecutionMode.RUN) and self._debug_bridge_factory:
+            if (
+                run.mode in (ExecutionMode.DEBUG, ExecutionMode.RUN)
+                and self._debug_bridge_factory
+            ):
                 debug_bridge = self._debug_bridge_factory(run.mode)
 
                 debug_bridge.on_state_update = lambda state: self._handle_state_update(
