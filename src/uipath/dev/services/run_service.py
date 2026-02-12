@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import traceback
 from datetime import datetime
-from typing import Any, Callable, cast
+from typing import Any, Callable, Literal, Protocol, cast
 
 from pydantic import BaseModel
 from uipath.core.tracing import UiPathTraceManager
@@ -18,19 +18,47 @@ from uipath.runtime import (
     UiPathRuntimeStatus,
     UiPathStreamOptions,
 )
-from uipath.runtime.debug import UiPathDebugRuntime
+from uipath.runtime.debug import (
+    UiPathBreakpointResult,
+    UiPathDebugProtocol,
+    UiPathDebugRuntime,
+)
 from uipath.runtime.errors import UiPathErrorContract, UiPathRuntimeError
 from uipath.runtime.events import UiPathRuntimeMessageEvent, UiPathRuntimeStateEvent
 
 from uipath.dev.infrastructure import RunContextExporter, RunContextLogHandler
 from uipath.dev.models.data import ChatData, LogData, TraceData
 from uipath.dev.models.execution import ExecutionMode, ExecutionRun
-from uipath.dev.services.debug_bridge import TextualDebugBridge
 
 RunUpdatedCallback = Callable[[ExecutionRun], None]
 LogCallback = Callable[[LogData], None]
 TraceCallback = Callable[[TraceData], None]
 ChatCallback = Callable[[ChatData], None]
+
+
+class DebugBridgeProtocol(UiPathDebugProtocol, Protocol):
+    """Extended debug bridge protocol with control methods and callbacks."""
+
+    on_execution_started: Callable[[], None] | None
+    on_state_update: Callable[[UiPathRuntimeStateEvent], None] | None
+    on_breakpoint_hit: Callable[[UiPathBreakpointResult], None] | None
+    on_execution_completed: Callable[[UiPathRuntimeResult], None] | None
+    on_execution_error: Callable[[str], None] | None
+
+    def resume(self, resume_data: Any) -> None:
+        """Signal that execution should resume."""
+        ...
+
+    def quit(self) -> None:
+        """Signal that execution should quit."""
+        ...
+
+    def set_breakpoints(self, breakpoints: list[str] | Literal["*"]) -> None:
+        """Set breakpoints."""
+        ...
+
+
+DebugBridgeFactory = Callable[[ExecutionMode], DebugBridgeProtocol]
 
 
 class RunService:
@@ -50,6 +78,7 @@ class RunService:
         on_log: LogCallback | None = None,
         on_trace: TraceCallback | None = None,
         on_chat: ChatCallback | None = None,
+        debug_bridge_factory: DebugBridgeFactory | None = None,
     ) -> None:
         """Initialize RunService with runtime factory and trace manager."""
         self.runtime_factory = runtime_factory
@@ -60,6 +89,7 @@ class RunService:
         self.on_log = on_log
         self.on_trace = on_trace
         self.on_chat = on_chat
+        self._debug_bridge_factory = debug_bridge_factory
 
         self.trace_manager.add_span_exporter(
             RunContextExporter(
@@ -69,7 +99,7 @@ class RunService:
             batch=False,
         )
 
-        self.debug_bridges: dict[str, TextualDebugBridge] = {}
+        self.debug_bridges: dict[str, DebugBridgeProtocol] = {}
 
     def register_run(self, run: ExecutionRun) -> None:
         """Register a new run and emit an initial update."""
@@ -111,8 +141,11 @@ class RunService:
 
             runtime: UiPathRuntimeProtocol
 
-            if run.mode == ExecutionMode.DEBUG:
-                debug_bridge = TextualDebugBridge()
+            if (
+                run.mode in (ExecutionMode.DEBUG, ExecutionMode.RUN)
+                and self._debug_bridge_factory
+            ):
+                debug_bridge = self._debug_bridge_factory(run.mode)
 
                 debug_bridge.on_state_update = lambda state: self._handle_state_update(
                     run.id, state
@@ -274,7 +307,7 @@ class RunService:
         if self.on_trace is not None:
             self.on_trace(trace_data)
 
-    def get_debug_bridge(self, run_id: str) -> TextualDebugBridge | None:
+    def get_debug_bridge(self, run_id: str) -> DebugBridgeProtocol | None:
         """Get the debug bridge for a run."""
         return self.debug_bridges.get(run_id)
 

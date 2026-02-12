@@ -67,10 +67,13 @@ export default function TraceTree({ traces }: Props) {
   const [isDragging, setIsDragging] = useState(false);
   const tree = buildTree(traces);
 
-  // Auto-select first span when traces change
+  // Auto-select first span only when nothing is selected; keep selected span data fresh
   useEffect(() => {
-    if (tree.length > 0) {
-      setSelectedSpan(tree[0].span);
+    if (selectedSpan === null) {
+      if (tree.length > 0) setSelectedSpan(tree[0].span);
+    } else {
+      const updated = traces.find((t) => t.span_id === selectedSpan.span_id);
+      if (updated && updated !== selectedSpan) setSelectedSpan(updated);
     }
   }, [traces]);
 

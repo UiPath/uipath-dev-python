@@ -10,7 +10,6 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from uipath.dev.models.chat import get_user_message, get_user_message_event
 from uipath.dev.models.data import ChatData
-from uipath.dev.models.execution import ExecutionMode
 from uipath.dev.server.ws.protocol import ClientCommand, parse_client_message
 
 router = APIRouter()
@@ -94,7 +93,8 @@ async def _handle_chat_message(server: Any, run_id: str, text: str) -> None:
         except json.JSONDecodeError:
             run.resume_data = text
 
-        if run.mode == ExecutionMode.DEBUG:
+        debug_bridge = server.run_service.get_debug_bridge(run.id)
+        if debug_bridge:
             asyncio.create_task(server.run_service.resume_debug(run, run.resume_data))
         else:
             asyncio.create_task(server.run_service.execute(run))

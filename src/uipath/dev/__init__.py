@@ -25,6 +25,7 @@ from uipath.dev.models import (
 from uipath.dev.models.chat import get_user_message, get_user_message_event
 from uipath.dev.models.data import ChatData, LogData, TraceData
 from uipath.dev.services import RunService
+from uipath.dev.services.debug_bridge import TextualDebugBridge
 from uipath.dev.ui.panels import NewRunPanel, RunDetailsPanel, RunHistoryPanel
 
 
@@ -71,6 +72,7 @@ class UiPathDeveloperConsole(App[Any]):
             on_log=self._on_log_for_ui,
             on_trace=self._on_trace_for_ui,
             on_chat=self._on_chat_for_ui,
+            debug_bridge_factory=lambda mode: TextualDebugBridge(),
         )
 
         # Just defaults for convenience
