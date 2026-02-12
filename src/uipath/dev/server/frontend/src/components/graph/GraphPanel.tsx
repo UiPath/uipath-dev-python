@@ -8,6 +8,7 @@ import ReactFlow, {
   useEdgesState,
   type Node,
   type Edge,
+  type ReactFlowInstance,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import ELK, { type ElkNode, type ElkExtendedEdge } from "elkjs/lib/elk.bundled.js";
@@ -337,13 +338,15 @@ async function runElkLayout(
 interface Props {
   entrypoint: string;
   traces: TraceSpan[];
+  runId: string;
 }
 
-export default function GraphPanel({ entrypoint, traces }: Props) {
+export default function GraphPanel({ entrypoint, traces, runId }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [loading, setLoading] = useState(true);
   const layoutRef = useRef(0);
+  const rfInstance = useRef<ReactFlowInstance | null>(null);
 
   const nodeStatusMap = useCallback(() => {
     const map: Record<string, string> = {};
@@ -373,12 +376,24 @@ export default function GraphPanel({ entrypoint, traces }: Props) {
         if (layoutRef.current !== layoutId) return;
         setNodes(laidNodes);
         setEdges(laidEdges);
+        // Fit view after nodes are rendered
+        setTimeout(() => {
+          rfInstance.current?.fitView({ padding: 0.1, duration: 200 });
+        }, 100);
       })
       .catch(console.error)
       .finally(() => {
         if (layoutRef.current === layoutId) setLoading(false);
       });
   }, [entrypoint, setNodes, setEdges]);
+
+  // Fit view when switching runs (even if entrypoint is the same)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      rfInstance.current?.fitView({ padding: 0.1, duration: 200 });
+    }, 100);
+    return () => clearTimeout(t);
+  }, [runId]);
 
   // Update node status from traces
   useEffect(() => {
@@ -438,6 +453,7 @@ export default function GraphPanel({ entrypoint, traces }: Props) {
         onEdgesChange={onEdgesChange}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
+        onInit={(instance) => { rfInstance.current = instance; }}
         fitView
         proOptions={{ hideAttribution: true }}
         nodesDraggable={false}

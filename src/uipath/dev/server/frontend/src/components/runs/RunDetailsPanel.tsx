@@ -162,7 +162,7 @@ export default function RunDetailsPanel({ run, ws, activeTab, onTabChange }: Pro
             <div ref={containerRef} className="flex flex-col flex-1 min-w-0">
               {/* Graph panel — resizable */}
               <div className="shrink-0" style={{ height: graphHeight }}>
-                <GraphPanel entrypoint={run.entrypoint} traces={traces} />
+                <GraphPanel entrypoint={run.entrypoint} traces={traces} runId={run.id} />
               </div>
               {/* Drag handle */}
               <div

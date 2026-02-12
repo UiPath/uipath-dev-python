@@ -62,6 +62,13 @@ export default function TraceTree({ traces }: Props) {
   const [isDragging, setIsDragging] = useState(false);
   const tree = buildTree(traces);
 
+  // Auto-select first span when traces change
+  useEffect(() => {
+    if (tree.length > 0) {
+      setSelectedSpan(tree[0].span);
+    }
+  }, [traces]);
+
   // Attach global mouse listeners when dragging
   useEffect(() => {
     if (!isDragging) return;
