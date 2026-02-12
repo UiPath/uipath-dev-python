@@ -40,6 +40,7 @@ class ChatEvents:
                 role=self.get_role(event),
                 content_parts=[],
                 tool_calls=[],
+                interrupts=[],
                 created_at=self.get_timestamp(event),
                 updated_at=self.get_timestamp(event),
             )
@@ -60,6 +61,7 @@ class ChatEvents:
 
             # Start of a new content part
             if cp_event.start and not existing:
+                timestamp = self.get_timestamp(event)
                 new_cp = UiPathConversationContentPart(
                     content_part_id=cp_event.content_part_id,
                     mime_type=cp_event.start.mime_type,
@@ -67,6 +69,8 @@ class ChatEvents:
                     citations=[],
                     is_transcript=None,
                     is_incomplete=True,
+                    created_at=timestamp,
+                    updated_at=timestamp,
                 )
                 if msg.content_parts is None:
                     msg.content_parts = []
@@ -76,6 +80,7 @@ class ChatEvents:
             # Chunk for an existing part (or backfill if start missing)
             if cp_event.chunk:
                 if not existing:
+                    timestamp = self.get_timestamp(event)
                     new_cp = UiPathConversationContentPart(
                         content_part_id=cp_event.content_part_id,
                         mime_type="text/plain",  # fallback if start missing
@@ -83,6 +88,8 @@ class ChatEvents:
                         citations=[],
                         is_transcript=None,
                         is_incomplete=True,
+                        created_at=timestamp,
+                        updated_at=timestamp,
                     )
                     if msg.content_parts is None:
                         msg.content_parts = []
@@ -110,12 +117,15 @@ class ChatEvents:
             # Start of a tool call
             if tc_event.start:
                 if not existing_tool_call:
+                    timestamp = self.get_timestamp(event)
                     new_tc = UiPathConversationToolCall(
                         tool_call_id=tc_event.tool_call_id,
                         name=tc_event.start.tool_name,
                         input=None,  # input will arrive as JSON content part
                         timestamp=tc_event.start.timestamp,
                         result=None,
+                        created_at=timestamp,
+                        updated_at=timestamp,
                     )
                     if msg.tool_calls is None:
                         msg.tool_calls = []
@@ -132,10 +142,13 @@ class ChatEvents:
             # End of a tool call
             if tc_event.end:
                 if not existing_tool_call:
+                    timestamp = self.get_timestamp(event)
                     existing_tool_call = UiPathConversationToolCall(
                         tool_call_id=tc_event.tool_call_id,
                         name="",  # unknown until start seen
                         input=None,
+                        created_at=timestamp,
+                        updated_at=timestamp,
                     )
                     if msg.tool_calls is None:
                         msg.tool_calls = []
@@ -143,7 +156,7 @@ class ChatEvents:
 
                 existing_tool_call.result = UiPathConversationToolCallResult(
                     timestamp=tc_event.end.timestamp,
-                    value=tc_event.end.output,
+                    output=tc_event.end.output,
                     is_error=tc_event.end.is_error,
                     cancelled=tc_event.end.cancelled,
                 )
@@ -167,17 +180,22 @@ class ChatEvents:
 
 def get_user_message(user_text: str) -> UiPathConversationMessage:
     """Build a user message from text input."""
+    timestamp = datetime.now().isoformat()
     return UiPathConversationMessage(
         message_id=str(uuid4()),
-        created_at=datetime.now().isoformat(),
-        updated_at=datetime.now().isoformat(),
+        created_at=timestamp,
+        updated_at=timestamp,
         content_parts=[
             UiPathConversationContentPart(
                 content_part_id=str(uuid4()),
                 mime_type="text/plain",
                 data=UiPathInlineValue(inline=user_text),
+                created_at=timestamp,
+                updated_at=timestamp,
             )
         ],
+        tool_calls=[],
+        interrupts=[],
         role="user",
     )
 
