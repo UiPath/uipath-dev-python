@@ -135,20 +135,30 @@ export default function RunDetailsPanel({ run, ws, activeTab, onTabChange }: Pro
   return (
     <div className="flex flex-col h-full">
       {/* Tab bar */}
-      <div className="flex border-b border-[var(--border)] bg-[var(--bg-primary)]">
+      <div className="flex items-center gap-1 px-2 py-1.5 border-b border-[var(--border)] bg-[var(--bg-primary)]">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => onTabChange(tab.id)}
-            className={`px-4 py-2 text-sm transition-colors ${
-              activeTab === tab.id
-                ? "border-b-2 border-[var(--tab-active)] text-[var(--tab-text-active)]"
-                : "text-[var(--tab-text)] hover:text-[var(--text-primary)]"
-            }`}
+            className="px-2.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded transition-colors cursor-pointer"
+            style={{
+              color: activeTab === tab.id ? "var(--accent)" : "var(--text-muted)",
+              background: activeTab === tab.id
+                ? "color-mix(in srgb, var(--accent) 10%, transparent)"
+                : "transparent",
+            }}
+            onMouseEnter={(e) => {
+              if (activeTab !== tab.id) e.currentTarget.style.color = "var(--text-primary)";
+            }}
+            onMouseLeave={(e) => {
+              if (activeTab !== tab.id) e.currentTarget.style.color = "var(--text-muted)";
+            }}
           >
             {tab.label}
             {tab.count !== undefined && tab.count > 0 && (
-              <span className="ml-1 text-xs text-[var(--text-muted)]">({tab.count})</span>
+              <span className="ml-1 font-normal" style={{ color: "var(--text-muted)" }}>
+                {tab.count}
+              </span>
             )}
           </button>
         ))}
