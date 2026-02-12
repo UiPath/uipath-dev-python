@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { TraceSpan } from "../../types/run";
+import { useRunStore } from "../../store/useRunStore";
 import SpanDetails from "./SpanDetails";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -60,12 +61,27 @@ function formatDuration(ms: number | null | undefined): string {
 
 export default function TraceTree({ traces }: Props) {
   const [selectedSpan, setSelectedSpan] = useState<TraceSpan | null>(null);
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
   const [leftWidth, setLeftWidth] = useState(() => {
     const saved = localStorage.getItem("traceTreeSplitWidth");
     return saved ? parseFloat(saved) : 50;
   });
   const [isDragging, setIsDragging] = useState(false);
   const tree = buildTree(traces);
+
+  const focusedSpan = useRunStore((s) => s.focusedSpan);
+  const setFocusedSpan = useRunStore((s) => s.setFocusedSpan);
+  const [scrollToSpanId, setScrollToSpanId] = useState<string | null>(null);
+  const treeScrollRef = useRef<HTMLDivElement>(null);
+
+  const toggleExpanded = useCallback((spanId: string) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(spanId)) next.delete(spanId);
+      else next.add(spanId);
+      return next;
+    });
+  }, []);
 
   // Auto-select first span only when nothing is selected; keep selected span data fresh
   useEffect(() => {
@@ -76,6 +92,52 @@ export default function TraceTree({ traces }: Props) {
       if (updated && updated !== selectedSpan) setSelectedSpan(updated);
     }
   }, [traces]);
+
+  // React to focused span from chat tool call click
+  useEffect(() => {
+    if (!focusedSpan) return;
+
+    // Find the Nth occurrence of spans with this name, sorted by timestamp
+    const matches = traces
+      .filter((t) => t.span_name === focusedSpan.name)
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    const match = matches[focusedSpan.index];
+
+    if (match) {
+      setSelectedSpan(match);
+      setScrollToSpanId(match.span_id);
+
+      // Expand all ancestors so the span is visible
+      const parentMap = new Map(traces.map((t) => [t.span_id, t.parent_span_id]));
+      setCollapsedIds((prev) => {
+        const next = new Set(prev);
+        let current = match.parent_span_id;
+        while (current) {
+          next.delete(current);
+          current = parentMap.get(current) ?? null;
+        }
+        return next;
+      });
+    }
+
+    setFocusedSpan(null);
+  }, [focusedSpan, traces, setFocusedSpan]);
+
+  // Scroll tree container to show the focused span
+  // Use requestAnimationFrame to wait for React to paint expanded ancestors first
+  useEffect(() => {
+    if (!scrollToSpanId) return;
+    const id = scrollToSpanId;
+    setScrollToSpanId(null);
+
+    requestAnimationFrame(() => {
+      const container = treeScrollRef.current;
+      const el = container?.querySelector<HTMLElement>(`[data-span-id="${id}"]`);
+      if (container && el) {
+        el.scrollIntoView({ block: "center", behavior: "smooth" });
+      }
+    });
+  }, [scrollToSpanId]);
 
   // Attach global mouse listeners when dragging
   useEffect(() => {
@@ -113,7 +175,7 @@ export default function TraceTree({ traces }: Props) {
     <div className="flex h-full trace-tree-container" style={{ cursor: isDragging ? "col-resize" : undefined }}>
       {/* Left: tree view */}
       <div className="pr-0.5 pt-0.5" style={{ width: `${leftWidth}%` }}>
-        <div className="overflow-y-auto h-full p-0.5">
+        <div ref={treeScrollRef} className="overflow-y-auto h-full p-0.5">
           {tree.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <p className="text-[var(--text-muted)] text-sm">No traces yet</p>
@@ -127,6 +189,8 @@ export default function TraceTree({ traces }: Props) {
                 selectedId={selectedSpan?.span_id ?? null}
                 onSelect={setSelectedSpan}
                 isLast={i === tree.length - 1}
+                collapsedIds={collapsedIds}
+                toggleExpanded={toggleExpanded}
               />
             ))
           )}
@@ -164,15 +228,19 @@ function TreeNodeView({
   selectedId,
   onSelect,
   isLast,
+  collapsedIds,
+  toggleExpanded,
 }: {
   node: TreeNode;
   depth: number;
   selectedId: string | null;
   onSelect: (span: TraceSpan) => void;
   isLast: boolean;
+  collapsedIds: Set<string>;
+  toggleExpanded: (spanId: string) => void;
 }) {
-  const [expanded, setExpanded] = useState(true);
   const { span } = node;
+  const expanded = !collapsedIds.has(span.span_id);
   const statusColor = STATUS_COLORS[span.status.toLowerCase()] ?? "var(--text-muted)";
   const duration = formatDuration(span.duration_ms);
   const isSelected = span.span_id === selectedId;
@@ -196,6 +264,7 @@ function TreeNodeView({
 
       {/* Row */}
       <button
+        data-span-id={span.span_id}
         onClick={() => onSelect(span)}
         className="w-full text-left text-xs py-1.5 pr-2 flex items-center gap-1.5 transition-colors relative"
         style={{
@@ -231,7 +300,7 @@ function TreeNodeView({
           <span
             onClick={(e) => {
               e.stopPropagation();
-              setExpanded(!expanded);
+              toggleExpanded(span.span_id);
             }}
             className="shrink-0 w-4 h-4 flex items-center justify-center cursor-pointer rounded hover:bg-[var(--bg-hover)]"
             style={{ color: "var(--text-muted)" }}
@@ -278,6 +347,8 @@ function TreeNodeView({
             selectedId={selectedId}
             onSelect={onSelect}
             isLast={i === node.children.length - 1}
+            collapsedIds={collapsedIds}
+            toggleExpanded={toggleExpanded}
           />
         ))}
     </div>
