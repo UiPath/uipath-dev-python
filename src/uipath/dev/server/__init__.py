@@ -15,6 +15,7 @@ from uipath.runtime import UiPathRuntimeFactoryProtocol
 
 from uipath.dev.models.data import ChatData, LogData, TraceData
 from uipath.dev.models.execution import ExecutionRun
+from uipath.dev.server.debug_bridge import WebDebugBridge
 from uipath.dev.services.run_service import RunService
 
 logger = logging.getLogger(__name__)
@@ -75,6 +76,7 @@ class UiPathDeveloperServer:
             on_log=self._on_log,
             on_trace=self._on_trace,
             on_chat=self._on_chat,
+            debug_bridge_factory=lambda mode: WebDebugBridge(mode=mode),
         )
 
     def create_app(self) -> Any:

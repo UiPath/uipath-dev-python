@@ -94,7 +94,8 @@ async def _handle_chat_message(server: Any, run_id: str, text: str) -> None:
         except json.JSONDecodeError:
             run.resume_data = text
 
-        if run.mode == ExecutionMode.DEBUG:
+        debug_bridge = server.run_service.get_debug_bridge(run.id)
+        if debug_bridge:
             asyncio.create_task(server.run_service.resume_debug(run, run.resume_data))
         else:
             asyncio.create_task(server.run_service.execute(run))
