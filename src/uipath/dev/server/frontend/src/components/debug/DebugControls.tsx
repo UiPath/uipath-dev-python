@@ -3,18 +3,17 @@ import type { WsClient } from "../../api/websocket";
 
 interface Props {
   runId: string;
-  entrypoint: string;
   status: string;
   ws: WsClient;
   breakpointNode?: string | null;
 }
 
-export default function DebugControls({ runId, entrypoint, status, ws, breakpointNode }: Props) {
+export default function DebugControls({ runId, status, ws, breakpointNode }: Props) {
   const isSuspended = status === "suspended";
 
   // Sync breakpoints to server before sending a debug command to avoid race conditions
   const syncBreakpointsThenSend = (command: "step" | "continue" | "stop") => {
-    const bpMap = useRunStore.getState().breakpoints[entrypoint] ?? {};
+    const bpMap = useRunStore.getState().breakpoints[runId] ?? {};
     ws.setBreakpoints(runId, Object.keys(bpMap));
     if (command === "step") ws.debugStep(runId);
     else if (command === "continue") ws.debugContinue(runId);

@@ -41,7 +41,7 @@ export default function RunDetailsPanel({ run, ws, activeTab, onTabChange }: Pro
   const traces = useRunStore((s) => s.traces[run.id] || EMPTY_TRACES);
   const logs = useRunStore((s) => s.logs[run.id] || EMPTY_LOGS);
   const chatMessages = useRunStore((s) => s.chatMessages[run.id] || EMPTY_CHAT);
-  const bpMap = useRunStore((s) => s.breakpoints[run.entrypoint]);
+  const bpMap = useRunStore((s) => s.breakpoints[run.id]);
 
   // Sync breakpoints to server when switching to this run
   useEffect(() => {
@@ -189,7 +189,7 @@ export default function RunDetailsPanel({ run, ws, activeTab, onTabChange }: Pro
             <div ref={containerRef} className="flex flex-col flex-1 min-w-0">
               {/* Debug controls — shown when debug mode, breakpoints set, or suspended */}
               {(run.mode === "debug" || run.status === "suspended" || (bpMap && Object.keys(bpMap).length > 0)) && (
-                <DebugControls runId={run.id} entrypoint={run.entrypoint} status={run.status} ws={ws} breakpointNode={run.breakpoint_node} />
+                <DebugControls runId={run.id} status={run.status} ws={ws} breakpointNode={run.breakpoint_node} />
               )}
               {/* Graph panel — resizable */}
               <div className="shrink-0" style={{ height: graphHeight }}>

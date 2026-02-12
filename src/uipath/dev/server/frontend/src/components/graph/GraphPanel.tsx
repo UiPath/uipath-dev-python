@@ -351,7 +351,7 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
   const layoutRef = useRef(0);
   const rfInstance = useRef<ReactFlowInstance | null>(null);
 
-  const bpMap = useRunStore((s) => s.breakpoints[entrypoint]);
+  const bpMap = useRunStore((s) => s.breakpoints[runId]);
   const toggleBreakpoint = useRunStore((s) => s.toggleBreakpoint);
 
   const onNodeClick = useCallback(
@@ -359,12 +359,12 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
       if (node.type === "groupNode") return;
       // For compound children, extract the plain ID from "parentId/childId"
       const plainId = node.id.includes("/") ? node.id.split("/").pop()! : node.id;
-      toggleBreakpoint(entrypoint, plainId);
+      toggleBreakpoint(runId, plainId);
       // Immediately notify parent with the updated breakpoints
-      const updated = useRunStore.getState().breakpoints[entrypoint] ?? {};
+      const updated = useRunStore.getState().breakpoints[runId] ?? {};
       onBreakpointChange?.(Object.keys(updated));
     },
-    [entrypoint, toggleBreakpoint, onBreakpointChange],
+    [runId, toggleBreakpoint, onBreakpointChange],
   );
 
   // Inject hasBreakpoint into node data when breakpoints change

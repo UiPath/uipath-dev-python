@@ -85,12 +85,9 @@ export default function NewRunPanel({ onRunCreated }: Props) {
       return;
     }
 
-    const bpMap = useRunStore.getState().breakpoints[selectedEp] ?? {};
-    const breakpoints = Object.keys(bpMap);
-
     setLoading(mode);
     try {
-      const run = await createRun(selectedEp, parsed, mode, breakpoints);
+      const run = await createRun(selectedEp, parsed, mode, []);
       // Immediately add the run to the store so it's available when switching views
       useRunStore.getState().upsertRun(run);
       onRunCreated(run.id);
