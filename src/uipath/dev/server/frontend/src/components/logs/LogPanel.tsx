@@ -47,13 +47,12 @@ export default function LogPanel({ logs }: Props) {
             key={i}
             className="flex gap-3 px-3 py-1.5"
             style={{
-              borderLeft: `2px solid ${style.border}`,
               background: isEven ? "var(--bg-primary)" : "var(--bg-secondary)",
             }}
           >
             <span className="text-[var(--text-muted)] shrink-0">{time}</span>
             <span
-              className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold leading-none inline-flex items-center"
+              className="shrink-0 self-start px-1.5 py-0.5 rounded text-[10px] font-semibold leading-none inline-flex items-center"
               style={{ color: style.color, background: style.bg }}
             >
               {levelShort}
