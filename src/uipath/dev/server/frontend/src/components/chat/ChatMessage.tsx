@@ -11,58 +11,71 @@ interface Props {
   message: ChatMsg;
 }
 
+const ROLE_CONFIG: Record<string, { label: string; color: string }> = {
+  user: { label: "You", color: "var(--info)" },
+  tool: { label: "Tool", color: "var(--warning)" },
+  assistant: { label: "AI", color: "var(--success)" },
+};
+
 export default function ChatMessage({ message }: Props) {
   const isUser = message.role === "user";
   const hasTool = message.tool_calls && message.tool_calls.length > 0;
-
-  const roleLabel = isUser ? "You" : hasTool ? "Tool" : "AI";
+  const roleKey = isUser ? "user" : hasTool ? "tool" : "assistant";
+  const role = ROLE_CONFIG[roleKey];
 
   return (
-    <div
-      className="rounded-lg border p-3"
-      style={{
-        background: isUser
-          ? "color-mix(in srgb, var(--info) 10%, var(--bg-secondary))"
-          : hasTool
-            ? "color-mix(in srgb, var(--warning) 8%, var(--bg-secondary))"
-            : "var(--bg-secondary)",
-        borderColor: isUser
-          ? "color-mix(in srgb, var(--info) 30%, var(--border))"
-          : hasTool
-            ? "color-mix(in srgb, var(--warning) 30%, var(--border))"
-            : "var(--border)",
-      }}
-    >
-      <div
-        className="text-xs font-semibold mb-1"
-        style={{
-          color: isUser
-            ? "var(--info)"
-            : hasTool
-              ? "var(--warning)"
-              : "var(--success)",
-        }}
-      >
-        {roleLabel}
+    <div className="py-1.5">
+      {/* Role indicator */}
+      <div className="flex items-center gap-1.5 mb-0.5">
+        <div
+          className="w-1 h-1 rounded-full"
+          style={{ background: role.color }}
+        />
+        <span
+          className="text-[10px] uppercase tracking-wider font-semibold"
+          style={{ color: role.color }}
+        >
+          {role.label}
+        </span>
       </div>
 
+      {/* Content */}
       {message.content && (
         isUser ? (
-          <div className="text-sm whitespace-pre-wrap" style={{ color: "var(--text-primary)" }}>
+          <div
+            className="text-xs leading-relaxed pl-2.5"
+            style={{ color: "var(--text-primary)" }}
+          >
             {message.content}
           </div>
         ) : (
-          <div className="text-sm chat-markdown" style={{ color: "var(--text-primary)" }}>
+          <div
+            className="text-xs leading-relaxed pl-2.5 chat-markdown"
+            style={{ color: "var(--text-secondary)" }}
+          >
             <Markdown>{message.content}</Markdown>
           </div>
         )
       )}
 
-      {message.tool_calls?.map((tc) => (
-        <div key={tc.name} className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-          {tc.has_result ? "\u2713" : "\u2699"} <strong>{tc.name}</strong>
+      {/* Tool calls */}
+      {message.tool_calls && message.tool_calls.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-1 pl-2.5">
+          {message.tool_calls.map((tc) => (
+            <span
+              key={tc.name}
+              className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded"
+              style={{
+                background: "var(--bg-primary)",
+                border: "1px solid var(--border)",
+                color: tc.has_result ? "var(--success)" : "var(--text-muted)",
+              }}
+            >
+              {tc.has_result ? "\u2713" : "\u2022"} {tc.name}
+            </span>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }
