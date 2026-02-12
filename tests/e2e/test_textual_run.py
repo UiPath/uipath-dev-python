@@ -16,6 +16,7 @@ from uipath.dev.ui.widgets.json_input import JsonInput
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 async def _wait_for_entrypoint(app, *, timeout: float = 10.0):
     """Wait until NewRunPanel has a selected entrypoint (schema loaded)."""
     deadline = asyncio.get_event_loop().time() + timeout

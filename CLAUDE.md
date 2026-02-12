@@ -3,7 +3,7 @@
 ## Workflow Rules
 - NEVER commit, push, or create PRs unless explicitly asked to do so.
 - Always wait for explicit user confirmation before any git operations that affect the repository.
-- Always run `uv run ruff check src/ tests/` and `uv run mypy src/` before committing. Fix any errors before creating the commit.
+- Always run `uv run ruff check src/ tests/`, `uv run ruff format --check .`, and `uv run mypy src/` before committing. Fix any errors before creating the commit.
 
 ## Project Structure
 - Monorepo: Python backend (`src/uipath/dev/`) + React frontend (`src/uipath/dev/server/frontend/`)
