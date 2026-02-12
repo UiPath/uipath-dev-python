@@ -141,7 +141,7 @@ export default function RunDetailsPanel({ run, ws, activeTab, onTabChange }: Pro
           <button
             key={tab.id}
             onClick={() => onTabChange(tab.id)}
-            className="px-2.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded transition-colors cursor-pointer"
+            className="px-2.5 py-0.5 h-5 text-[10px] uppercase tracking-wider font-semibold rounded transition-colors cursor-pointer"
             style={{
               color: activeTab === tab.id ? "var(--accent)" : "var(--text-muted)",
               background: activeTab === tab.id
