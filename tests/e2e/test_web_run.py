@@ -5,13 +5,7 @@ Requires:
     playwright install chromium
 """
 
-import pytest
 from playwright.sync_api import Page, expect
-
-pytestmark = pytest.mark.skipif(
-    not __import__("shutil").which("playwright"),
-    reason="playwright not installed — run `playwright install chromium`",
-)
 
 
 def _wait_for_entrypoints(page: Page) -> None:

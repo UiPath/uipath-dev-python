@@ -8,10 +8,9 @@ import json
 
 from textual.widgets import Footer, Select
 
-from tests.conftest import ENTRYPOINT_GREETING, ENTRYPOINT_NUMBERS
+from tests.conftest import ENTRYPOINT_NUMBERS
 from uipath.dev.ui.panels import NewRunPanel, RunDetailsPanel, RunHistoryPanel
 from uipath.dev.ui.widgets.json_input import JsonInput
-
 
 # ---------------------------------------------------------------------------
 # Helpers
