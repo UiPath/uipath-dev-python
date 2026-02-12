@@ -149,7 +149,7 @@ export default function SpanDetails({ span }: Props) {
         className="px-2 py-1.5 border-b flex items-center gap-2 flex-wrap"
         style={{ borderColor: "var(--border)", background: "var(--bg-secondary)" }}
       >
-        <span className="text-sm font-semibold mr-auto" style={{ color: "var(--text-primary)" }}>
+        <span className="text-xs font-semibold mr-auto" style={{ color: "var(--text-primary)" }}>
           {span.span_name}
         </span>
         <span

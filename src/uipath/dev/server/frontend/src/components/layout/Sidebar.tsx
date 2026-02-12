@@ -22,12 +22,21 @@ export default function Sidebar({ runs, selectedRunId, onSelectRun, onNewRun }: 
     <aside className="w-44 bg-[var(--sidebar-bg)] border-r border-[var(--border)] flex flex-col">
       {/* Header */}
       <div className="px-3 py-2.5 border-b border-[var(--border)] flex items-center justify-between">
-        <span
-          className="text-[10px] uppercase tracking-widest font-semibold"
-          style={{ color: "var(--text-muted)" }}
+        <button
+          onClick={onNewRun}
+          className="flex items-center gap-1.5 cursor-pointer transition-opacity hover:opacity-80"
         >
-          Dev Console
-        </span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+            <rect width="24" height="24" rx="4" fill="var(--accent)" />
+            <text x="12" y="17" textAnchor="middle" fill="white" fontSize="14" fontWeight="700" fontFamily="Arial, sans-serif">U</text>
+          </svg>
+          <span
+            className="text-[10px] uppercase tracking-widest font-semibold"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Dev Console
+          </span>
+        </button>
         <button
           onClick={toggleTheme}
           className="w-5 h-5 flex items-center justify-center rounded cursor-pointer transition-colors"
