@@ -320,7 +320,7 @@ class RunService:
     def _handle_debug_started(self, run_id: str) -> None:
         """Handle debug started event."""
         run = self.runs.get(run_id)
-        if run:
+        if run and run.mode == ExecutionMode.DEBUG:
             run.status = "suspended"
             self._emit_run_updated(run)
 
