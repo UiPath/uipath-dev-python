@@ -42,9 +42,14 @@ function buildTree(traces: TraceSpan[]): TreeNode[] {
     return { span, children: kids.map(build) };
   }
 
-  return roots
+  const tree = roots
     .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
     .map(build);
+
+  // Skip "root" spans — promote their children
+  return tree.flatMap((node) =>
+    node.span.span_name === "root" ? node.children : [node],
+  );
 }
 
 function formatDuration(ms: number | null | undefined): string {
