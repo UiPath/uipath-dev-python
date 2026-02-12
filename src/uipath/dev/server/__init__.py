@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import socket
 import threading
 import time
 import webbrowser
@@ -94,6 +95,7 @@ class UiPathDeveloperServer:
         if not HAS_EXTRAS:
             raise ImportError(_MISSING_EXTRAS_MSG)
 
+        self.port = self._find_free_port(self.host, self.port)
         app = self.create_app()
 
         if self.open_browser:
@@ -145,6 +147,24 @@ class UiPathDeveloperServer:
     def _on_chat(self, chat_data: ChatData) -> None:
         """Broadcast chat message to subscribed WebSocket clients."""
         self.connection_manager.broadcast_chat(chat_data)
+
+    @staticmethod
+    def _find_free_port(host: str, start_port: int, max_attempts: int = 100) -> int:
+        """Find a free port starting from *start_port*.
+
+        Tries *start_port*, then *start_port + 1*, etc. up to *max_attempts*.
+        """
+        for offset in range(max_attempts):
+            port = start_port + offset
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.bind((host, port))
+                    return port
+            except OSError:
+                continue
+        raise OSError(
+            f"Could not find a free port in range {start_port}-{start_port + max_attempts - 1}"
+        )
 
     def _deferred_open_browser(self) -> None:
         """Open the browser after a short delay to let uvicorn bind."""
