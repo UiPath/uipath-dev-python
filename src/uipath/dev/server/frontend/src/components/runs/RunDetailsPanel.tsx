@@ -135,7 +135,7 @@ export default function RunDetailsPanel({ run, ws, activeTab, onTabChange }: Pro
   return (
     <div className="flex flex-col h-full">
       {/* Tab bar */}
-      <div className="flex items-center gap-1 px-2 py-1.5 border-b border-[var(--border)] bg-[var(--bg-primary)]">
+      <div className="flex items-center gap-1 px-2 py-2.5 border-b border-[var(--border)] bg-[var(--bg-primary)]">
         {tabs.map((tab) => (
           <button
             key={tab.id}
