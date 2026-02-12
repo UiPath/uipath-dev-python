@@ -97,30 +97,32 @@ export default function TraceTree({ traces }: Props) {
   return (
     <div className="flex h-full trace-tree-container" style={{ cursor: isDragging ? "col-resize" : undefined }}>
       {/* Left: tree view */}
-      <div className="overflow-y-auto border-r border-[var(--border)] py-1" style={{ width: `${leftWidth}%` }}>
-        {tree.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-[var(--text-muted)] text-sm">No traces yet</p>
-          </div>
-        ) : (
-          tree.map((node, i) => (
-            <TreeNodeView
-              key={node.span.span_id}
-              node={node}
-              depth={0}
-              selectedId={selectedSpan?.span_id ?? null}
-              onSelect={setSelectedSpan}
-              isLast={i === tree.length - 1}
-            />
-          ))
-        )}
+      <div className="pr-0.5 pt-0.5" style={{ width: `${leftWidth}%` }}>
+        <div className="overflow-y-auto h-full p-0.5">
+          {tree.length === 0 ? (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-[var(--text-muted)] text-sm">No traces yet</p>
+            </div>
+          ) : (
+            tree.map((node, i) => (
+              <TreeNodeView
+                key={node.span.span_id}
+                node={node}
+                depth={0}
+                selectedId={selectedSpan?.span_id ?? null}
+                onSelect={setSelectedSpan}
+                isLast={i === tree.length - 1}
+              />
+            ))
+          )}
+        </div>
       </div>
 
       {/* Draggable divider */}
       <div
         onMouseDown={handleMouseDown}
-        className="w-1 hover:bg-[var(--accent)] transition-colors cursor-col-resize shrink-0 relative group"
-        style={{ background: isDragging ? "var(--accent)" : "transparent" }}
+        className="shrink-0 w-1.5 cursor-col-resize bg-[var(--border)] hover:bg-[var(--accent)] transition-colors relative"
+        style={isDragging ? { background: "var(--accent)" } : undefined}
       >
         <div className="absolute inset-0 -left-1 -right-1" />
       </div>

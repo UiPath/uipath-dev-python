@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, useEffect } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { RunSummary } from "../../types/run";
 import type { WsClient } from "../../api/websocket";
 import { useRunStore } from "../../store/useRunStore";
@@ -12,6 +12,8 @@ type Tab = "traces" | "output";
 interface Props {
   run: RunSummary;
   ws: WsClient;
+  activeTab: Tab;
+  onTabChange: (tab: Tab) => void;
 }
 
 // Stable empty arrays to avoid infinite re-renders
@@ -19,9 +21,8 @@ const EMPTY_TRACES: never[] = [];
 const EMPTY_LOGS: never[] = [];
 const EMPTY_CHAT: never[] = [];
 
-export default function RunDetailsPanel({ run, ws }: Props) {
+export default function RunDetailsPanel({ run, ws, activeTab, onTabChange }: Props) {
   const isChatMode = run.mode === "chat";
-  const [activeTab, setActiveTab] = useState<Tab>("traces");
   const [graphHeight, setGraphHeight] = useState(280);
   const [chatWidth, setChatWidth] = useState(() => {
     const saved = localStorage.getItem("chatPanelWidth");
@@ -38,11 +39,6 @@ export default function RunDetailsPanel({ run, ws }: Props) {
   const traces = useRunStore((s) => s.traces[run.id] || EMPTY_TRACES);
   const logs = useRunStore((s) => s.logs[run.id] || EMPTY_LOGS);
   const chatMessages = useRunStore((s) => s.chatMessages[run.id] || EMPTY_CHAT);
-
-  // Reset to Live tab when switching runs
-  useEffect(() => {
-    setActiveTab("traces");
-  }, [run.id]);
 
   const onResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -143,7 +139,7 @@ export default function RunDetailsPanel({ run, ws }: Props) {
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => onTabChange(tab.id)}
             className={`px-4 py-2 text-sm transition-colors ${
               activeTab === tab.id
                 ? "border-b-2 border-[var(--tab-active)] text-[var(--tab-text-active)]"

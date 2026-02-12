@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRunStore } from "./store/useRunStore";
 import { useWebSocket } from "./store/useWebSocket";
 import { listRuns, listEntrypoints, getRun } from "./api/client";
+import { useHashRoute } from "./hooks/useHashRoute";
 import Sidebar from "./components/layout/Sidebar";
 import NewRunPanel from "./components/runs/NewRunPanel";
 import RunDetailsPanel from "./components/runs/RunDetailsPanel";
@@ -18,7 +19,14 @@ export default function App() {
     setChatMessages,
     setEntrypoints,
   } = useRunStore();
-  const [view, setView] = useState<"new" | "details">("new");
+  const { view, runId: routeRunId, tab, navigate } = useHashRoute();
+
+  // Sync route runId → store selection
+  useEffect(() => {
+    if (view === "details" && routeRunId && routeRunId !== selectedRunId) {
+      selectRun(routeRunId);
+    }
+  }, [view, routeRunId, selectedRunId, selectRun]);
 
   // Load existing runs and entrypoints on mount
   useEffect(() => {
@@ -71,17 +79,23 @@ export default function App() {
   }, [selectedRunId, ws, setTraces, setLogs, setChatMessages]);
 
   const handleRunCreated = (runId: string) => {
+    navigate(`#/runs/${runId}/traces`);
     selectRun(runId);
-    setView("details");
   };
 
   const handleSelectRun = (runId: string) => {
+    navigate(`#/runs/${runId}/traces`);
     selectRun(runId);
-    setView("details");
   };
 
   const handleNewRun = () => {
-    setView("new");
+    navigate("#/new");
+  };
+
+  const handleTabChange = (newTab: "traces" | "output") => {
+    if (selectedRunId) {
+      navigate(`#/runs/${selectedRunId}/${newTab}`);
+    }
   };
 
   const selectedRun = selectedRunId ? runs[selectedRunId] : null;
@@ -98,7 +112,7 @@ export default function App() {
         {view === "new" ? (
           <NewRunPanel onRunCreated={handleRunCreated} />
         ) : selectedRun ? (
-          <RunDetailsPanel run={selectedRun} ws={ws} />
+          <RunDetailsPanel run={selectedRun} ws={ws} activeTab={tab} onTabChange={handleTabChange} />
         ) : (
           <div className="flex items-center justify-center h-full text-[var(--text-muted)]">
             Select a run or create a new one

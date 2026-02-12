@@ -52,7 +52,7 @@ export default function Sidebar({ runs, selectedRunId, onSelectRun, onNewRun }: 
 
       <button
         onClick={onNewRun}
-        className="mx-3 mt-3 px-3 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-sm rounded transition-colors"
+        className="mx-3 mt-3 px-2 py-1 text-xs rounded border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--text-muted)] bg-transparent transition-colors cursor-pointer"
       >
         + New Run
       </button>
