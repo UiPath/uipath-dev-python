@@ -50,28 +50,27 @@ export const useRunStore = create<RunStore>((set) => ({
 
   setRuns: (runs) =>
     set((state) => {
-      const bps = { ...state.breakpoints };
+      let bps = state.breakpoints;
       for (const r of runs) {
         if (r.breakpoints?.length && !bps[r.id]) {
-          bps[r.id] = Object.fromEntries(r.breakpoints.map((id) => [id, true]));
+          bps = { ...bps, [r.id]: Object.fromEntries(r.breakpoints.map((id) => [id, true])) };
         }
       }
-      return {
-        runs: Object.fromEntries(runs.map((r) => [r.id, r])),
-        breakpoints: bps,
-      };
+      const result: Partial<RunStore> = { runs: Object.fromEntries(runs.map((r) => [r.id, r])) };
+      if (bps !== state.breakpoints) result.breakpoints = bps;
+      return result;
     }),
 
   upsertRun: (run) =>
     set((state) => {
-      const bps = { ...state.breakpoints };
-      if (run.breakpoints?.length && !bps[run.id]) {
-        bps[run.id] = Object.fromEntries(run.breakpoints.map((id) => [id, true]));
+      const result: Partial<RunStore> = { runs: { ...state.runs, [run.id]: run } };
+      if (run.breakpoints?.length && !state.breakpoints[run.id]) {
+        result.breakpoints = {
+          ...state.breakpoints,
+          [run.id]: Object.fromEntries(run.breakpoints.map((id) => [id, true])),
+        };
       }
-      return {
-        runs: { ...state.runs, [run.id]: run },
-        breakpoints: bps,
-      };
+      return result;
     }),
 
   selectRun: (runId) => set({ selectedRunId: runId }),
