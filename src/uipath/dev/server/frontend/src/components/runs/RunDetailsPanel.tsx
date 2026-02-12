@@ -171,13 +171,9 @@ export default function RunDetailsPanel({ run, ws }: Props) {
               {/* Drag handle */}
               <div
                 onMouseDown={onResizeStart}
-                className="shrink-0 h-1.5 cursor-row-resize flex items-center justify-center"
-                style={{ background: "var(--border)" }}
+                className="shrink-0 h-1.5 cursor-row-resize bg-[var(--border)] hover:bg-[var(--accent)] transition-colors relative"
               >
-                <div
-                  className="w-8 h-0.5 rounded-full"
-                  style={{ background: "var(--text-muted)" }}
-                />
+                <div className="absolute inset-0 -top-1 -bottom-1" />
               </div>
               {/* Trace tree */}
               <div className="flex-1 overflow-hidden">
@@ -189,8 +185,7 @@ export default function RunDetailsPanel({ run, ws }: Props) {
               <>
                 <div
                   onMouseDown={onChatResizeStart}
-                  className="shrink-0 w-1.5 cursor-col-resize flex items-center justify-center hover:bg-[var(--accent)] transition-colors relative"
-                  style={{ background: "var(--border)" }}
+                  className="shrink-0 w-1.5 cursor-col-resize bg-[var(--border)] hover:bg-[var(--accent)] transition-colors relative"
                 >
                   <div className="absolute inset-0 -left-1 -right-1" />
                 </div>
@@ -252,8 +247,7 @@ export default function RunDetailsPanel({ run, ws }: Props) {
               {/* Drag handle */}
               <div
                 onMouseDown={onOutputSplitStart}
-                className="shrink-0 w-1.5 cursor-col-resize flex items-center justify-center hover:bg-[var(--accent)] transition-colors relative"
-                style={{ background: "var(--border)" }}
+                className="shrink-0 w-1.5 cursor-col-resize bg-[var(--border)] hover:bg-[var(--accent)] transition-colors relative"
               >
                 <div className="absolute inset-0 -left-1 -right-1" />
               </div>

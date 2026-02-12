@@ -146,7 +146,7 @@ export default function SpanDetails({ span }: Props) {
     <div className="overflow-y-auto h-full text-xs">
       {/* Header: name + pills */}
       <div
-        className="px-3 py-2 border-b flex items-center gap-2 flex-wrap"
+        className="px-2 py-1.5 border-b flex items-center gap-2 flex-wrap"
         style={{ borderColor: "var(--border)", background: "var(--bg-secondary)" }}
       >
         <span className="text-sm font-semibold mr-auto" style={{ color: "var(--text-primary)" }}>
@@ -176,7 +176,7 @@ export default function SpanDetails({ span }: Props) {
       {attrEntries.length > 0 && (
         <>
           <div
-            className="px-3 py-1 text-[10px] uppercase font-bold tracking-wider border-b"
+            className="px-2 py-1 text-[10px] uppercase font-bold tracking-wider border-b"
             style={{ color: "var(--accent)", borderColor: "var(--border)", background: "var(--bg-secondary)" }}
           >
             Attributes ({attrEntries.length})
@@ -184,7 +184,7 @@ export default function SpanDetails({ span }: Props) {
           {attrEntries.map(([key, value], idx) => (
             <div
               key={key}
-              className="flex gap-2 px-3 py-1 items-start border-b"
+              className="flex gap-2 px-2 py-1 items-start border-b"
               style={{
                 borderColor: "var(--border)",
                 background: idx % 2 === 0 ? "var(--bg-primary)" : "var(--bg-secondary)",
@@ -207,7 +207,7 @@ export default function SpanDetails({ span }: Props) {
 
       {/* Identifiers — collapsible */}
       <div
-        className="px-3 py-1 text-[10px] uppercase font-bold tracking-wider border-b cursor-pointer flex items-center"
+        className="px-2 py-1 text-[10px] uppercase font-bold tracking-wider border-b cursor-pointer flex items-center"
         style={{ color: "var(--info)", borderColor: "var(--border)", background: "var(--bg-secondary)" }}
         onClick={() => setIdsOpen((o) => !o)}
       >
@@ -217,7 +217,7 @@ export default function SpanDetails({ span }: Props) {
         </span>
       </div>
       {idsOpen && (
-        <div className="px-3 py-1 space-y-0.5" style={{ background: "var(--bg-primary)" }}>
+        <div className="px-2 py-1 space-y-0.5" style={{ background: "var(--bg-primary)" }}>
           {ids.map((id) => (
             <IdRow key={id.label} label={id.label} value={id.value} />
           ))}
