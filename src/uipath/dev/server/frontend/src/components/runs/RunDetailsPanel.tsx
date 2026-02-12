@@ -330,7 +330,7 @@ function IOView({ run }: { run: RunSummary }) {
       {/* Input */}
       <DataSection title="Input" color="var(--success)" copyText={JSON.stringify(run.input_data, null, 2)}>
         <pre
-          className="p-3 rounded-lg text-xs overflow-x-auto font-mono"
+          className="p-3 rounded-lg text-xs font-mono whitespace-pre-wrap break-words"
           style={{ background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)" }}
         >
           {JSON.stringify(run.input_data, null, 2)}
@@ -345,7 +345,7 @@ function IOView({ run }: { run: RunSummary }) {
           copyText={typeof run.output_data === "string" ? run.output_data : JSON.stringify(run.output_data, null, 2)}
         >
           <pre
-            className="p-3 rounded-lg text-xs overflow-x-auto font-mono"
+            className="p-3 rounded-lg text-xs font-mono whitespace-pre-wrap break-words"
             style={{ background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)" }}
           >
             {typeof run.output_data === "string"
