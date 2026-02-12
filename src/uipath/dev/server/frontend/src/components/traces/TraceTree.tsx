@@ -11,6 +11,76 @@ const STATUS_COLORS: Record<string, string> = {
   error: "var(--error)",
 };
 
+/* Icons for openinference.span.kind */
+function SpanKindIcon({ kind, statusColor }: { kind: string | undefined; statusColor: string }) {
+  const color = statusColor;
+  const size = 14;
+  const props = { width: size, height: size, viewBox: "0 0 16 16", fill: "none", stroke: color, strokeWidth: 1.5, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+
+  switch (kind) {
+    case "LLM":
+      // Brain / sparkle icon
+      return (
+        <svg {...props}>
+          <path d="M8 2L9 5L12 4L10 7L14 8L10 9L12 12L9 11L8 14L7 11L4 12L6 9L2 8L6 7L4 4L7 5Z" fill={color} stroke="none" />
+        </svg>
+      );
+    case "TOOL":
+      // Wrench icon
+      return (
+        <svg {...props}>
+          <path d="M10.5 2.5a3.5 3.5 0 0 0-3.17 4.93L3.5 11.27a1 1 0 0 0 0 1.41l.82.82a1 1 0 0 0 1.41 0l3.84-3.83A3.5 3.5 0 1 0 10.5 2.5z" />
+        </svg>
+      );
+    case "AGENT":
+      // Bot / agent icon
+      return (
+        <svg {...props}>
+          <rect x="3" y="5" width="10" height="8" rx="2" />
+          <circle cx="6" cy="9" r="1" fill={color} stroke="none" />
+          <circle cx="10" cy="9" r="1" fill={color} stroke="none" />
+          <path d="M8 2v3" />
+          <path d="M6 2h4" />
+        </svg>
+      );
+    case "CHAIN":
+      // Chain links icon
+      return (
+        <svg {...props}>
+          <path d="M6.5 9.5L9.5 6.5" />
+          <path d="M4.5 8.5l-1 1a2 2 0 0 0 2.83 2.83l1-1" />
+          <path d="M11.5 7.5l1-1a2 2 0 0 0-2.83-2.83l-1 1" />
+        </svg>
+      );
+    case "RETRIEVER":
+      // Search / magnifier icon
+      return (
+        <svg {...props}>
+          <circle cx="7" cy="7" r="4" />
+          <path d="M10 10l3.5 3.5" />
+        </svg>
+      );
+    case "EMBEDDING":
+      // Grid / matrix icon
+      return (
+        <svg {...props}>
+          <rect x="2" y="2" width="4" height="4" rx="0.5" />
+          <rect x="10" y="2" width="4" height="4" rx="0.5" />
+          <rect x="2" y="10" width="4" height="4" rx="0.5" />
+          <rect x="10" y="10" width="4" height="4" rx="0.5" />
+        </svg>
+      );
+    default:
+      // Fallback: status dot
+      return (
+        <span
+          className="shrink-0 w-2 h-2 rounded-full"
+          style={{ background: statusColor }}
+        />
+      );
+  }
+}
+
 interface Props {
   traces: TraceSpan[];
 }
@@ -246,6 +316,7 @@ function TreeNodeView({
   const isSelected = span.span_id === selectedId;
   const hasChildren = node.children.length > 0;
   const indent = depth * 20;
+  const spanKind = span.attributes?.["openinference.span.kind"] as string | undefined;
 
   return (
     <div className="relative">
@@ -318,11 +389,10 @@ function TreeNodeView({
           <span className="shrink-0 w-4" />
         )}
 
-        {/* Status dot */}
-        <span
-          className="shrink-0 w-2 h-2 rounded-full"
-          style={{ background: statusColor }}
-        />
+        {/* Span kind icon */}
+        <span className="shrink-0 flex items-center justify-center w-4 h-4">
+          <SpanKindIcon kind={spanKind} statusColor={statusColor} />
+        </span>
 
         {/* Span name */}
         <span className="text-[var(--text-primary)] truncate min-w-0 flex-1">
