@@ -13,6 +13,7 @@ export default function App() {
     runs,
     selectedRunId,
     setRuns,
+    upsertRun,
     selectRun,
     setTraces,
     setLogs,
@@ -41,8 +42,9 @@ export default function App() {
     if (!selectedRunId) return;
     ws.subscribe(selectedRunId);
 
-    // Fetch full run details
+    // Fetch full run details (includes fresh status in case we missed run.updated events)
     getRun(selectedRunId).then((detail) => {
+      upsertRun(detail);
       setTraces(selectedRunId, detail.traces);
       setLogs(selectedRunId, detail.logs);
       // Convert messages to chat format (server uses camelCase aliases)
@@ -76,7 +78,7 @@ export default function App() {
     }).catch(console.error);
 
     return () => ws.unsubscribe(selectedRunId);
-  }, [selectedRunId, ws, setTraces, setLogs, setChatMessages]);
+  }, [selectedRunId, ws, upsertRun, setTraces, setLogs, setChatMessages]);
 
   const handleRunCreated = (runId: string) => {
     navigate(`#/runs/${runId}/traces`);
