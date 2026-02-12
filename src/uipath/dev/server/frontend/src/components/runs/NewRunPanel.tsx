@@ -101,19 +101,47 @@ export default function NewRunPanel({ onRunCreated }: Props) {
   const isDisabled = !!loading || !selectedEp || loadingSchema;
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
-      <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-6">New Run</h2>
+    <div className="flex items-center justify-center h-full">
+      <div className="w-full max-w-lg px-6">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-1">
+            <div
+              className="w-1.5 h-1.5 rounded-full"
+              style={{ background: "var(--accent)" }}
+            />
+            <span
+              className="text-[10px] uppercase tracking-widest font-semibold"
+              style={{ color: "var(--text-muted)" }}
+            >
+              New Run
+            </span>
+          </div>
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+            Select an entrypoint and configure input
+          </p>
+        </div>
 
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm text-[var(--text-secondary)] mb-1">Entrypoint</label>
+        {/* Entrypoint */}
+        <div className="mb-5">
+          <label
+            className="block text-[10px] uppercase tracking-wider font-semibold mb-2"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Entrypoint
+          </label>
           <select
             value={selectedEp}
             onChange={(e) => setSelectedEp(e.target.value)}
-            className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded px-3 py-2 text-sm text-[var(--text-primary)] appearance-auto"
+            className="w-full rounded-md px-3 py-1.5 text-xs font-mono cursor-pointer appearance-auto"
+            style={{
+              background: "var(--bg-secondary)",
+              border: "1px solid var(--border)",
+              color: "var(--text-primary)",
+            }}
           >
             {entrypoints.length === 0 && (
-              <option value="">Loading entrypoints...</option>
+              <option value="">Loading...</option>
             )}
             {entrypoints.map((ep) => (
               <option key={ep} value={ep}>
@@ -127,33 +155,74 @@ export default function NewRunPanel({ onRunCreated }: Props) {
           <SchemaErrorDisplay error={schemaError} />
         ) : (
           <>
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-sm text-[var(--text-secondary)]">Input (JSON)</label>
+            {/* JSON Input */}
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-2">
+                <label
+                  className="text-[10px] uppercase tracking-wider font-semibold"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Input
+                </label>
                 {loadingSchema && (
-                  <span className="text-xs text-[var(--accent)]">Loading schema...</span>
+                  <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                    Loading schema...
+                  </span>
                 )}
               </div>
               <textarea
                 value={inputJson}
                 onChange={(e) => setInputJson(e.target.value)}
-                rows={10}
-                className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded px-3 py-2 text-sm text-[var(--text-primary)] font-mono"
+                rows={8}
+                spellCheck={false}
+                className="w-full rounded-md px-3 py-2 text-xs font-mono leading-relaxed resize-none focus:outline-none"
+                style={{
+                  background: "var(--bg-secondary)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text-primary)",
+                }}
               />
             </div>
 
-            <div className="flex gap-3">
+            {/* Actions */}
+            <div className="flex gap-2">
               <button
                 onClick={() => handleSubmit("run")}
                 disabled={isDisabled}
-                className="flex-1 py-2.5 bg-[var(--success)] hover:brightness-110 disabled:opacity-40 text-white text-sm font-medium rounded transition-all"
+                className="flex-1 py-1.5 text-xs font-medium rounded-md border cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                style={{
+                  background: "transparent",
+                  borderColor: "var(--success)",
+                  color: "var(--success)",
+                }}
+                onMouseEnter={(e) => {
+                  if (!isDisabled) {
+                    e.currentTarget.style.background = "color-mix(in srgb, var(--success) 10%, transparent)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                }}
               >
                 {loading === "run" ? "Starting..." : "Run"}
               </button>
               <button
                 onClick={() => handleSubmit("chat")}
                 disabled={isDisabled}
-                className="flex-1 py-2.5 bg-[var(--accent)] hover:brightness-110 disabled:opacity-40 text-white text-sm font-medium rounded transition-all"
+                className="flex-1 py-1.5 text-xs font-medium rounded-md border cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                style={{
+                  background: "transparent",
+                  borderColor: "var(--accent)",
+                  color: "var(--accent)",
+                }}
+                onMouseEnter={(e) => {
+                  if (!isDisabled) {
+                    e.currentTarget.style.background = "color-mix(in srgb, var(--accent) 10%, transparent)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                }}
               >
                 {loading === "chat" ? "Starting..." : "Chat"}
               </button>
@@ -212,7 +281,7 @@ function SchemaErrorDisplay({ error }: { error: SchemaError }) {
         {error.traceback && (
           <button
             onClick={copyStacktrace}
-            className="text-xs font-semibold px-2.5 py-1 rounded transition-colors"
+            className="text-xs font-semibold px-2.5 py-1 rounded transition-colors cursor-pointer"
             style={{
               background: copied ? "var(--success)" : "var(--bg-primary)",
               color: copied ? "white" : "var(--text-primary)",

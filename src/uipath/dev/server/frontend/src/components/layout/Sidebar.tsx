@@ -9,14 +9,6 @@ interface Props {
   onNewRun: () => void;
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  pending: "text-[var(--text-muted)]",
-  running: "text-[var(--warning)]",
-  suspended: "text-[var(--info)]",
-  completed: "text-[var(--success)]",
-  failed: "text-[var(--error)]",
-};
-
 export default function Sidebar({ runs, selectedRunId, onSelectRun, onNewRun }: Props) {
   const { theme, toggleTheme } = useTheme();
 
@@ -27,48 +19,79 @@ export default function Sidebar({ runs, selectedRunId, onSelectRun, onNewRun }: 
   );
 
   return (
-    <aside className="w-48 bg-[var(--sidebar-bg)] border-r border-[var(--border)] flex flex-col">
-      <div className="p-3 border-b border-[var(--border)] flex items-center justify-between">
-        <h1 className="text-sm font-semibold text-[var(--text-primary)]">UiPath Dev Console</h1>
+    <aside className="w-44 bg-[var(--sidebar-bg)] border-r border-[var(--border)] flex flex-col">
+      {/* Header */}
+      <div className="px-3 py-2.5 border-b border-[var(--border)] flex items-center justify-between">
+        <button
+          onClick={onNewRun}
+          className="flex items-center gap-1.5 cursor-pointer transition-opacity hover:opacity-80"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+            <rect width="24" height="24" rx="4" fill="var(--accent)" />
+            <text x="12" y="17" textAnchor="middle" fill="white" fontSize="14" fontWeight="700" fontFamily="Arial, sans-serif">U</text>
+          </svg>
+          <span
+            className="text-[10px] uppercase tracking-widest font-semibold"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Dev Console
+          </span>
+        </button>
         <button
           onClick={toggleTheme}
-          className="w-7 h-4 rounded-full relative transition-colors"
-          style={{
-            background: theme === "dark"
-              ? "var(--text-muted)"
-              : "var(--accent)",
-          }}
+          className="w-5 h-5 flex items-center justify-center rounded cursor-pointer transition-colors"
+          style={{ color: "var(--text-muted)" }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
           title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
         >
-          <span
-            className="absolute top-0.5 w-3 h-3 rounded-full transition-all"
-            style={{
-              background: "var(--bg-primary)",
-              left: theme === "dark" ? "2px" : "14px",
-            }}
-          />
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            {theme === "dark" ? (
+              <><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></>
+            ) : (
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            )}
+          </svg>
         </button>
       </div>
 
+      {/* New Run */}
       <button
         onClick={onNewRun}
-        className="mx-3 mt-3 px-3 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-sm rounded transition-colors"
+        className="mx-3 mt-2.5 mb-1 px-2 py-1 text-[10px] uppercase tracking-wider font-semibold rounded border border-[var(--border)] bg-transparent transition-colors cursor-pointer"
+        style={{ color: "var(--text-muted)" }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.color = "var(--text-primary)";
+          e.currentTarget.style.borderColor = "var(--text-muted)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = "var(--text-muted)";
+          e.currentTarget.style.borderColor = "var(--border)";
+        }}
       >
         + New Run
       </button>
 
-      <div className="flex-1 overflow-y-auto mt-3">
+      {/* Runs label */}
+      <div
+        className="px-3 pt-3 pb-1 text-[9px] uppercase tracking-widest font-semibold"
+        style={{ color: "var(--text-muted)" }}
+      >
+        History
+      </div>
+
+      {/* Run list */}
+      <div className="flex-1 overflow-y-auto">
         {sorted.map((run) => (
           <RunHistoryItem
             key={run.id}
             run={run}
             isSelected={run.id === selectedRunId}
-            statusColor={STATUS_COLORS[run.status] ?? "text-[var(--text-muted)]"}
             onClick={() => onSelectRun(run.id)}
           />
         ))}
         {sorted.length === 0 && (
-          <p className="text-sm text-[var(--text-muted)] px-3 py-4 text-center">
+          <p className="text-[10px] px-3 py-4 text-center" style={{ color: "var(--text-muted)" }}>
             No runs yet
           </p>
         )}

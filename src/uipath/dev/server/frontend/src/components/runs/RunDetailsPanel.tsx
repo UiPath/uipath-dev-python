@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, useEffect } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { RunSummary } from "../../types/run";
 import type { WsClient } from "../../api/websocket";
 import { useRunStore } from "../../store/useRunStore";
@@ -12,6 +12,8 @@ type Tab = "traces" | "output";
 interface Props {
   run: RunSummary;
   ws: WsClient;
+  activeTab: Tab;
+  onTabChange: (tab: Tab) => void;
 }
 
 // Stable empty arrays to avoid infinite re-renders
@@ -19,9 +21,8 @@ const EMPTY_TRACES: never[] = [];
 const EMPTY_LOGS: never[] = [];
 const EMPTY_CHAT: never[] = [];
 
-export default function RunDetailsPanel({ run, ws }: Props) {
+export default function RunDetailsPanel({ run, ws, activeTab, onTabChange }: Props) {
   const isChatMode = run.mode === "chat";
-  const [activeTab, setActiveTab] = useState<Tab>("traces");
   const [graphHeight, setGraphHeight] = useState(280);
   const [chatWidth, setChatWidth] = useState(() => {
     const saved = localStorage.getItem("chatPanelWidth");
@@ -38,11 +39,6 @@ export default function RunDetailsPanel({ run, ws }: Props) {
   const traces = useRunStore((s) => s.traces[run.id] || EMPTY_TRACES);
   const logs = useRunStore((s) => s.logs[run.id] || EMPTY_LOGS);
   const chatMessages = useRunStore((s) => s.chatMessages[run.id] || EMPTY_CHAT);
-
-  // Reset to Live tab when switching runs
-  useEffect(() => {
-    setActiveTab("traces");
-  }, [run.id]);
 
   const onResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -139,20 +135,30 @@ export default function RunDetailsPanel({ run, ws }: Props) {
   return (
     <div className="flex flex-col h-full">
       {/* Tab bar */}
-      <div className="flex border-b border-[var(--border)] bg-[var(--bg-primary)]">
+      <div className="flex items-center gap-1 px-2 py-1.5 border-b border-[var(--border)] bg-[var(--bg-primary)]">
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2 text-sm transition-colors ${
-              activeTab === tab.id
-                ? "border-b-2 border-[var(--tab-active)] text-[var(--tab-text-active)]"
-                : "text-[var(--tab-text)] hover:text-[var(--text-primary)]"
-            }`}
+            onClick={() => onTabChange(tab.id)}
+            className="px-2.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded transition-colors cursor-pointer"
+            style={{
+              color: activeTab === tab.id ? "var(--accent)" : "var(--text-muted)",
+              background: activeTab === tab.id
+                ? "color-mix(in srgb, var(--accent) 10%, transparent)"
+                : "transparent",
+            }}
+            onMouseEnter={(e) => {
+              if (activeTab !== tab.id) e.currentTarget.style.color = "var(--text-primary)";
+            }}
+            onMouseLeave={(e) => {
+              if (activeTab !== tab.id) e.currentTarget.style.color = "var(--text-muted)";
+            }}
           >
             {tab.label}
             {tab.count !== undefined && tab.count > 0 && (
-              <span className="ml-1 text-xs text-[var(--text-muted)]">({tab.count})</span>
+              <span className="ml-1 font-normal" style={{ color: "var(--text-muted)" }}>
+                {tab.count}
+              </span>
             )}
           </button>
         ))}
@@ -166,18 +172,14 @@ export default function RunDetailsPanel({ run, ws }: Props) {
             <div ref={containerRef} className="flex flex-col flex-1 min-w-0">
               {/* Graph panel — resizable */}
               <div className="shrink-0" style={{ height: graphHeight }}>
-                <GraphPanel entrypoint={run.entrypoint} traces={traces} />
+                <GraphPanel entrypoint={run.entrypoint} traces={traces} runId={run.id} />
               </div>
               {/* Drag handle */}
               <div
                 onMouseDown={onResizeStart}
-                className="shrink-0 h-1.5 cursor-row-resize flex items-center justify-center"
-                style={{ background: "var(--border)" }}
+                className="shrink-0 h-1.5 cursor-row-resize bg-[var(--border)] hover:bg-[var(--accent)] transition-colors relative"
               >
-                <div
-                  className="w-8 h-0.5 rounded-full"
-                  style={{ background: "var(--text-muted)" }}
-                />
+                <div className="absolute inset-0 -top-1 -bottom-1" />
               </div>
               {/* Trace tree */}
               <div className="flex-1 overflow-hidden">
@@ -189,8 +191,7 @@ export default function RunDetailsPanel({ run, ws }: Props) {
               <>
                 <div
                   onMouseDown={onChatResizeStart}
-                  className="shrink-0 w-1.5 cursor-col-resize flex items-center justify-center hover:bg-[var(--accent)] transition-colors relative"
-                  style={{ background: "var(--border)" }}
+                  className="shrink-0 w-1.5 cursor-col-resize bg-[var(--border)] hover:bg-[var(--accent)] transition-colors relative"
                 >
                   <div className="absolute inset-0 -left-1 -right-1" />
                 </div>
@@ -252,8 +253,7 @@ export default function RunDetailsPanel({ run, ws }: Props) {
               {/* Drag handle */}
               <div
                 onMouseDown={onOutputSplitStart}
-                className="shrink-0 w-1.5 cursor-col-resize flex items-center justify-center hover:bg-[var(--accent)] transition-colors relative"
-                style={{ background: "var(--border)" }}
+                className="shrink-0 w-1.5 cursor-col-resize bg-[var(--border)] hover:bg-[var(--accent)] transition-colors relative"
               >
                 <div className="absolute inset-0 -left-1 -right-1" />
               </div>

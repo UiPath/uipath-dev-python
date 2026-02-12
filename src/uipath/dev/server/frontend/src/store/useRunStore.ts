@@ -27,6 +27,7 @@ interface RunStore {
   setLogs: (runId: string, logs: LogEntry[]) => void;
 
   addChatEvent: (runId: string, payload: Record<string, unknown>) => void;
+  addLocalChatMessage: (runId: string, msg: ChatMsg) => void;
   setChatMessages: (runId: string, messages: ChatMsg[]) => void;
 
   setEntrypoints: (eps: string[]) => void;
@@ -107,7 +108,6 @@ export const useRunStore = create<RunStore>((set) => ({
         has_result: !!tc.result,
       }));
 
-      const idx = existing.findIndex((m) => m.message_id === messageId);
       const chatMsg: ChatMsg = {
         message_id: messageId,
         role,
@@ -115,12 +115,31 @@ export const useRunStore = create<RunStore>((set) => ({
         tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
       };
 
-      const updated =
-        idx >= 0
-          ? existing.map((m, i) => (i === idx ? chatMsg : m))
-          : [...existing, chatMsg];
+      // Check for existing message by server ID first
+      const idx = existing.findIndex((m) => m.message_id === messageId);
+      if (idx >= 0) {
+        return { chatMessages: { ...state.chatMessages, [runId]: existing.map((m, i) => (i === idx ? chatMsg : m)) } };
+      }
+
+      // For user messages, replace the optimistic local-* entry if one matches
+      if (role === "user") {
+        const localIdx = existing.findIndex(
+          (m) => m.message_id.startsWith("local-") && m.role === "user" && m.content === content,
+        );
+        if (localIdx >= 0) {
+          return { chatMessages: { ...state.chatMessages, [runId]: existing.map((m, i) => (i === localIdx ? chatMsg : m)) } };
+        }
+      }
+
+      const updated = [...existing, chatMsg];
 
       return { chatMessages: { ...state.chatMessages, [runId]: updated } };
+    }),
+
+  addLocalChatMessage: (runId, msg) =>
+    set((state) => {
+      const existing = state.chatMessages[runId] ?? [];
+      return { chatMessages: { ...state.chatMessages, [runId]: [...existing, msg] } };
     }),
 
   setChatMessages: (runId, messages) =>
