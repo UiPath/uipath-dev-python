@@ -31,7 +31,7 @@ export default function DebugControls({ runId, status, ws, breakpointNode }: Pro
       <DebugBtn label="Step" onClick={() => syncBreakpointsThenSend("step")} disabled={!isSuspended} color="var(--info)" active={isSuspended} />
       <DebugBtn label="Continue" onClick={() => syncBreakpointsThenSend("continue")} disabled={!isSuspended} color="var(--success)" active={isSuspended} />
       <DebugBtn label="Stop" onClick={() => syncBreakpointsThenSend("stop")} disabled={!isSuspended} color="var(--error)" active={isSuspended} />
-      <span className="text-[10px] ml-auto truncate" style={{ color: isSuspended ? "var(--warning)" : "var(--text-muted)" }}>
+      <span className="text-[10px] ml-auto truncate" style={{ color: isSuspended ? "var(--accent)" : "var(--text-muted)" }}>
         {isSuspended
           ? breakpointNode
             ? `Paused at ${breakpointNode}`

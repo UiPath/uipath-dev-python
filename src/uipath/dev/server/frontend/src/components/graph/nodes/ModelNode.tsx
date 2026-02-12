@@ -19,7 +19,7 @@ export default function ModelNode({ data }: NodeProps) {
   const isPausedHere = data.isPausedHere as boolean | undefined;
 
   const borderColor = isPausedHere
-    ? "var(--warning)"
+    ? "var(--accent)"
     : status === "completed"
       ? "var(--success)"
       : status === "running"
@@ -36,7 +36,7 @@ export default function ModelNode({ data }: NodeProps) {
         background: "var(--node-bg)",
         color: "var(--text-primary)",
         border: `2px solid ${borderColor}`,
-        boxShadow: isPausedHere ? "0 0 8px var(--warning), 0 0 2px var(--warning)" : undefined,
+        boxShadow: isPausedHere ? "0 0 4px var(--accent)" : undefined,
       }}
       title={label}
     >
