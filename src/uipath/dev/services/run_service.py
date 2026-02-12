@@ -45,9 +45,17 @@ class DebugBridgeProtocol(UiPathDebugProtocol, Protocol):
     on_execution_completed: Callable[[UiPathRuntimeResult], None] | None
     on_execution_error: Callable[[str], None] | None
 
-    def resume(self, resume_data: Any) -> None: ...
-    def quit(self) -> None: ...
-    def set_breakpoints(self, breakpoints: list[str] | Literal["*"]) -> None: ...
+    def resume(self, resume_data: Any) -> None:
+        """Signal that execution should resume."""
+        ...
+
+    def quit(self) -> None:
+        """Signal that execution should quit."""
+        ...
+
+    def set_breakpoints(self, breakpoints: list[str] | Literal["*"]) -> None:
+        """Set breakpoints."""
+        ...
 
 
 DebugBridgeFactory = Callable[[ExecutionMode], DebugBridgeProtocol]

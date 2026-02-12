@@ -10,7 +10,6 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from uipath.dev.models.chat import get_user_message, get_user_message_event
 from uipath.dev.models.data import ChatData
-from uipath.dev.models.execution import ExecutionMode
 from uipath.dev.server.ws.protocol import ClientCommand, parse_client_message
 
 router = APIRouter()

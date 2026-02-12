@@ -22,6 +22,7 @@ class WebDebugBridge:
     """
 
     def __init__(self, mode: ExecutionMode = ExecutionMode.RUN):
+        """Initialize the web debug bridge."""
         self._mode = mode
         self._auto_resume = mode == ExecutionMode.RUN
         self._resume_event = asyncio.Event()
@@ -43,19 +44,23 @@ class WebDebugBridge:
     # ------------------------------------------------------------------
 
     async def connect(self) -> None:
+        """Establish connection to debugger."""
         logger.debug("WebDebugBridge connected (mode=%s)", self._mode)
 
     async def disconnect(self) -> None:
+        """Close connection to debugger."""
         self._resume_event.set()
         self._terminate_event.set()
         logger.debug("WebDebugBridge disconnected")
 
     async def emit_execution_started(self, **kwargs: Any) -> None:
+        """Notify debugger that execution started."""
         logger.debug("Execution started")
         if self.on_execution_started:
             self.on_execution_started()
 
     async def emit_state_update(self, state_event: UiPathRuntimeStateEvent) -> None:
+        """Notify debugger of runtime state update."""
         logger.debug("State update: %s", state_event.node_name)
         if self.on_state_update:
             self.on_state_update(state_event)
@@ -63,6 +68,7 @@ class WebDebugBridge:
     async def emit_breakpoint_hit(
         self, breakpoint_result: UiPathBreakpointResult
     ) -> None:
+        """Notify debugger that a breakpoint was hit."""
         logger.debug("Breakpoint hit: %s", breakpoint_result)
         if self.on_breakpoint_hit:
             self.on_breakpoint_hit(breakpoint_result)
@@ -70,6 +76,7 @@ class WebDebugBridge:
     async def emit_execution_suspended(
         self, runtime_result: UiPathRuntimeResult
     ) -> None:
+        """Notify debugger that execution is suspended."""
         logger.debug("Execution suspended")
         if runtime_result.trigger is None:
             return
@@ -86,21 +93,25 @@ class WebDebugBridge:
                 )
 
     async def emit_execution_resumed(self, resume_data: Any) -> None:
+        """Notify debugger that execution resumed."""
         logger.debug("Execution resumed")
 
     async def emit_execution_completed(
         self, runtime_result: UiPathRuntimeResult
     ) -> None:
+        """Notify debugger that execution completed."""
         logger.debug("Execution completed")
         if self.on_execution_completed:
             self.on_execution_completed(runtime_result)
 
     async def emit_execution_error(self, error: str) -> None:
+        """Notify debugger that an error occurred."""
         logger.error("Execution error: %s", error)
         if self.on_execution_error:
             self.on_execution_error(error)
 
     async def wait_for_resume(self) -> Any:
+        """Wait for resume command from debugger."""
         if self._auto_resume:
             self._auto_resume = False  # Only auto-resume the first (initial) pause
             return {}
@@ -114,9 +125,11 @@ class WebDebugBridge:
         return self._resume_data
 
     async def wait_for_terminate(self) -> None:
+        """Wait for terminate command from debugger."""
         await self._terminate_event.wait()
 
     def get_breakpoints(self) -> list[str] | Literal["*"]:
+        """Get nodes to suspend execution at."""
         return self._breakpoints
 
     # ------------------------------------------------------------------
@@ -124,12 +137,15 @@ class WebDebugBridge:
     # ------------------------------------------------------------------
 
     def resume(self, resume_data: Any) -> None:
+        """Signal that execution should resume."""
         self._resume_data = resume_data or {}
         self._resume_event.set()
 
     def quit(self) -> None:
+        """Signal that execution should quit."""
         self._terminate_event.set()
         self._resume_event.set()
 
     def set_breakpoints(self, breakpoints: list[str] | Literal["*"]) -> None:
+        """Set breakpoints."""
         self._breakpoints = breakpoints
