@@ -1,3 +1,5 @@
+import Markdown from "react-markdown";
+
 interface ChatMsg {
   message_id: string;
   role: string;
@@ -45,9 +47,15 @@ export default function ChatMessage({ message }: Props) {
       </div>
 
       {message.content && (
-        <div className="text-sm whitespace-pre-wrap" style={{ color: "var(--text-primary)" }}>
-          {message.content}
-        </div>
+        isUser ? (
+          <div className="text-sm whitespace-pre-wrap" style={{ color: "var(--text-primary)" }}>
+            {message.content}
+          </div>
+        ) : (
+          <div className="text-sm chat-markdown" style={{ color: "var(--text-primary)" }}>
+            <Markdown>{message.content}</Markdown>
+          </div>
+        )
       )}
 
       {message.tool_calls?.map((tc) => (

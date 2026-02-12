@@ -19,15 +19,25 @@ interface Props {
 
 export default function ChatPanel({ messages, runId, runStatus, ws }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const stickToBottom = useRef(true);
 
+  // Track whether user has scrolled away from bottom
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    stickToBottom.current = atBottom;
+  };
+
+  // Auto-scroll on any message content change (streaming tokens)
   useEffect(() => {
-    scrollRef.current?.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior: "smooth",
-    });
-  }, [messages.length]);
+    if (stickToBottom.current && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  });
 
   const handleSend = (text: string) => {
+    stickToBottom.current = true;
     ws.sendChatMessage(runId, text);
   };
 
@@ -35,7 +45,11 @@ export default function ChatPanel({ messages, runId, runStatus, ws }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto p-4 space-y-3"
+      >
         {messages.length === 0 && (
           <p className="text-[var(--text-muted)] text-sm text-center py-8">
             No messages yet. Type below to start chatting.

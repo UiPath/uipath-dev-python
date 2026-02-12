@@ -27,7 +27,7 @@ export default function Sidebar({ runs, selectedRunId, onSelectRun, onNewRun }: 
   );
 
   return (
-    <aside className="w-64 bg-[var(--sidebar-bg)] border-r border-[var(--border)] flex flex-col">
+    <aside className="w-48 bg-[var(--sidebar-bg)] border-r border-[var(--border)] flex flex-col">
       <div className="p-3 border-b border-[var(--border)] flex items-center justify-between">
         <h1 className="text-sm font-semibold text-[var(--text-primary)]">UiPath Dev Console</h1>
         <button

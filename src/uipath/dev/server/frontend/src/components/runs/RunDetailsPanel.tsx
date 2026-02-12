@@ -1,10 +1,11 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, useEffect } from "react";
 import type { RunSummary } from "../../types/run";
 import type { WsClient } from "../../api/websocket";
 import { useRunStore } from "../../store/useRunStore";
 import GraphPanel from "../graph/GraphPanel";
 import TraceTree from "../traces/TraceTree";
 import LogPanel from "../logs/LogPanel";
+import ChatPanel from "../chat/ChatPanel";
 
 type Tab = "details" | "traces" | "logs";
 
@@ -16,14 +17,29 @@ interface Props {
 // Stable empty arrays to avoid infinite re-renders
 const EMPTY_TRACES: never[] = [];
 const EMPTY_LOGS: never[] = [];
+const EMPTY_CHAT: never[] = [];
 
-export default function RunDetailsPanel({ run }: Props) {
-  const [activeTab, setActiveTab] = useState<Tab>("details");
+export default function RunDetailsPanel({ run, ws }: Props) {
+  const isChatMode = run.mode === "chat";
+  const [activeTab, setActiveTab] = useState<Tab>(isChatMode ? "traces" : "details");
   const [graphHeight, setGraphHeight] = useState(280);
+  const [chatWidth, setChatWidth] = useState(() => {
+    const saved = localStorage.getItem("chatPanelWidth");
+    return saved ? parseInt(saved, 10) : 380;
+  });
   const containerRef = useRef<HTMLDivElement>(null);
+  const tracesContainerRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
   const traces = useRunStore((s) => s.traces[run.id] || EMPTY_TRACES);
   const logs = useRunStore((s) => s.logs[run.id] || EMPTY_LOGS);
+  const chatMessages = useRunStore((s) => s.chatMessages[run.id] || EMPTY_CHAT);
+
+  // Auto-switch to traces tab when entering chat mode
+  useEffect(() => {
+    if (isChatMode) {
+      setActiveTab("traces");
+    }
+  }, [isChatMode, run.id]);
 
   const onResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -54,6 +70,34 @@ export default function RunDetailsPanel({ run }: Props) {
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
   }, [graphHeight]);
+
+  const onChatResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+
+    const startX = e.clientX;
+    const startW = chatWidth;
+
+    const onMove = (ev: MouseEvent) => {
+      const container = tracesContainerRef.current;
+      if (!container) return;
+      const maxW = container.clientWidth - 300; // leave room for traces
+      const newW = Math.max(280, Math.min(maxW, startW + (startX - ev.clientX)));
+      setChatWidth(newW);
+    };
+
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      localStorage.setItem("chatPanelWidth", String(chatWidth));
+    };
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, [chatWidth]);
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: "details", label: "Details" },
@@ -87,26 +131,79 @@ export default function RunDetailsPanel({ run }: Props) {
       <div className="flex-1 overflow-hidden">
         {activeTab === "details" && <DetailsView run={run} />}
         {activeTab === "traces" && (
-          <div ref={containerRef} className="flex flex-col h-full">
-            {/* Graph panel — resizable */}
-            <div className="shrink-0" style={{ height: graphHeight }}>
-              <GraphPanel entrypoint={run.entrypoint} traces={traces} />
-            </div>
-            {/* Drag handle */}
-            <div
-              onMouseDown={onResizeStart}
-              className="shrink-0 h-1.5 cursor-row-resize flex items-center justify-center"
-              style={{ background: "var(--border)" }}
-            >
+          <div ref={tracesContainerRef} className="flex h-full">
+            {/* Main traces content */}
+            <div ref={containerRef} className="flex flex-col flex-1 min-w-0">
+              {/* Graph panel — resizable */}
+              <div className="shrink-0" style={{ height: graphHeight }}>
+                <GraphPanel entrypoint={run.entrypoint} traces={traces} />
+              </div>
+              {/* Drag handle */}
               <div
-                className="w-8 h-0.5 rounded-full"
-                style={{ background: "var(--text-muted)" }}
-              />
+                onMouseDown={onResizeStart}
+                className="shrink-0 h-1.5 cursor-row-resize flex items-center justify-center"
+                style={{ background: "var(--border)" }}
+              >
+                <div
+                  className="w-8 h-0.5 rounded-full"
+                  style={{ background: "var(--text-muted)" }}
+                />
+              </div>
+              {/* Trace tree */}
+              <div className="flex-1 overflow-hidden">
+                <TraceTree traces={traces} />
+              </div>
             </div>
-            {/* Trace tree */}
-            <div className="flex-1 overflow-hidden">
-              <TraceTree traces={traces} />
-            </div>
+            {/* Chat sidebar with drag handle */}
+            {isChatMode && (
+              <>
+                <div
+                  onMouseDown={onChatResizeStart}
+                  className="shrink-0 w-1.5 cursor-col-resize flex items-center justify-center hover:bg-[var(--accent)] transition-colors relative"
+                  style={{ background: "var(--border)" }}
+                >
+                  <div className="absolute inset-0 -left-1 -right-1" />
+                </div>
+                <div
+                  className="shrink-0 flex flex-col"
+                  style={{
+                    width: chatWidth,
+                    background: "var(--bg-primary)",
+                  }}
+                >
+                  <div
+                    className="px-4 py-2 text-xs font-semibold uppercase border-b flex items-center gap-2"
+                    style={{
+                      color: "var(--text-muted)",
+                      borderColor: "var(--border)",
+                      background: "var(--bg-secondary)",
+                    }}
+                  >
+                    <span style={{ color: "var(--accent)" }}>&#9679;</span>
+                    Chat
+                    {run.status === "running" && (
+                      <span
+                        className="ml-auto text-[10px] px-2 py-0.5 rounded-full"
+                        style={{
+                          background: "color-mix(in srgb, var(--warning) 15%, var(--bg-secondary))",
+                          color: "var(--warning)",
+                        }}
+                      >
+                        Thinking...
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex-1 overflow-hidden">
+                    <ChatPanel
+                      messages={chatMessages}
+                      runId={run.id}
+                      runStatus={run.status}
+                      ws={ws}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
         {activeTab === "logs" && <LogPanel logs={logs} />}

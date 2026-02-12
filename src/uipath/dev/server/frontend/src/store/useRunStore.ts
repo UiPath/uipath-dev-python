@@ -81,15 +81,17 @@ export const useRunStore = create<RunStore>((set) => ({
       const msg = payload.message as Record<string, unknown> | undefined;
       if (!msg) return state;
 
-      const messageId = msg.message_id as string;
+      // Server serializes with by_alias=True → camelCase
+      const messageId = (msg.messageId ?? msg.message_id) as string;
       const role = (msg.role as string) ?? "assistant";
 
-      // Extract text content
-      const parts = (msg.content_parts as Array<Record<string, unknown>>) ?? [];
+      // Extract text content (camelCase: contentParts, mimeType)
+      const parts =
+        ((msg.contentParts ?? msg.content_parts) as Array<Record<string, unknown>>) ?? [];
       const textParts = parts
         .filter((p) => {
-          const mime = p.mime_type as string;
-          return mime?.startsWith("text/") || mime === "application/json";
+          const mime = ((p.mimeType ?? p.mime_type) as string) ?? "";
+          return mime.startsWith("text/") || mime === "application/json";
         })
         .map((p) => {
           const data = p.data as Record<string, unknown>;
@@ -97,9 +99,9 @@ export const useRunStore = create<RunStore>((set) => ({
         });
       const content = textParts.join("\n").trim();
 
-      // Extract tool calls
+      // Extract tool calls (camelCase: toolCalls)
       const toolCalls = (
-        (msg.tool_calls as Array<Record<string, unknown>>) ?? []
+        ((msg.toolCalls ?? msg.tool_calls) as Array<Record<string, unknown>>) ?? []
       ).map((tc) => ({
         name: (tc.name as string) ?? "",
         has_result: !!tc.result,
