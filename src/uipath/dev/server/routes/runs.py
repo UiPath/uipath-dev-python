@@ -44,8 +44,9 @@ async def create_run(request: Request, body: CreateRunRequest) -> dict[str, Any]
 
     server.run_service.register_run(run)
 
-    # Execute in background
-    asyncio.create_task(server.run_service.execute(run))
+    # Chat mode waits for user's first message before executing
+    if mode != ExecutionMode.CHAT:
+        asyncio.create_task(server.run_service.execute(run))
 
     return serialize_run(run)
 

@@ -1180,7 +1180,7 @@ wheels = [
 
 [[package]]
 name = "uipath-dev"
-version = "0.0.25"
+version = "0.0.26"
 source = { editable = "." }
 dependencies = [
     { name = "pyperclip" },

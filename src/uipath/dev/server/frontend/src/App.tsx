@@ -37,25 +37,33 @@ export default function App() {
     getRun(selectedRunId).then((detail) => {
       setTraces(selectedRunId, detail.traces);
       setLogs(selectedRunId, detail.logs);
-      // Convert messages to chat format
-      const chatMsgs = detail.messages.map((m) => ({
-        message_id: m.message_id,
-        role: m.role,
-        content:
-          m.content_parts
-            ?.filter(
-              (p) =>
-                p.mime_type.startsWith("text/") ||
-                p.mime_type === "application/json",
-            )
-            .map((p) => p.data?.inline ?? "")
-            .join("\n")
-            .trim() ?? "",
-        tool_calls: m.tool_calls?.map((tc) => ({
-          name: tc.name,
-          has_result: !!tc.result,
-        })),
-      }));
+      // Convert messages to chat format (server uses camelCase aliases)
+      const chatMsgs = (detail.messages as unknown as Record<string, unknown>[]).map((m: Record<string, unknown>) => {
+        const parts = ((m.contentParts ?? m.content_parts) as Array<Record<string, unknown>>) ?? [];
+        const toolCalls = ((m.toolCalls ?? m.tool_calls) as Array<Record<string, unknown>>) ?? [];
+        return {
+          message_id: ((m.messageId ?? m.message_id) as string),
+          role: (m.role as string) ?? "assistant",
+          content:
+            parts
+              .filter((p) => {
+                const mime = ((p.mimeType ?? p.mime_type) as string) ?? "";
+                return mime.startsWith("text/") || mime === "application/json";
+              })
+              .map((p) => {
+                const data = p.data as Record<string, unknown>;
+                return (data?.inline as string) ?? "";
+              })
+              .join("\n")
+              .trim() ?? "",
+          tool_calls: toolCalls.length > 0
+            ? toolCalls.map((tc) => ({
+                name: (tc.name as string) ?? "",
+                has_result: !!tc.result,
+              }))
+            : undefined,
+        };
+      });
       setChatMessages(selectedRunId, chatMsgs);
     }).catch(console.error);
 

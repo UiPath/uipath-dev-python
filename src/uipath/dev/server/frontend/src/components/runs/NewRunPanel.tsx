@@ -150,6 +150,13 @@ export default function NewRunPanel({ onRunCreated }: Props) {
               >
                 {loading === "run" ? "Starting..." : "Run"}
               </button>
+              <button
+                onClick={() => handleSubmit("chat")}
+                disabled={isDisabled}
+                className="flex-1 py-2.5 bg-[var(--accent)] hover:brightness-110 disabled:opacity-40 text-white text-sm font-medium rounded transition-all"
+              >
+                {loading === "chat" ? "Starting..." : "Chat"}
+              </button>
             </div>
           </>
         )}

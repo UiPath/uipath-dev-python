@@ -440,9 +440,12 @@ export default function GraphPanel({ entrypoint, traces }: Props) {
         edgeTypes={edgeTypes}
         fitView
         proOptions={{ hideAttribution: true }}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        elementsSelectable={false}
       >
         <Background color="var(--bg-tertiary)" gap={16} />
-        <Controls />
+        <Controls showInteractive={false} />
         <MiniMap
           nodeColor={(n) => {
             if (n.type === "groupNode") return "var(--bg-tertiary)";
@@ -453,7 +456,7 @@ export default function GraphPanel({ entrypoint, traces }: Props) {
             return "var(--node-border)";
           }}
           nodeStrokeWidth={0}
-          style={{ background: "var(--bg-secondary)" }}
+          style={{ background: "var(--bg-secondary)", width: 120, height: 80 }}
         />
       </ReactFlow>
     </div>
