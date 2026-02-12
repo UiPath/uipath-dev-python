@@ -9,6 +9,8 @@ interface ChatMsg {
 
 interface Props {
   message: ChatMsg;
+  onToolCallClick?: (name: string, occurrenceIndex: number) => void;
+  toolCallIndices?: number[];
 }
 
 const ROLE_CONFIG: Record<string, { label: string; color: string }> = {
@@ -17,7 +19,7 @@ const ROLE_CONFIG: Record<string, { label: string; color: string }> = {
   assistant: { label: "AI", color: "var(--success)" },
 };
 
-export default function ChatMessage({ message }: Props) {
+export default function ChatMessage({ message, onToolCallClick, toolCallIndices }: Props) {
   const isUser = message.role === "user";
   const hasTool = message.tool_calls && message.tool_calls.length > 0;
   const roleKey = isUser ? "user" : hasTool ? "tool" : "assistant";
@@ -61,15 +63,16 @@ export default function ChatMessage({ message }: Props) {
       {/* Tool calls */}
       {message.tool_calls && message.tool_calls.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-1 pl-2.5">
-          {message.tool_calls.map((tc) => (
+          {message.tool_calls.map((tc, i) => (
             <span
-              key={tc.name}
-              className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded"
+              key={`${tc.name}-${i}`}
+              className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded cursor-pointer hover:brightness-125"
               style={{
                 background: "var(--bg-primary)",
                 border: "1px solid var(--border)",
                 color: tc.has_result ? "var(--success)" : "var(--text-muted)",
               }}
+              onClick={() => onToolCallClick?.(tc.name, toolCallIndices?.[i] ?? 0)}
             >
               {tc.has_result ? "\u2713" : "\u2022"} {tc.name}
             </span>

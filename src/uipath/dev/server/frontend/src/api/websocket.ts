@@ -8,6 +8,8 @@ export class WsClient {
   private handlers: Set<MessageHandler> = new Set();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private shouldReconnect = true;
+  private pendingMessages: string[] = [];
+  private activeSubscriptions: Set<string> = new Set();
 
   constructor(url?: string) {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -21,6 +23,15 @@ export class WsClient {
 
     this.ws.onopen = () => {
       console.log("[ws] connected");
+      // Re-subscribe to active subscriptions after reconnect
+      for (const runId of this.activeSubscriptions) {
+        this.sendRaw(JSON.stringify({ type: "subscribe", payload: { run_id: runId } }));
+      }
+      // Flush any messages queued while connecting
+      for (const msg of this.pendingMessages) {
+        this.sendRaw(msg);
+      }
+      this.pendingMessages = [];
     };
 
     this.ws.onmessage = (event) => {
@@ -56,17 +67,28 @@ export class WsClient {
     return () => this.handlers.delete(handler);
   }
 
-  send(type: ClientCommandType, payload: Record<string, unknown>): void {
+  private sendRaw(data: string): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ type, payload }));
+      this.ws.send(data);
+    }
+  }
+
+  send(type: ClientCommandType, payload: Record<string, unknown>): void {
+    const data = JSON.stringify({ type, payload });
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(data);
+    } else {
+      this.pendingMessages.push(data);
     }
   }
 
   subscribe(runId: string): void {
+    this.activeSubscriptions.add(runId);
     this.send("subscribe", { run_id: runId });
   }
 
   unsubscribe(runId: string): void {
+    this.activeSubscriptions.delete(runId);
     this.send("unsubscribe", { run_id: runId });
   }
 

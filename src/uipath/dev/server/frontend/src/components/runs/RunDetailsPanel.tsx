@@ -6,6 +6,7 @@ import GraphPanel from "../graph/GraphPanel";
 import TraceTree from "../traces/TraceTree";
 import LogPanel from "../logs/LogPanel";
 import ChatPanel from "../chat/ChatPanel";
+import JsonHighlight from "../shared/JsonHighlight";
 
 type Tab = "traces" | "output";
 
@@ -135,7 +136,7 @@ export default function RunDetailsPanel({ run, ws, activeTab, onTabChange }: Pro
   return (
     <div className="flex flex-col h-full">
       {/* Tab bar */}
-      <div className="flex items-center gap-1 px-2 py-1.5 border-b border-[var(--border)] bg-[var(--bg-primary)]">
+      <div className="flex items-center gap-1 px-2 py-2.5 border-b border-[var(--border)] bg-[var(--bg-primary)]">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -329,12 +330,11 @@ function IOView({ run }: { run: RunSummary }) {
     <div className="p-4 overflow-y-auto h-full space-y-4">
       {/* Input */}
       <DataSection title="Input" color="var(--success)" copyText={JSON.stringify(run.input_data, null, 2)}>
-        <pre
+        <JsonHighlight
+          json={JSON.stringify(run.input_data, null, 2)}
           className="p-3 rounded-lg text-xs font-mono whitespace-pre-wrap break-words"
-          style={{ background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)" }}
-        >
-          {JSON.stringify(run.input_data, null, 2)}
-        </pre>
+          style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)" }}
+        />
       </DataSection>
 
       {/* Output */}
@@ -344,14 +344,13 @@ function IOView({ run }: { run: RunSummary }) {
           color="var(--accent)"
           copyText={typeof run.output_data === "string" ? run.output_data : JSON.stringify(run.output_data, null, 2)}
         >
-          <pre
-            className="p-3 rounded-lg text-xs font-mono whitespace-pre-wrap break-words"
-            style={{ background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)" }}
-          >
-            {typeof run.output_data === "string"
+          <JsonHighlight
+            json={typeof run.output_data === "string"
               ? run.output_data
               : JSON.stringify(run.output_data, null, 2)}
-          </pre>
+            className="p-3 rounded-lg text-xs font-mono whitespace-pre-wrap break-words"
+            style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)" }}
+          />
         </DataSection>
       )}
 

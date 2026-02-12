@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { TraceSpan } from "../../types/run";
+import { useRunStore } from "../../store/useRunStore";
 import SpanDetails from "./SpanDetails";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -9,6 +10,76 @@ const STATUS_COLORS: Record<string, string> = {
   failed: "var(--error)",
   error: "var(--error)",
 };
+
+/* Icons for openinference.span.kind */
+function SpanKindIcon({ kind, statusColor }: { kind: string | undefined; statusColor: string }) {
+  const color = statusColor;
+  const size = 14;
+  const props = { width: size, height: size, viewBox: "0 0 16 16", fill: "none", stroke: color, strokeWidth: 1.5, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+
+  switch (kind) {
+    case "LLM":
+      // Brain / sparkle icon
+      return (
+        <svg {...props}>
+          <path d="M8 2L9 5L12 4L10 7L14 8L10 9L12 12L9 11L8 14L7 11L4 12L6 9L2 8L6 7L4 4L7 5Z" fill={color} stroke="none" />
+        </svg>
+      );
+    case "TOOL":
+      // Wrench icon
+      return (
+        <svg {...props}>
+          <path d="M10.5 2.5a3.5 3.5 0 0 0-3.17 4.93L3.5 11.27a1 1 0 0 0 0 1.41l.82.82a1 1 0 0 0 1.41 0l3.84-3.83A3.5 3.5 0 1 0 10.5 2.5z" />
+        </svg>
+      );
+    case "AGENT":
+      // Bot / agent icon
+      return (
+        <svg {...props}>
+          <rect x="3" y="5" width="10" height="8" rx="2" />
+          <circle cx="6" cy="9" r="1" fill={color} stroke="none" />
+          <circle cx="10" cy="9" r="1" fill={color} stroke="none" />
+          <path d="M8 2v3" />
+          <path d="M6 2h4" />
+        </svg>
+      );
+    case "CHAIN":
+      // Chain links icon
+      return (
+        <svg {...props}>
+          <path d="M6.5 9.5L9.5 6.5" />
+          <path d="M4.5 8.5l-1 1a2 2 0 0 0 2.83 2.83l1-1" />
+          <path d="M11.5 7.5l1-1a2 2 0 0 0-2.83-2.83l-1 1" />
+        </svg>
+      );
+    case "RETRIEVER":
+      // Search / magnifier icon
+      return (
+        <svg {...props}>
+          <circle cx="7" cy="7" r="4" />
+          <path d="M10 10l3.5 3.5" />
+        </svg>
+      );
+    case "EMBEDDING":
+      // Grid / matrix icon
+      return (
+        <svg {...props}>
+          <rect x="2" y="2" width="4" height="4" rx="0.5" />
+          <rect x="10" y="2" width="4" height="4" rx="0.5" />
+          <rect x="2" y="10" width="4" height="4" rx="0.5" />
+          <rect x="10" y="10" width="4" height="4" rx="0.5" />
+        </svg>
+      );
+    default:
+      // Fallback: status dot
+      return (
+        <span
+          className="shrink-0 w-2 h-2 rounded-full"
+          style={{ background: statusColor }}
+        />
+      );
+  }
+}
 
 interface Props {
   traces: TraceSpan[];
@@ -60,12 +131,27 @@ function formatDuration(ms: number | null | undefined): string {
 
 export default function TraceTree({ traces }: Props) {
   const [selectedSpan, setSelectedSpan] = useState<TraceSpan | null>(null);
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
   const [leftWidth, setLeftWidth] = useState(() => {
     const saved = localStorage.getItem("traceTreeSplitWidth");
     return saved ? parseFloat(saved) : 50;
   });
   const [isDragging, setIsDragging] = useState(false);
   const tree = buildTree(traces);
+
+  const focusedSpan = useRunStore((s) => s.focusedSpan);
+  const setFocusedSpan = useRunStore((s) => s.setFocusedSpan);
+  const [scrollToSpanId, setScrollToSpanId] = useState<string | null>(null);
+  const treeScrollRef = useRef<HTMLDivElement>(null);
+
+  const toggleExpanded = useCallback((spanId: string) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(spanId)) next.delete(spanId);
+      else next.add(spanId);
+      return next;
+    });
+  }, []);
 
   // Auto-select first span only when nothing is selected; keep selected span data fresh
   useEffect(() => {
@@ -76,6 +162,52 @@ export default function TraceTree({ traces }: Props) {
       if (updated && updated !== selectedSpan) setSelectedSpan(updated);
     }
   }, [traces]);
+
+  // React to focused span from chat tool call click
+  useEffect(() => {
+    if (!focusedSpan) return;
+
+    // Find the Nth occurrence of spans with this name, sorted by timestamp
+    const matches = traces
+      .filter((t) => t.span_name === focusedSpan.name)
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    const match = matches[focusedSpan.index];
+
+    if (match) {
+      setSelectedSpan(match);
+      setScrollToSpanId(match.span_id);
+
+      // Expand all ancestors so the span is visible
+      const parentMap = new Map(traces.map((t) => [t.span_id, t.parent_span_id]));
+      setCollapsedIds((prev) => {
+        const next = new Set(prev);
+        let current = match.parent_span_id;
+        while (current) {
+          next.delete(current);
+          current = parentMap.get(current) ?? null;
+        }
+        return next;
+      });
+    }
+
+    setFocusedSpan(null);
+  }, [focusedSpan, traces, setFocusedSpan]);
+
+  // Scroll tree container to show the focused span
+  // Use requestAnimationFrame to wait for React to paint expanded ancestors first
+  useEffect(() => {
+    if (!scrollToSpanId) return;
+    const id = scrollToSpanId;
+    setScrollToSpanId(null);
+
+    requestAnimationFrame(() => {
+      const container = treeScrollRef.current;
+      const el = container?.querySelector<HTMLElement>(`[data-span-id="${id}"]`);
+      if (container && el) {
+        el.scrollIntoView({ block: "center", behavior: "smooth" });
+      }
+    });
+  }, [scrollToSpanId]);
 
   // Attach global mouse listeners when dragging
   useEffect(() => {
@@ -113,7 +245,7 @@ export default function TraceTree({ traces }: Props) {
     <div className="flex h-full trace-tree-container" style={{ cursor: isDragging ? "col-resize" : undefined }}>
       {/* Left: tree view */}
       <div className="pr-0.5 pt-0.5" style={{ width: `${leftWidth}%` }}>
-        <div className="overflow-y-auto h-full p-0.5">
+        <div ref={treeScrollRef} className="overflow-y-auto h-full p-0.5">
           {tree.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <p className="text-[var(--text-muted)] text-sm">No traces yet</p>
@@ -127,6 +259,8 @@ export default function TraceTree({ traces }: Props) {
                 selectedId={selectedSpan?.span_id ?? null}
                 onSelect={setSelectedSpan}
                 isLast={i === tree.length - 1}
+                collapsedIds={collapsedIds}
+                toggleExpanded={toggleExpanded}
               />
             ))
           )}
@@ -164,20 +298,25 @@ function TreeNodeView({
   selectedId,
   onSelect,
   isLast,
+  collapsedIds,
+  toggleExpanded,
 }: {
   node: TreeNode;
   depth: number;
   selectedId: string | null;
   onSelect: (span: TraceSpan) => void;
   isLast: boolean;
+  collapsedIds: Set<string>;
+  toggleExpanded: (spanId: string) => void;
 }) {
-  const [expanded, setExpanded] = useState(true);
   const { span } = node;
+  const expanded = !collapsedIds.has(span.span_id);
   const statusColor = STATUS_COLORS[span.status.toLowerCase()] ?? "var(--text-muted)";
   const duration = formatDuration(span.duration_ms);
   const isSelected = span.span_id === selectedId;
   const hasChildren = node.children.length > 0;
   const indent = depth * 20;
+  const spanKind = span.attributes?.["openinference.span.kind"] as string | undefined;
 
   return (
     <div className="relative">
@@ -196,6 +335,7 @@ function TreeNodeView({
 
       {/* Row */}
       <button
+        data-span-id={span.span_id}
         onClick={() => onSelect(span)}
         className="w-full text-left text-xs py-1.5 pr-2 flex items-center gap-1.5 transition-colors relative"
         style={{
@@ -231,7 +371,7 @@ function TreeNodeView({
           <span
             onClick={(e) => {
               e.stopPropagation();
-              setExpanded(!expanded);
+              toggleExpanded(span.span_id);
             }}
             className="shrink-0 w-4 h-4 flex items-center justify-center cursor-pointer rounded hover:bg-[var(--bg-hover)]"
             style={{ color: "var(--text-muted)" }}
@@ -249,11 +389,10 @@ function TreeNodeView({
           <span className="shrink-0 w-4" />
         )}
 
-        {/* Status dot */}
-        <span
-          className="shrink-0 w-2 h-2 rounded-full"
-          style={{ background: statusColor }}
-        />
+        {/* Span kind icon */}
+        <span className="shrink-0 flex items-center justify-center w-4 h-4">
+          <SpanKindIcon kind={spanKind} statusColor={statusColor} />
+        </span>
 
         {/* Span name */}
         <span className="text-[var(--text-primary)] truncate min-w-0 flex-1">
@@ -278,6 +417,8 @@ function TreeNodeView({
             selectedId={selectedId}
             onSelect={onSelect}
             isLast={i === node.children.length - 1}
+            collapsedIds={collapsedIds}
+            toggleExpanded={toggleExpanded}
           />
         ))}
     </div>

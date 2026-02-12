@@ -31,6 +31,9 @@ interface RunStore {
   setChatMessages: (runId: string, messages: ChatMsg[]) => void;
 
   setEntrypoints: (eps: string[]) => void;
+
+  focusedSpan: { name: string; index: number } | null;
+  setFocusedSpan: (span: { name: string; index: number } | null) => void;
 }
 
 export const useRunStore = create<RunStore>((set) => ({
@@ -148,4 +151,7 @@ export const useRunStore = create<RunStore>((set) => ({
     })),
 
   setEntrypoints: (eps) => set({ entrypoints: eps }),
+
+  focusedSpan: null,
+  setFocusedSpan: (span) => set({ focusedSpan: span }),
 }));

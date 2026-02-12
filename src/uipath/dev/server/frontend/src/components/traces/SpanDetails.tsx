@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import type { TraceSpan } from "../../types/run";
+import JsonHighlight from "../shared/JsonHighlight";
 
 const STATUS_CONFIG: Record<string, { color: string; label: string }> = {
   started: { color: "var(--info)", label: "Started" },
@@ -56,12 +57,19 @@ function AttributeValue({ value }: { value: unknown }) {
   const [expanded, setExpanded] = useState(false);
   const raw = stringifyValue(value);
   const jsonFormatted = useMemo(() => tryParseJson(value), [value]);
+  const isJson = jsonFormatted !== null;
   const displayValue = jsonFormatted ?? raw;
   const isLong = displayValue.length > TRUNCATE_LIMIT || displayValue.includes("\n");
   const toggle = useCallback(() => setExpanded((prev) => !prev), []);
 
   if (!isLong) {
-    return (
+    return isJson ? (
+      <JsonHighlight
+        json={displayValue}
+        className="font-mono text-[11px] break-all whitespace-pre-wrap"
+        style={{}}
+      />
+    ) : (
       <span className="font-mono text-[11px] break-all" style={{ color: "var(--text-primary)" }}>
         {displayValue}
       </span>
@@ -71,12 +79,20 @@ function AttributeValue({ value }: { value: unknown }) {
   return (
     <div>
       {expanded ? (
-        <pre
-          className="font-mono text-[11px] whitespace-pre-wrap break-all"
-          style={{ color: "var(--text-primary)" }}
-        >
-          {displayValue}
-        </pre>
+        isJson ? (
+          <JsonHighlight
+            json={displayValue}
+            className="font-mono text-[11px] whitespace-pre-wrap break-all"
+            style={{}}
+          />
+        ) : (
+          <pre
+            className="font-mono text-[11px] whitespace-pre-wrap break-all"
+            style={{ color: "var(--text-primary)" }}
+          >
+            {displayValue}
+          </pre>
+        )
       ) : (
         <span className="font-mono text-[11px] break-all" style={{ color: "var(--text-primary)" }}>
           {displayValue.slice(0, TRUNCATE_LIMIT)}...

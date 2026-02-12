@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { WsClient } from "../../api/websocket";
 import { useRunStore } from "../../store/useRunStore";
 import ChatMessage from "./ChatMessage";
@@ -22,6 +22,25 @@ export default function ChatPanel({ messages, runId, runStatus, ws }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
   const addLocalChatMessage = useRunStore((s) => s.addLocalChatMessage);
+  const setFocusedSpan = useRunStore((s) => s.setFocusedSpan);
+
+  // Precompute per-tool-call occurrence indices across all messages
+  const toolCallIndicesMap = useMemo(() => {
+    const map = new Map<string, number[]>();
+    const counts = new Map<string, number>();
+    for (const msg of messages) {
+      if (msg.tool_calls) {
+        const indices: number[] = [];
+        for (const tc of msg.tool_calls) {
+          const count = counts.get(tc.name) ?? 0;
+          indices.push(count);
+          counts.set(tc.name, count + 1);
+        }
+        map.set(msg.message_id, indices);
+      }
+    }
+    return map;
+  }, [messages]);
 
   // Track whether user has scrolled away from bottom
   const handleScroll = () => {
@@ -64,7 +83,12 @@ export default function ChatPanel({ messages, runId, runStatus, ws }: Props) {
           </p>
         )}
         {messages.map((msg) => (
-          <ChatMessage key={msg.message_id} message={msg} />
+          <ChatMessage
+            key={msg.message_id}
+            message={msg}
+            toolCallIndices={toolCallIndicesMap.get(msg.message_id)}
+            onToolCallClick={(name, idx) => setFocusedSpan({ name, index: idx })}
+          />
         ))}
       </div>
       <ChatInput
