@@ -42,8 +42,7 @@ export default function App() {
     if (!selectedRunId) return;
     ws.subscribe(selectedRunId);
 
-    // Fetch full run details (includes fresh status in case we missed run.updated events)
-    getRun(selectedRunId).then((detail) => {
+    const applyRunDetail = (detail: Awaited<ReturnType<typeof getRun>>) => {
       upsertRun(detail);
       setTraces(selectedRunId, detail.traces);
       setLogs(selectedRunId, detail.logs);
@@ -75,9 +74,24 @@ export default function App() {
         };
       });
       setChatMessages(selectedRunId, chatMsgs);
-    }).catch(console.error);
+    };
 
-    return () => ws.unsubscribe(selectedRunId);
+    // Fetch full run details (includes fresh status in case we missed run.updated events)
+    getRun(selectedRunId).then(applyRunDetail).catch(console.error);
+
+    // Safety net: re-fetch if run is still in progress after WS subscribe + initial fetch.
+    // Covers the race where the run completes before WS subscription is processed.
+    const retryTimer = setTimeout(() => {
+      const run = useRunStore.getState().runs[selectedRunId];
+      if (run && (run.status === "pending" || run.status === "running")) {
+        getRun(selectedRunId).then(applyRunDetail).catch(console.error);
+      }
+    }, 2000);
+
+    return () => {
+      clearTimeout(retryTimer);
+      ws.unsubscribe(selectedRunId);
+    };
   }, [selectedRunId, ws, upsertRun, setTraces, setLogs, setChatMessages]);
 
   const handleRunCreated = (runId: string) => {
