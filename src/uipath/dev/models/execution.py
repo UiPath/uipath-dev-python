@@ -44,6 +44,8 @@ class ExecutionRun:
         self.traces: list[TraceData] = []
         self.logs: list[LogData] = []
         self.error: UiPathErrorContract | None = None
+        self.breakpoints: list[str] = []
+        self.breakpoint_node: str | None = None
         self.chat_events = ChatEvents()
 
     @property

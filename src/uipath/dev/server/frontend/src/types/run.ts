@@ -12,6 +12,7 @@ export interface RunSummary {
   trace_count: number;
   log_count: number;
   message_count: number;
+  breakpoint_node: string | null;
 }
 
 export interface RunDetail extends RunSummary {

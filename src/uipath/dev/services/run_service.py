@@ -115,7 +115,9 @@ class RunService:
         new_runtime: UiPathRuntimeProtocol | None = None
         try:
             execution_input: dict[str, Any] | str | None = {}
-            execution_options: UiPathExecuteOptions = UiPathExecuteOptions()
+            execution_options: UiPathExecuteOptions = UiPathExecuteOptions(
+                breakpoints=run.breakpoints if run.breakpoints else None,
+            )
 
             if run.status == "suspended":
                 execution_input = run.resume_data
@@ -141,10 +143,7 @@ class RunService:
 
             runtime: UiPathRuntimeProtocol
 
-            if (
-                run.mode in (ExecutionMode.DEBUG, ExecutionMode.RUN)
-                and self._debug_bridge_factory
-            ):
+            if self._debug_bridge_factory:
                 debug_bridge = self._debug_bridge_factory(run.mode)
 
                 debug_bridge.on_state_update = lambda state: self._handle_state_update(
@@ -159,6 +158,9 @@ class RunService:
                 debug_bridge.on_execution_error = lambda error: self._add_error_log(
                     run, error
                 )
+
+                if run.breakpoints:
+                    debug_bridge.set_breakpoints(run.breakpoints)
 
                 self.debug_bridges[run.id] = debug_bridge
 
@@ -259,20 +261,29 @@ class RunService:
             # Step mode = break on all nodes
             debug_bridge.set_breakpoints("*")
             # Resume execution (will pause at next node)
+            run.breakpoint_node = None
             run.status = "running"
             self._emit_run_updated(run)
             debug_bridge.resume(resume_data={})
 
     def continue_debug(self, run: ExecutionRun) -> None:
-        """Continue execution without stopping at breakpoints."""
+        """Continue execution, stopping at user-set breakpoints if any."""
         debug_bridge = self.debug_bridges.get(run.id)
         if debug_bridge:
-            # Clear breakpoints = run to completion
-            debug_bridge.set_breakpoints([])
+            # Restore user breakpoints (empty list = run to completion)
+            debug_bridge.set_breakpoints(run.breakpoints)
             # Resume execution
+            run.breakpoint_node = None
             run.status = "running"
             self._emit_run_updated(run)
             debug_bridge.resume(resume_data={})
+
+    def set_breakpoints(self, run: ExecutionRun, breakpoints: list[str]) -> None:
+        """Update breakpoints for a run and apply to active debug bridge."""
+        run.breakpoints = breakpoints
+        debug_bridge = self.debug_bridges.get(run.id)
+        if debug_bridge:
+            debug_bridge.set_breakpoints(breakpoints)
 
     def stop_debug(self, run: ExecutionRun) -> None:
         """Stop debug execution."""
@@ -324,10 +335,11 @@ class RunService:
             run.status = "suspended"
             self._emit_run_updated(run)
 
-    def _handle_breakpoint_hit(self, run_id: str, bp) -> None:
+    def _handle_breakpoint_hit(self, run_id: str, bp: UiPathBreakpointResult) -> None:
         """Handle breakpoint hit from debug runtime."""
         run = self.runs.get(run_id)
         if run:
+            run.breakpoint_node = bp.breakpoint_node
             run.status = "suspended"
             self._emit_run_updated(run)
 

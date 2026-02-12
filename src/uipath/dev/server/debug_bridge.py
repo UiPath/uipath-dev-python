@@ -24,13 +24,11 @@ class WebDebugBridge:
     def __init__(self, mode: ExecutionMode = ExecutionMode.RUN):
         """Initialize the web debug bridge."""
         self._mode = mode
-        self._auto_resume = mode == ExecutionMode.RUN
+        self._should_wait = False
         self._resume_event = asyncio.Event()
         self._resume_data: dict[str, Any] | None = None
         self._terminate_event = asyncio.Event()
-        self._breakpoints: list[str] | Literal["*"] = (
-            [] if mode == ExecutionMode.RUN else "*"
-        )
+        self._breakpoints: list[str] | Literal["*"] = []
 
         # Callbacks (wired by RunService)
         self.on_execution_started: Callable[[], None] | None = None
@@ -70,6 +68,7 @@ class WebDebugBridge:
     ) -> None:
         """Notify debugger that a breakpoint was hit."""
         logger.debug("Breakpoint hit: %s", breakpoint_result)
+        self._should_wait = True
         if self.on_breakpoint_hit:
             self.on_breakpoint_hit(breakpoint_result)
 
@@ -82,6 +81,7 @@ class WebDebugBridge:
             return
 
         if runtime_result.trigger.trigger_type == UiPathResumeTriggerType.API:
+            self._should_wait = True
             if self.on_breakpoint_hit:
                 self.on_breakpoint_hit(
                     UiPathBreakpointResult(
@@ -112,10 +112,10 @@ class WebDebugBridge:
 
     async def wait_for_resume(self) -> Any:
         """Wait for resume command from debugger."""
-        if self._auto_resume:
-            self._auto_resume = False  # Only auto-resume the first (initial) pause
+        if not self._should_wait:
             return {}
 
+        self._should_wait = False
         self._resume_event.clear()
         await self._resume_event.wait()
 

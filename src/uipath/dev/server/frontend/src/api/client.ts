@@ -48,11 +48,12 @@ export async function createRun(
   entrypoint: string,
   inputData: Record<string, unknown>,
   mode: string = "run",
+  breakpoints: string[] = [],
 ): Promise<RunSummary> {
   return fetchJson(`${BASE}/runs`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ entrypoint, input_data: inputData, mode }),
+    body: JSON.stringify({ entrypoint, input_data: inputData, mode, breakpoints }),
   });
 }
 

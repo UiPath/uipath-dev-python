@@ -24,6 +24,7 @@ class ClientCommand(str, Enum):
     DEBUG_STEP = "debug.step"
     DEBUG_CONTINUE = "debug.continue"
     DEBUG_STOP = "debug.stop"
+    DEBUG_SET_BREAKPOINTS = "debug.set_breakpoints"
 
 
 def server_message(event: ServerEvent, payload: dict[str, Any]) -> dict[str, Any]:

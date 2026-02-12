@@ -32,6 +32,10 @@ interface RunStore {
 
   setEntrypoints: (eps: string[]) => void;
 
+  breakpoints: Record<string, Record<string, boolean>>;
+  toggleBreakpoint: (entrypoint: string, nodeId: string) => void;
+  clearBreakpoints: (entrypoint: string) => void;
+
   focusedSpan: { name: string; index: number } | null;
   setFocusedSpan: (span: { name: string; index: number } | null) => void;
 }
@@ -151,6 +155,23 @@ export const useRunStore = create<RunStore>((set) => ({
     })),
 
   setEntrypoints: (eps) => set({ entrypoints: eps }),
+
+  breakpoints: {},
+  toggleBreakpoint: (entrypoint, nodeId) =>
+    set((state) => {
+      const epBps = { ...(state.breakpoints[entrypoint] ?? {}) };
+      if (epBps[nodeId]) {
+        delete epBps[nodeId];
+      } else {
+        epBps[nodeId] = true;
+      }
+      return { breakpoints: { ...state.breakpoints, [entrypoint]: epBps } };
+    }),
+  clearBreakpoints: (entrypoint) =>
+    set((state) => {
+      const { [entrypoint]: _, ...rest } = state.breakpoints;
+      return { breakpoints: rest };
+    }),
 
   focusedSpan: null,
   setFocusedSpan: (span) => set({ focusedSpan: span }),

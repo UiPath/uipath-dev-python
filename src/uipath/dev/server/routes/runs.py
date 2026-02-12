@@ -22,6 +22,7 @@ class CreateRunRequest(BaseModel):
     entrypoint: str
     input_data: dict[str, Any] = {}
     mode: str = "run"
+    breakpoints: list[str] = []
 
 
 @router.post("/runs")
@@ -41,6 +42,8 @@ async def create_run(request: Request, body: CreateRunRequest) -> dict[str, Any]
         input_data=body.input_data,
         mode=mode,
     )
+
+    run.breakpoints = body.breakpoints
 
     server.run_service.register_run(run)
 

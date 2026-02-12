@@ -18,9 +18,12 @@ export default function ToolNode({ data }: NodeProps) {
   const toolNames = data.tool_names as string[] | undefined;
   const toolCount = data.tool_count as number | undefined;
   const label = (data.label as string) ?? "Tool";
+  const hasBreakpoint = data.hasBreakpoint as boolean | undefined;
+  const isPausedHere = data.isPausedHere as boolean | undefined;
 
-  const borderColor =
-    status === "completed"
+  const borderColor = isPausedHere
+    ? "var(--warning)"
+    : status === "completed"
       ? "var(--success)"
       : status === "running"
         ? "var(--warning)"
@@ -33,15 +36,31 @@ export default function ToolNode({ data }: NodeProps) {
 
   return (
     <div
-      className="px-3 py-1.5 rounded-lg text-center text-xs overflow-hidden"
+      className="px-3 py-1.5 rounded-lg text-center text-xs overflow-hidden cursor-pointer relative"
       style={{
         width: w,
         background: "var(--node-bg)",
         color: "var(--text-primary)",
-        border: `1px solid ${borderColor}`,
+        border: `2px solid ${borderColor}`,
+        boxShadow: isPausedHere ? "0 0 8px var(--warning), 0 0 2px var(--warning)" : undefined,
       }}
       title={label}
     >
+      {hasBreakpoint && (
+        <div
+          className="absolute"
+          style={{
+            top: -5,
+            left: -5,
+            width: 12,
+            height: 12,
+            borderRadius: "50%",
+            background: "var(--error)",
+            border: "2px solid var(--node-bg)",
+            boxShadow: "0 0 4px var(--error)",
+          }}
+        />
+      )}
       <Handle type="target" position={Position.Top} style={hiddenHandle} />
       <div style={{ color: "var(--warning)", fontSize: 9, marginBottom: 1 }}>
         tools{toolCount ? ` (${toolCount})` : ""}
