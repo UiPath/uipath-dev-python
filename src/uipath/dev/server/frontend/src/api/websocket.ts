@@ -107,4 +107,8 @@ export class WsClient {
   debugStop(runId: string): void {
     this.send("debug.stop", { run_id: runId });
   }
+
+  setBreakpoints(runId: string, breakpoints: string[]): void {
+    this.send("debug.set_breakpoints", { run_id: runId, breakpoints });
+  }
 }

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { RunSummary } from "../../types/run";
 import type { WsClient } from "../../api/websocket";
 import { useRunStore } from "../../store/useRunStore";
@@ -7,6 +7,7 @@ import TraceTree from "../traces/TraceTree";
 import LogPanel from "../logs/LogPanel";
 import ChatPanel from "../chat/ChatPanel";
 import JsonHighlight from "../shared/JsonHighlight";
+import DebugControls from "../debug/DebugControls";
 
 type Tab = "traces" | "output";
 
@@ -40,6 +41,21 @@ export default function RunDetailsPanel({ run, ws, activeTab, onTabChange }: Pro
   const traces = useRunStore((s) => s.traces[run.id] || EMPTY_TRACES);
   const logs = useRunStore((s) => s.logs[run.id] || EMPTY_LOGS);
   const chatMessages = useRunStore((s) => s.chatMessages[run.id] || EMPTY_CHAT);
+  const bpMap = useRunStore((s) => s.breakpoints[run.id]);
+
+  // Sync breakpoints to server when switching to this run
+  useEffect(() => {
+    ws.setBreakpoints(run.id, bpMap ? Object.keys(bpMap) : []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on run switch
+  }, [run.id]);
+
+  // Send breakpoints to server immediately when toggled on graph nodes
+  const handleBreakpointChange = useCallback(
+    (breakpoints: string[]) => {
+      ws.setBreakpoints(run.id, breakpoints);
+    },
+    [run.id, ws],
+  );
 
   const onResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -141,7 +157,7 @@ export default function RunDetailsPanel({ run, ws, activeTab, onTabChange }: Pro
           <button
             key={tab.id}
             onClick={() => onTabChange(tab.id)}
-            className="px-2.5 py-0.5 text-[10px] uppercase tracking-wider font-semibold rounded transition-colors cursor-pointer"
+            className="px-2.5 py-0.5 h-5 text-[10px] uppercase tracking-wider font-semibold rounded transition-colors cursor-pointer"
             style={{
               color: activeTab === tab.id ? "var(--accent)" : "var(--text-muted)",
               background: activeTab === tab.id
@@ -171,9 +187,13 @@ export default function RunDetailsPanel({ run, ws, activeTab, onTabChange }: Pro
           <div ref={tracesContainerRef} className="flex h-full">
             {/* Main traces content */}
             <div ref={containerRef} className="flex flex-col flex-1 min-w-0">
+              {/* Debug controls — shown when debug mode, breakpoints set, or suspended */}
+              {(run.mode === "debug" || run.status === "suspended" || (bpMap && Object.keys(bpMap).length > 0)) && (
+                <DebugControls runId={run.id} status={run.status} ws={ws} breakpointNode={run.breakpoint_node} />
+              )}
               {/* Graph panel — resizable */}
               <div className="shrink-0" style={{ height: graphHeight }}>
-                <GraphPanel entrypoint={run.entrypoint} traces={traces} runId={run.id} />
+                <GraphPanel entrypoint={run.entrypoint} traces={traces} runId={run.id} breakpointNode={run.breakpoint_node} onBreakpointChange={handleBreakpointChange} />
               </div>
               {/* Drag handle */}
               <div
@@ -204,7 +224,7 @@ export default function RunDetailsPanel({ run, ws, activeTab, onTabChange }: Pro
                   }}
                 >
                   <div
-                    className="px-4 py-2 text-xs font-semibold uppercase border-b flex items-center gap-2"
+                    className="px-4 text-xs font-semibold uppercase border-b flex items-center gap-2 h-[33px]"
                     style={{
                       color: "var(--text-muted)",
                       borderColor: "var(--border)",

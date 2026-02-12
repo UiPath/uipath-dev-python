@@ -68,6 +68,14 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     if run:
                         server.run_service.stop_debug(run)
 
+            elif command == ClientCommand.DEBUG_SET_BREAKPOINTS.value:
+                run_id = payload.get("run_id", "")
+                breakpoints = payload.get("breakpoints", [])
+                if run_id:
+                    run = server.run_service.get_run(run_id)
+                    if run:
+                        server.run_service.set_breakpoints(run, breakpoints)
+
     except WebSocketDisconnect:
         manager.disconnect(websocket)
     except Exception:

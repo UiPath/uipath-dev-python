@@ -11,7 +11,8 @@ export type ClientCommandType =
   | "chat.message"
   | "debug.step"
   | "debug.continue"
-  | "debug.stop";
+  | "debug.stop"
+  | "debug.set_breakpoints";
 
 export interface ClientMessage {
   type: ClientCommandType;

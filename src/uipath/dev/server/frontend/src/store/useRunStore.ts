@@ -32,6 +32,10 @@ interface RunStore {
 
   setEntrypoints: (eps: string[]) => void;
 
+  breakpoints: Record<string, Record<string, boolean>>;
+  toggleBreakpoint: (runId: string, nodeId: string) => void;
+  clearBreakpoints: (runId: string) => void;
+
   focusedSpan: { name: string; index: number } | null;
   setFocusedSpan: (span: { name: string; index: number } | null) => void;
 }
@@ -45,14 +49,29 @@ export const useRunStore = create<RunStore>((set) => ({
   entrypoints: [],
 
   setRuns: (runs) =>
-    set({
-      runs: Object.fromEntries(runs.map((r) => [r.id, r])),
+    set((state) => {
+      let bps = state.breakpoints;
+      for (const r of runs) {
+        if (r.breakpoints?.length && !bps[r.id]) {
+          bps = { ...bps, [r.id]: Object.fromEntries(r.breakpoints.map((id) => [id, true])) };
+        }
+      }
+      const result: Partial<RunStore> = { runs: Object.fromEntries(runs.map((r) => [r.id, r])) };
+      if (bps !== state.breakpoints) result.breakpoints = bps;
+      return result;
     }),
 
   upsertRun: (run) =>
-    set((state) => ({
-      runs: { ...state.runs, [run.id]: run },
-    })),
+    set((state) => {
+      const result: Partial<RunStore> = { runs: { ...state.runs, [run.id]: run } };
+      if (run.breakpoints?.length && !state.breakpoints[run.id]) {
+        result.breakpoints = {
+          ...state.breakpoints,
+          [run.id]: Object.fromEntries(run.breakpoints.map((id) => [id, true])),
+        };
+      }
+      return result;
+    }),
 
   selectRun: (runId) => set({ selectedRunId: runId }),
 
@@ -151,6 +170,23 @@ export const useRunStore = create<RunStore>((set) => ({
     })),
 
   setEntrypoints: (eps) => set({ entrypoints: eps }),
+
+  breakpoints: {},
+  toggleBreakpoint: (runId, nodeId) =>
+    set((state) => {
+      const bps = { ...(state.breakpoints[runId] ?? {}) };
+      if (bps[nodeId]) {
+        delete bps[nodeId];
+      } else {
+        bps[nodeId] = true;
+      }
+      return { breakpoints: { ...state.breakpoints, [runId]: bps } };
+    }),
+  clearBreakpoints: (runId) =>
+    set((state) => {
+      const { [runId]: _, ...rest } = state.breakpoints;
+      return { breakpoints: rest };
+    }),
 
   focusedSpan: null,
   setFocusedSpan: (span) => set({ focusedSpan: span }),

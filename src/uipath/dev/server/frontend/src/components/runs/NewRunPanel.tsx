@@ -87,7 +87,7 @@ export default function NewRunPanel({ onRunCreated }: Props) {
 
     setLoading(mode);
     try {
-      const run = await createRun(selectedEp, parsed, mode);
+      const run = await createRun(selectedEp, parsed, mode, []);
       // Immediately add the run to the store so it's available when switching views
       useRunStore.getState().upsertRun(run);
       onRunCreated(run.id);

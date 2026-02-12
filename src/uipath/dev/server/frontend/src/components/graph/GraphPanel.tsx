@@ -15,6 +15,7 @@ import ELK, { type ElkNode, type ElkExtendedEdge } from "elkjs/lib/elk.bundled.j
 import type { TraceSpan } from "../../types/run";
 import type { GraphData } from "../../types/graph";
 import { getEntrypointGraph } from "../../api/client";
+import { useRunStore } from "../../store/useRunStore";
 import StartNode from "./nodes/StartNode";
 import EndNode from "./nodes/EndNode";
 import ModelNode from "./nodes/ModelNode";
@@ -339,14 +340,61 @@ interface Props {
   entrypoint: string;
   traces: TraceSpan[];
   runId: string;
+  breakpointNode?: string | null;
+  onBreakpointChange?: (breakpoints: string[]) => void;
 }
 
-export default function GraphPanel({ entrypoint, traces, runId }: Props) {
+export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, onBreakpointChange }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [loading, setLoading] = useState(true);
   const layoutRef = useRef(0);
   const rfInstance = useRef<ReactFlowInstance | null>(null);
+
+  const bpMap = useRunStore((s) => s.breakpoints[runId]);
+  const toggleBreakpoint = useRunStore((s) => s.toggleBreakpoint);
+
+  const onNodeClick = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      if (node.type === "groupNode") return;
+      // For compound children, extract the plain ID from "parentId/childId"
+      const plainId = node.id.includes("/") ? node.id.split("/").pop()! : node.id;
+      toggleBreakpoint(runId, plainId);
+      // Immediately notify parent with the updated breakpoints
+      const updated = useRunStore.getState().breakpoints[runId] ?? {};
+      onBreakpointChange?.(Object.keys(updated));
+    },
+    [runId, toggleBreakpoint, onBreakpointChange],
+  );
+
+  // Inject hasBreakpoint into node data when breakpoints change
+  useEffect(() => {
+    setNodes((nds) =>
+      nds.map((n) => {
+        if (n.type === "groupNode") return n;
+        const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
+        const has = !!(bpMap && bpMap[plainId]);
+        return has !== !!n.data?.hasBreakpoint
+          ? { ...n, data: { ...n.data, hasBreakpoint: has } }
+          : n;
+      }),
+    );
+  }, [bpMap, setNodes]);
+
+  // Highlight the node where execution is paused at a breakpoint
+  useEffect(() => {
+    setNodes((nds) =>
+      nds.map((n) => {
+        if (n.type === "groupNode") return n;
+        const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
+        const label = n.data?.label as string | undefined;
+        const paused = breakpointNode != null && (plainId === breakpointNode || label === breakpointNode);
+        return paused !== !!n.data?.isPausedHere
+          ? { ...n, data: { ...n.data, isPausedHere: paused } }
+          : n;
+      }),
+    );
+  }, [breakpointNode, setNodes]);
 
   const nodeStatusMap = useCallback(() => {
     const map: Record<string, string> = {};
@@ -374,7 +422,16 @@ export default function GraphPanel({ entrypoint, traces, runId }: Props) {
         const { nodes: laidNodes, edges: laidEdges } =
           await runElkLayout(graphData);
         if (layoutRef.current !== layoutId) return;
-        setNodes(laidNodes);
+        // Inject persisted breakpoints into freshly laid-out nodes
+        const curBp = useRunStore.getState().breakpoints[runId];
+        const nodesWithBp = curBp
+          ? laidNodes.map((n) => {
+              if (n.type === "groupNode") return n;
+              const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
+              return curBp[plainId] ? { ...n, data: { ...n.data, hasBreakpoint: true } } : n;
+            })
+          : laidNodes;
+        setNodes(nodesWithBp);
         setEdges(laidEdges);
         // Fit view after nodes are rendered
         setTimeout(() => {
@@ -454,6 +511,7 @@ export default function GraphPanel({ entrypoint, traces, runId }: Props) {
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onInit={(instance) => { rfInstance.current = instance; }}
+        onNodeClick={onNodeClick}
         fitView
         proOptions={{ hideAttribution: true }}
         nodesDraggable={false}
