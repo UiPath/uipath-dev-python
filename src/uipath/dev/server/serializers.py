@@ -72,6 +72,7 @@ def serialize_run(run: ExecutionRun) -> dict[str, Any]:
         "log_count": len(run.logs),
         "message_count": len(run.messages),
         "breakpoint_node": run.breakpoint_node,
+        "breakpoints": run.breakpoints,
     }
 
 

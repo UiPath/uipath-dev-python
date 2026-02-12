@@ -49,14 +49,30 @@ export const useRunStore = create<RunStore>((set) => ({
   entrypoints: [],
 
   setRuns: (runs) =>
-    set({
-      runs: Object.fromEntries(runs.map((r) => [r.id, r])),
+    set((state) => {
+      const bps = { ...state.breakpoints };
+      for (const r of runs) {
+        if (r.breakpoints?.length && !bps[r.id]) {
+          bps[r.id] = Object.fromEntries(r.breakpoints.map((id) => [id, true]));
+        }
+      }
+      return {
+        runs: Object.fromEntries(runs.map((r) => [r.id, r])),
+        breakpoints: bps,
+      };
     }),
 
   upsertRun: (run) =>
-    set((state) => ({
-      runs: { ...state.runs, [run.id]: run },
-    })),
+    set((state) => {
+      const bps = { ...state.breakpoints };
+      if (run.breakpoints?.length && !bps[run.id]) {
+        bps[run.id] = Object.fromEntries(run.breakpoints.map((id) => [id, true]));
+      }
+      return {
+        runs: { ...state.runs, [run.id]: run },
+        breakpoints: bps,
+      };
+    }),
 
   selectRun: (runId) => set({ selectedRunId: runId }),
 

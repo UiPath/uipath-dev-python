@@ -422,7 +422,16 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
         const { nodes: laidNodes, edges: laidEdges } =
           await runElkLayout(graphData);
         if (layoutRef.current !== layoutId) return;
-        setNodes(laidNodes);
+        // Inject persisted breakpoints into freshly laid-out nodes
+        const curBp = useRunStore.getState().breakpoints[runId];
+        const nodesWithBp = curBp
+          ? laidNodes.map((n) => {
+              if (n.type === "groupNode") return n;
+              const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
+              return curBp[plainId] ? { ...n, data: { ...n.data, hasBreakpoint: true } } : n;
+            })
+          : laidNodes;
+        setNodes(nodesWithBp);
         setEdges(laidEdges);
         // Fit view after nodes are rendered
         setTimeout(() => {
