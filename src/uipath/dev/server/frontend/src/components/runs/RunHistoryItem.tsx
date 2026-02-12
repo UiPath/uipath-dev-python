@@ -25,7 +25,7 @@ export default function RunHistoryItem({ run, isSelected, statusColor, onClick }
   return (
     <button
       onClick={onClick}
-      className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-[var(--bg-hover)] transition-colors ${
+      className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-[var(--bg-hover)] transition-colors cursor-pointer ${
         isSelected ? "bg-[var(--bg-hover)] border-l-2 border-[var(--accent)]" : ""
       }`}
     >

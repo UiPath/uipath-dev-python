@@ -7,7 +7,7 @@ import TraceTree from "../traces/TraceTree";
 import LogPanel from "../logs/LogPanel";
 import ChatPanel from "../chat/ChatPanel";
 
-type Tab = "details" | "traces" | "logs";
+type Tab = "traces" | "output";
 
 interface Props {
   run: RunSummary;
@@ -21,25 +21,28 @@ const EMPTY_CHAT: never[] = [];
 
 export default function RunDetailsPanel({ run, ws }: Props) {
   const isChatMode = run.mode === "chat";
-  const [activeTab, setActiveTab] = useState<Tab>(isChatMode ? "traces" : "details");
+  const [activeTab, setActiveTab] = useState<Tab>("traces");
   const [graphHeight, setGraphHeight] = useState(280);
   const [chatWidth, setChatWidth] = useState(() => {
     const saved = localStorage.getItem("chatPanelWidth");
     return saved ? parseInt(saved, 10) : 380;
   });
+  const [outputSplit, setOutputSplit] = useState(() => {
+    const saved = localStorage.getItem("outputSplitPercent");
+    return saved ? parseFloat(saved) : 50;
+  });
   const containerRef = useRef<HTMLDivElement>(null);
   const tracesContainerRef = useRef<HTMLDivElement>(null);
+  const outputContainerRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
   const traces = useRunStore((s) => s.traces[run.id] || EMPTY_TRACES);
   const logs = useRunStore((s) => s.logs[run.id] || EMPTY_LOGS);
   const chatMessages = useRunStore((s) => s.chatMessages[run.id] || EMPTY_CHAT);
 
-  // Auto-switch to traces tab when entering chat mode
+  // Reset to Live tab when switching runs
   useEffect(() => {
-    if (isChatMode) {
-      setActiveTab("traces");
-    }
-  }, [isChatMode, run.id]);
+    setActiveTab("traces");
+  }, [run.id]);
 
   const onResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -99,10 +102,38 @@ export default function RunDetailsPanel({ run, ws }: Props) {
     document.addEventListener("mouseup", onUp);
   }, [chatWidth]);
 
+  const onOutputSplitStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+
+    const startX = e.clientX;
+    const startPct = outputSplit;
+
+    const onMove = (ev: MouseEvent) => {
+      const container = outputContainerRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const deltaPct = ((ev.clientX - startX) / rect.width) * 100;
+      const newPct = Math.max(20, Math.min(80, startPct + deltaPct));
+      setOutputSplit(newPct);
+    };
+
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      localStorage.setItem("outputSplitPercent", String(outputSplit));
+    };
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, [outputSplit]);
+
   const tabs: { id: Tab; label: string; count?: number }[] = [
-    { id: "details", label: "Details" },
-    { id: "traces", label: "Traces", count: traces.length },
-    { id: "logs", label: "Logs", count: logs.length },
+    { id: "traces", label: "Trace", count: traces.length },
+    { id: "output", label: "Output", count: logs.length },
   ];
 
   return (
@@ -129,7 +160,6 @@ export default function RunDetailsPanel({ run, ws }: Props) {
 
       {/* Tab content */}
       <div className="flex-1 overflow-hidden">
-        {activeTab === "details" && <DetailsView run={run} />}
         {activeTab === "traces" && (
           <div ref={tracesContainerRef} className="flex h-full">
             {/* Main traces content */}
@@ -206,7 +236,37 @@ export default function RunDetailsPanel({ run, ws }: Props) {
             )}
           </div>
         )}
-        {activeTab === "logs" && <LogPanel logs={logs} />}
+        {activeTab === "output" && (
+          <div className="flex flex-col h-full">
+            {/* Summary bar — full width */}
+            <OutputSummary run={run} />
+            {/* Split panels */}
+            <div ref={outputContainerRef} className="flex flex-1 min-h-0">
+              {/* I/O panel */}
+              <div className="overflow-hidden flex flex-col pr-1" style={{ width: `${outputSplit}%` }}>
+                <PanelHeader title="I/O" count={run.output_data ? 2 : 1} />
+                <div className="flex-1 overflow-hidden">
+                  <IOView run={run} />
+                </div>
+              </div>
+              {/* Drag handle */}
+              <div
+                onMouseDown={onOutputSplitStart}
+                className="shrink-0 w-1.5 cursor-col-resize flex items-center justify-center hover:bg-[var(--accent)] transition-colors relative"
+                style={{ background: "var(--border)" }}
+              >
+                <div className="absolute inset-0 -left-1 -right-1" />
+              </div>
+              {/* Logs panel */}
+              <div className="flex-1 overflow-hidden min-w-0 flex flex-col">
+                <PanelHeader title="Logs" count={logs.length} />
+                <div className="flex-1 overflow-hidden">
+                  <LogPanel logs={logs} />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -220,77 +280,55 @@ const STATUS_BADGE: Record<string, { bg: string; text: string; label: string }> 
   failed: { bg: "color-mix(in srgb, var(--error) 15%, var(--bg-secondary))", text: "var(--error)", label: "Failed" },
 };
 
-const MODE_ICONS: Record<string, string> = {
-  run: "\u25B6",
-  debug: "\uD83D\uDC1B",
-  chat: "\uD83D\uDCAC",
-};
-
-function DetailsView({ run }: { run: RunSummary }) {
+function OutputSummary({ run }: { run: RunSummary }) {
   const badge = STATUS_BADGE[run.status] ?? STATUS_BADGE.pending;
-  const modeIcon = MODE_ICONS[run.mode] ?? "";
   const entrypointName = run.entrypoint.split("/").pop() ?? run.entrypoint;
 
   return (
-    <div className="p-6 overflow-y-auto h-full space-y-5">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h2
-            className="text-lg font-semibold truncate"
-            style={{ color: "var(--text-primary)" }}
-          >
-            {entrypointName}
-          </h2>
-          <div
-            className="text-xs font-mono mt-1 truncate"
-            style={{ color: "var(--text-muted)" }}
-          >
-            {run.id}
-          </div>
+    <div
+      className="shrink-0 px-4 py-3 flex items-center gap-3 flex-wrap border-b"
+      style={{ background: "var(--bg-secondary)", borderColor: "var(--border)" }}
+    >
+      {/* Name + ID */}
+      <div className="min-w-0 mr-2">
+        <div className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>
+          {entrypointName}
         </div>
-        <div
-          className="shrink-0 px-3 py-1 rounded-full text-xs font-semibold"
-          style={{ background: badge.bg, color: badge.text }}
-        >
-          {badge.label}
+        <div className="text-[10px] font-mono truncate" style={{ color: "var(--text-muted)" }}>
+          {run.id}
         </div>
       </div>
 
-      {/* Info cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <InfoCard label="Mode" value={`${modeIcon} ${run.mode}`} />
-        <InfoCard label="Duration" value={run.duration || "--"} color="var(--warning)" />
-        <InfoCard
-          label="Started"
-          value={run.start_time ? new Date(run.start_time).toLocaleTimeString() : "--"}
-        />
-        <InfoCard
-          label="Ended"
-          value={run.end_time ? new Date(run.end_time).toLocaleTimeString() : "--"}
-        />
-      </div>
-
-      {/* Stats row */}
-      <div className="grid grid-cols-3 gap-3">
-        <StatCard label="Traces" value={run.trace_count} color="var(--info)" />
-        <StatCard label="Logs" value={run.log_count} color="var(--warning)" />
-        <StatCard label="Messages" value={run.message_count} color="var(--success)" />
-      </div>
-
-      {/* Entrypoint full path */}
+      {/* Status badge */}
       <div
-        className="rounded-lg p-3 text-xs font-mono"
-        style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)" }}
+        className="shrink-0 px-2.5 py-0.5 rounded-full text-[11px] font-semibold"
+        style={{ background: badge.bg, color: badge.text }}
       >
-        <div className="text-[10px] uppercase font-semibold mb-1" style={{ color: "var(--text-muted)" }}>
-          Entrypoint
-        </div>
-        <div style={{ color: "var(--text-primary)" }}>{run.entrypoint}</div>
+        {badge.label}
       </div>
 
+      {/* Pills */}
+      <Pill label="Duration" value={run.duration || "--"} color="var(--warning)" />
+      <Pill
+        label="Started"
+        value={run.start_time ? new Date(run.start_time).toLocaleTimeString() : "--"}
+      />
+      <Pill
+        label="Ended"
+        value={run.end_time ? new Date(run.end_time).toLocaleTimeString() : "--"}
+      />
+      <Pill label="Traces" value={String(run.trace_count)} color="var(--info)" />
+      <Pill label="Logs" value={String(run.log_count)} color="var(--warning)" />
+      <Pill label="Messages" value={String(run.message_count)} color="var(--success)" />
+    </div>
+  );
+}
+
+function IOView({ run }: { run: RunSummary }) {
+  return (
+    <div className="p-4 overflow-y-auto h-full space-y-4">
       {/* Input */}
-      <DataSection title="Input" color="var(--success)">
+      <DataSection title="Input" color="var(--success)" copyText={JSON.stringify(run.input_data, null, 2)}>
         <pre
           className="p-3 rounded-lg text-xs overflow-x-auto font-mono"
           style={{ background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)" }}
@@ -301,7 +339,11 @@ function DetailsView({ run }: { run: RunSummary }) {
 
       {/* Output */}
       {run.output_data && (
-        <DataSection title="Output" color="var(--accent)">
+        <DataSection
+          title="Output"
+          color="var(--accent)"
+          copyText={typeof run.output_data === "string" ? run.output_data : JSON.stringify(run.output_data, null, 2)}
+        >
           <pre
             className="p-3 rounded-lg text-xs overflow-x-auto font-mono"
             style={{ background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)" }}
@@ -353,7 +395,21 @@ function DetailsView({ run }: { run: RunSummary }) {
   );
 }
 
-function InfoCard({
+function PanelHeader({ title, count }: { title: string; count?: number }) {
+  return (
+    <div
+      className="shrink-0 px-3 py-1 text-[10px] uppercase font-bold tracking-wider border-b"
+      style={{ color: "var(--text-muted)", borderColor: "var(--border)", background: "var(--bg-secondary)" }}
+    >
+      {title}
+      {count !== undefined && count > 0 && (
+        <span className="ml-1 font-normal">({count})</span>
+      )}
+    </div>
+  );
+}
+
+function Pill({
   label,
   value,
   color,
@@ -364,43 +420,11 @@ function InfoCard({
 }) {
   return (
     <div
-      className="rounded-lg p-3"
-      style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)" }}
+      className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px]"
+      style={{ background: "var(--bg-primary)", border: "1px solid var(--border)" }}
     >
-      <div
-        className="text-[10px] uppercase font-semibold mb-1"
-        style={{ color: "var(--text-muted)" }}
-      >
-        {label}
-      </div>
-      <div
-        className="text-sm font-medium truncate"
-        style={{ color: color ?? "var(--text-primary)" }}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: number;
-  color: string;
-}) {
-  return (
-    <div
-      className="rounded-lg p-3 text-center"
-      style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)" }}
-    >
-      <div className="text-xl font-bold" style={{ color }}>{value}</div>
-      <div className="text-[10px] uppercase font-semibold mt-0.5" style={{ color: "var(--text-muted)" }}>
-        {label}
-      </div>
+      <span style={{ color: "var(--text-muted)" }}>{label}</span>
+      <span className="font-semibold" style={{ color: color ?? "var(--text-primary)" }}>{value}</span>
     </div>
   );
 }
@@ -408,17 +432,42 @@ function StatCard({
 function DataSection({
   title,
   color,
+  copyText,
   children,
 }: {
   title: string;
   color: string;
+  copyText?: string;
   children: React.ReactNode;
 }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = useCallback(() => {
+    if (!copyText) return;
+    navigator.clipboard.writeText(copyText).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }, [copyText]);
+
   return (
     <div>
       <div className="flex items-center gap-2 mb-2">
         <div className="w-1 h-4 rounded-full" style={{ background: color }} />
         <span className="text-xs font-semibold uppercase" style={{ color }}>{title}</span>
+        {copyText && (
+          <button
+            onClick={copy}
+            className="ml-auto text-[10px] cursor-pointer px-1.5 py-0.5 rounded"
+            style={{
+              color: copied ? "var(--success)" : "var(--text-muted)",
+              background: "var(--bg-secondary)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            {copied ? "Copied" : "Copy"}
+          </button>
+        )}
       </div>
       {children}
     </div>
