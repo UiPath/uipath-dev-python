@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from uipath.dev.models.data import ChatData, LogData, TraceData
+from uipath.dev.models.data import ChatData, LogData, StateData, TraceData
 from uipath.dev.models.execution import ExecutionRun
 
 
@@ -45,6 +45,14 @@ def serialize_chat(chat_data: ChatData) -> dict[str, Any]:
             by_alias=True, exclude_none=True
         )
     return result
+
+
+def serialize_state(state_data: StateData) -> dict[str, Any]:
+    """Serialize a StateData instance to a JSON-compatible dict."""
+    return {
+        "run_id": state_data.run_id,
+        "node_name": state_data.node_name,
+    }
 
 
 def serialize_run(run: ExecutionRun) -> dict[str, Any]:

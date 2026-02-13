@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import traceback
 from datetime import datetime
 from typing import Any, Callable, Literal, Protocol, cast
@@ -27,13 +26,14 @@ from uipath.runtime.errors import UiPathErrorContract, UiPathRuntimeError
 from uipath.runtime.events import UiPathRuntimeMessageEvent, UiPathRuntimeStateEvent
 
 from uipath.dev.infrastructure import RunContextExporter, RunContextLogHandler
-from uipath.dev.models.data import ChatData, LogData, TraceData
+from uipath.dev.models.data import ChatData, LogData, StateData, TraceData
 from uipath.dev.models.execution import ExecutionMode, ExecutionRun
 
 RunUpdatedCallback = Callable[[ExecutionRun], None]
 LogCallback = Callable[[LogData], None]
 TraceCallback = Callable[[TraceData], None]
 ChatCallback = Callable[[ChatData], None]
+StateCallback = Callable[[StateData], None]
 
 
 class DebugBridgeProtocol(UiPathDebugProtocol, Protocol):
@@ -78,6 +78,7 @@ class RunService:
         on_log: LogCallback | None = None,
         on_trace: TraceCallback | None = None,
         on_chat: ChatCallback | None = None,
+        on_state: StateCallback | None = None,
         debug_bridge_factory: DebugBridgeFactory | None = None,
     ) -> None:
         """Initialize RunService with runtime factory and trace manager."""
@@ -89,6 +90,7 @@ class RunService:
         self.on_log = on_log
         self.on_trace = on_trace
         self.on_chat = on_chat
+        self.on_state = on_state
         self._debug_bridge_factory = debug_bridge_factory
 
         self.trace_manager.add_span_exporter(
@@ -325,8 +327,8 @@ class RunService:
     def _handle_state_update(self, run_id: str, state: UiPathRuntimeStateEvent) -> None:
         """Handle state update from debug runtime."""
         run = self.runs.get(run_id)
-        if run:
-            self._add_info_log(run, json.dumps(state.payload))
+        if run and state.node_name and self.on_state is not None:
+            self.on_state(StateData(run_id=run_id, node_name=state.node_name))
 
     def _handle_debug_started(self, run_id: str) -> None:
         """Handle debug started event."""

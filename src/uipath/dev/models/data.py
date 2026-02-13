@@ -33,6 +33,14 @@ class TraceData:
 
 
 @dataclass
+class StateData:
+    """Plain data class for runtime state transitions."""
+
+    run_id: str
+    node_name: str
+
+
+@dataclass
 class ChatData:
     """Plain data class for chat messages."""
 

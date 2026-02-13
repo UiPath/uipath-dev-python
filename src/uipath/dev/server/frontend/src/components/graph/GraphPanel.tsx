@@ -3,6 +3,7 @@ import ReactFlow, {
   Background,
   Controls,
   MiniMap,
+  Panel,
   MarkerType,
   useNodesState,
   useEdgesState,
@@ -353,6 +354,8 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
 
   const bpMap = useRunStore((s) => s.breakpoints[runId]);
   const toggleBreakpoint = useRunStore((s) => s.toggleBreakpoint);
+  const clearBreakpoints = useRunStore((s) => s.clearBreakpoints);
+  const activeNode = useRunStore((s) => s.activeNodes[runId]);
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
@@ -366,6 +369,28 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
     },
     [runId, toggleBreakpoint, onBreakpointChange],
   );
+
+  const hasAnyBreakpoint = bpMap && Object.keys(bpMap).length > 0;
+
+  const onToggleAllBreakpoints = useCallback(() => {
+    if (hasAnyBreakpoint) {
+      clearBreakpoints(runId);
+      onBreakpointChange?.([]);
+    } else {
+      // Set breakpoints on all non-group, non-start, non-end nodes
+      const nodeIds: string[] = [];
+      for (const n of nodes) {
+        if (n.type === "groupNode" || n.type === "startNode" || n.type === "endNode") continue;
+        const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
+        nodeIds.push(plainId);
+      }
+      for (const id of nodeIds) {
+        if (!bpMap?.[id]) toggleBreakpoint(runId, id);
+      }
+      const updated = useRunStore.getState().breakpoints[runId] ?? {};
+      onBreakpointChange?.(Object.keys(updated));
+    }
+  }, [runId, hasAnyBreakpoint, bpMap, nodes, clearBreakpoints, toggleBreakpoint, onBreakpointChange]);
 
   // Inject hasBreakpoint into node data when breakpoints change
   useEffect(() => {
@@ -383,18 +408,103 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
 
   // Highlight the node where execution is paused at a breakpoint
   useEffect(() => {
+    const bpNames = breakpointNode
+      ? new Set(breakpointNode.split(",").map((s) => s.trim()).filter(Boolean))
+      : null;
     setNodes((nds) =>
       nds.map((n) => {
         if (n.type === "groupNode") return n;
         const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
         const label = n.data?.label as string | undefined;
-        const paused = breakpointNode != null && (plainId === breakpointNode || label === breakpointNode);
+        const paused = bpNames != null && (bpNames.has(plainId) || (label != null && bpNames.has(label)));
         return paused !== !!n.data?.isPausedHere
           ? { ...n, data: { ...n.data, isPausedHere: paused } }
           : n;
       }),
     );
   }, [breakpointNode, setNodes]);
+
+  // Highlight edges + nodes during execution
+  // - Paused at breakpoint (before node X): edges INTO X, node X (via isPausedHere)
+  // - Running (state event after node Y completes): edges OUT of Y, target nodes of those edges
+  useEffect(() => {
+    const isPaused = !!breakpointNode;
+    let matchIds = new Set<string>();
+    const activeTargetIds = new Set<string>();
+
+    // 1) Build label→ID lookup (read-only pass, returns nds unchanged)
+    setNodes((nds) => {
+      const labelToIds = new Map<string, Set<string>>();
+      for (const n of nds) {
+        const label = n.data?.label as string | undefined;
+        if (!label) continue;
+        const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
+        for (const key of [plainId, label]) {
+          let s = labelToIds.get(key);
+          if (!s) { s = new Set(); labelToIds.set(key, s); }
+          s.add(plainId);
+        }
+      }
+
+      if (isPaused && breakpointNode) {
+        const bpNames = breakpointNode.split(",").map((s) => s.trim()).filter(Boolean);
+        for (const name of bpNames) {
+          (labelToIds.get(name) ?? new Set()).forEach((id) => matchIds.add(id));
+        }
+      } else if (activeNode) {
+        matchIds = labelToIds.get(activeNode.current) ?? new Set<string>();
+      }
+
+      return nds;
+    });
+
+    // 2) Highlight edges + collect target IDs for running mode
+    setEdges((eds) =>
+      eds.map((e) => {
+        const srcPlain = e.source.includes("/") ? e.source.split("/").pop()! : e.source;
+        const tgtPlain = e.target.includes("/") ? e.target.split("/").pop()! : e.target;
+
+        const isActive = isPaused
+          ? matchIds.has(tgtPlain)   // breakpoint: edges INTO paused node
+          : matchIds.has(srcPlain);  // running: edges OUT of completed node
+
+        if (isActive) {
+          if (!isPaused) activeTargetIds.add(tgtPlain);
+          return {
+            ...e,
+            style: { stroke: "var(--accent)", strokeWidth: 2.5 },
+            markerEnd: { ...arrowMarker, color: "var(--accent)" },
+            data: { ...e.data, highlighted: true },
+            animated: true,
+          };
+        }
+
+        if (e.data?.highlighted) {
+          return {
+            ...e,
+            style: mkEdgeStyle((e as Edge & { data?: { conditional?: boolean } }).data?.conditional),
+            markerEnd: arrowMarker,
+            data: { ...e.data, highlighted: false },
+            animated: false,
+          };
+        }
+
+        return e;
+      }),
+    );
+
+    // 3) Mark target nodes as active (running mode only; breakpoint uses isPausedHere)
+    setNodes((nds) =>
+      nds.map((n) => {
+        if (n.type === "groupNode") return n;
+        const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
+        const active = activeTargetIds.has(plainId);
+        return active !== !!n.data?.isActiveNode
+          ? { ...n, data: { ...n.data, isActiveNode: active } }
+          : n;
+      }),
+    );
+  }, [activeNode, breakpointNode, setNodes, setEdges]);
 
   const nodeStatusMap = useCallback(() => {
     const map: Record<string, string> = {};
@@ -502,6 +612,17 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
           overflow: visible !important;
           z-index: 1 !important;
         }
+        .graph-panel .react-flow__edge.animated path {
+          stroke-dasharray: 8 4;
+          animation: edge-flow 0.6s linear infinite;
+        }
+        @keyframes edge-flow {
+          to { stroke-dashoffset: -12; }
+        }
+        @keyframes node-pulse {
+          0%, 100% { box-shadow: 0 0 4px var(--accent); }
+          50% { box-shadow: 0 0 10px var(--accent); }
+        }
       `}</style>
       <ReactFlow
         nodes={nodes}
@@ -520,6 +641,33 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
       >
         <Background color="var(--bg-tertiary)" gap={16} />
         <Controls showInteractive={false} />
+        <Panel position="top-right">
+          <button
+            onClick={onToggleAllBreakpoints}
+            title={hasAnyBreakpoint ? "Remove all breakpoints" : "Set breakpoints on all nodes"}
+            style={{
+              background: "var(--bg-secondary)",
+              color: hasAnyBreakpoint ? "var(--error)" : "var(--text-muted)",
+              border: `1px solid ${hasAnyBreakpoint ? "var(--error)" : "var(--node-border)"}`,
+              borderRadius: 6,
+              padding: "4px 10px",
+              fontSize: 11,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+            }}
+          >
+            <span style={{
+              display: "inline-block",
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: hasAnyBreakpoint ? "var(--error)" : "var(--node-border)",
+            }} />
+            {hasAnyBreakpoint ? "Clear all" : "Break all"}
+          </button>
+        </Panel>
         <MiniMap
           nodeColor={(n) => {
             if (n.type === "groupNode") return "var(--bg-tertiary)";

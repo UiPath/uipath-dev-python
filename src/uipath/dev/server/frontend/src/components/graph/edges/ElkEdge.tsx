@@ -4,6 +4,7 @@ export interface ElkEdgeData {
   sourcePoint: { x: number; y: number };
   targetPoint: { x: number; y: number };
   bendPoints: { x: number; y: number }[];
+  highlighted?: boolean;
 }
 
 /** Build an SVG path with rounded corners at bend points. */

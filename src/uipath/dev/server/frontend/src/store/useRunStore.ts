@@ -36,6 +36,9 @@ interface RunStore {
   toggleBreakpoint: (runId: string, nodeId: string) => void;
   clearBreakpoints: (runId: string) => void;
 
+  activeNodes: Record<string, { prev: string | null; current: string }>;
+  setActiveNode: (runId: string, nodeName: string) => void;
+
   focusedSpan: { name: string; index: number } | null;
   setFocusedSpan: (span: { name: string; index: number } | null) => void;
 }
@@ -69,6 +72,14 @@ export const useRunStore = create<RunStore>((set) => ({
           ...state.breakpoints,
           [run.id]: Object.fromEntries(run.breakpoints.map((id) => [id, true])),
         };
+      }
+      // Clear active node tracking when run reaches terminal status
+      if (
+        (run.status === "completed" || run.status === "failed") &&
+        state.activeNodes[run.id]
+      ) {
+        const { [run.id]: _, ...rest } = state.activeNodes;
+        result.activeNodes = rest;
       }
       return result;
     }),
@@ -186,6 +197,18 @@ export const useRunStore = create<RunStore>((set) => ({
     set((state) => {
       const { [runId]: _, ...rest } = state.breakpoints;
       return { breakpoints: rest };
+    }),
+
+  activeNodes: {},
+  setActiveNode: (runId, nodeName) =>
+    set((state) => {
+      const existing = state.activeNodes[runId];
+      return {
+        activeNodes: {
+          ...state.activeNodes,
+          [runId]: { prev: existing?.current ?? null, current: nodeName },
+        },
+      };
     }),
 
   focusedSpan: null,
