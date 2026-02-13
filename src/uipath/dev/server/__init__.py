@@ -101,6 +101,9 @@ class UiPathDeveloperServer:
         self.port = self._find_free_port(self.host, self.port)
         app = self.create_app()
 
+        base_url = f"http://{self.host}:{self.port}"
+        self._print_banner(base_url)
+
         if self.open_browser:
             threading.Thread(
                 target=self._deferred_open_browser,
@@ -111,7 +114,7 @@ class UiPathDeveloperServer:
             app,
             host=self.host,
             port=self.port,
-            log_level="info",
+            log_level="warning",
         )
         server = uvicorn.Server(config)
         await server.serve()
@@ -129,7 +132,7 @@ class UiPathDeveloperServer:
         try:
             asyncio.run(self.run_async())
         except KeyboardInterrupt:
-            logger.info("Server stopped.")
+            pass
 
     # ------------------------------------------------------------------
     # Internal callbacks
@@ -173,9 +176,34 @@ class UiPathDeveloperServer:
             f"Could not find a free port in range {start_port}-{start_port + max_attempts - 1}"
         )
 
+    @staticmethod
+    def _print_banner(base_url: str) -> None:
+        """Print a welcome banner to the console."""
+        import sys
+
+        # Use emojis only if stdout supports unicode (not Windows cp1252)
+        try:
+            "\U0001f916".encode(sys.stdout.encoding or "utf-8")
+            server_icon, docs_icon = "\U0001f916", "\U0001f4da"
+        except (UnicodeEncodeError, LookupError):
+            server_icon, docs_icon = ">>", ">>"
+
+        banner = (
+            "\n"
+            " _   _ _ ____       _   _       ____\n"
+            "| | | (_)  _ \\ __ _| |_| |__   |  _ \\  _____   __\n"
+            "| | | | | |_) / _` | __| '_ \\  | | | |/ _ \\ \\ / /\n"
+            "| |_| | |  __/ (_| | |_| | | | | |_| |  __/\\ V /\n"
+            " \\___/|_|_|   \\__,_|\\__|_| |_| |____/ \\___| \\_/\n"
+            "\n"
+            f"  {server_icon} Server: {base_url}\n"
+            f"  {docs_icon} Docs:   https://uipath.github.io/uipath-python/\n"
+            "\n"
+            "  This server is designed for development and testing.\n"
+        )
+        print(banner)
+
     def _deferred_open_browser(self) -> None:
         """Open the browser after a short delay to let uvicorn bind."""
         time.sleep(1.5)
-        url = f"http://{self.host}:{self.port}"
-        logger.info("Opening browser at %s", url)
-        webbrowser.open(url)
+        webbrowser.open(f"http://{self.host}:{self.port}")
