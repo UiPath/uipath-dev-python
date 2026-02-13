@@ -353,6 +353,7 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
 
   const bpMap = useRunStore((s) => s.breakpoints[runId]);
   const toggleBreakpoint = useRunStore((s) => s.toggleBreakpoint);
+  const activeNode = useRunStore((s) => s.activeNodes[runId]);
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
@@ -398,6 +399,88 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
       }),
     );
   }, [breakpointNode, setNodes]);
+
+  // Highlight edges + nodes during execution
+  // - Paused at breakpoint (before node X): edges INTO X, node X (via isPausedHere)
+  // - Running (state event after node Y completes): edges OUT of Y, target nodes of those edges
+  useEffect(() => {
+    const isPaused = !!breakpointNode;
+    let matchIds = new Set<string>();
+    const activeTargetIds = new Set<string>();
+
+    // 1) Build label→ID lookup (read-only pass, returns nds unchanged)
+    setNodes((nds) => {
+      const labelToIds = new Map<string, Set<string>>();
+      for (const n of nds) {
+        const label = n.data?.label as string | undefined;
+        if (!label) continue;
+        const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
+        for (const key of [plainId, label]) {
+          let s = labelToIds.get(key);
+          if (!s) { s = new Set(); labelToIds.set(key, s); }
+          s.add(plainId);
+        }
+      }
+
+      if (isPaused && breakpointNode) {
+        const bpNames = breakpointNode.split(",").map((s) => s.trim()).filter(Boolean);
+        for (const name of bpNames) {
+          (labelToIds.get(name) ?? new Set()).forEach((id) => matchIds.add(id));
+        }
+      } else if (activeNode) {
+        matchIds = labelToIds.get(activeNode.current) ?? new Set<string>();
+      }
+
+      return nds;
+    });
+
+    // 2) Highlight edges + collect target IDs for running mode
+    setEdges((eds) =>
+      eds.map((e) => {
+        const srcPlain = e.source.includes("/") ? e.source.split("/").pop()! : e.source;
+        const tgtPlain = e.target.includes("/") ? e.target.split("/").pop()! : e.target;
+
+        const isActive = isPaused
+          ? matchIds.has(tgtPlain)   // breakpoint: edges INTO paused node
+          : matchIds.has(srcPlain);  // running: edges OUT of completed node
+
+        if (isActive) {
+          if (!isPaused) activeTargetIds.add(tgtPlain);
+          return {
+            ...e,
+            style: { stroke: "var(--accent)", strokeWidth: 2.5 },
+            markerEnd: { ...arrowMarker, color: "var(--accent)" },
+            data: { ...e.data, highlighted: true },
+            animated: true,
+          };
+        }
+
+        if (e.data?.highlighted) {
+          return {
+            ...e,
+            style: mkEdgeStyle((e as Edge & { data?: { conditional?: boolean } }).data?.conditional),
+            markerEnd: arrowMarker,
+            data: { ...e.data, highlighted: false },
+            animated: false,
+          };
+        }
+
+        return e;
+      }),
+    );
+
+    // 3) Mark target nodes as active (running mode only; breakpoint uses isPausedHere)
+    setNodes((nds) =>
+      nds.map((n) => {
+        if (n.type === "groupNode") return n;
+        const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
+        const active = activeTargetIds.has(plainId);
+        return active !== !!n.data?.isActiveNode
+          ? { ...n, data: { ...n.data, isActiveNode: active } }
+          : n;
+      }),
+    );
+  }, [activeNode, breakpointNode, setNodes, setEdges]);
 
   const nodeStatusMap = useCallback(() => {
     const map: Record<string, string> = {};
@@ -504,6 +587,17 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
         .graph-panel .react-flow__edges {
           overflow: visible !important;
           z-index: 1 !important;
+        }
+        .graph-panel .react-flow__edge.animated path {
+          stroke-dasharray: 8 4;
+          animation: edge-flow 0.6s linear infinite;
+        }
+        @keyframes edge-flow {
+          to { stroke-dashoffset: -12; }
+        }
+        @keyframes node-pulse {
+          0%, 100% { box-shadow: 0 0 4px var(--accent); }
+          50% { box-shadow: 0 0 10px var(--accent); }
         }
       `}</style>
       <ReactFlow

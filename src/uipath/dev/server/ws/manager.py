@@ -8,12 +8,13 @@ from typing import Any
 
 from fastapi import WebSocket
 
-from uipath.dev.models.data import ChatData, LogData, TraceData
+from uipath.dev.models.data import ChatData, LogData, StateData, TraceData
 from uipath.dev.models.execution import ExecutionRun
 from uipath.dev.server.serializers import (
     serialize_chat,
     serialize_log,
     serialize_run,
+    serialize_state,
     serialize_trace,
 )
 from uipath.dev.server.ws.protocol import ServerEvent, server_message
@@ -97,6 +98,11 @@ class ConnectionManager:
         """Broadcast a chat message to run subscribers."""
         msg = server_message(ServerEvent.CHAT, serialize_chat(chat_data))
         self._schedule_broadcast(chat_data.run_id, msg)
+
+    def broadcast_state(self, state_data: StateData) -> None:
+        """Broadcast a state transition to run subscribers."""
+        msg = server_message(ServerEvent.STATE, serialize_state(state_data))
+        self._schedule_broadcast(state_data.run_id, msg)
 
     def _schedule_broadcast(self, run_id: str, message: dict[str, Any]) -> None:
         """Schedule an async broadcast from a potentially sync callback."""

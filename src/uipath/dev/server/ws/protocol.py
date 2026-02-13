@@ -13,6 +13,7 @@ class ServerEvent(str, Enum):
     LOG = "log"
     TRACE = "trace"
     CHAT = "chat"
+    STATE = "state"
 
 
 class ClientCommand(str, Enum):

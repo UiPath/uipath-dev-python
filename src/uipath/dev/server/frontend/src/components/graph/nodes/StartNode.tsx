@@ -16,14 +16,17 @@ export default function StartNode({ data }: NodeProps) {
   const label = (data.label as string) ?? "Start";
   const hasBreakpoint = data.hasBreakpoint as boolean | undefined;
   const isPausedHere = data.isPausedHere as boolean | undefined;
+  const isActiveNode = data.isActiveNode as boolean | undefined;
 
   const borderColor = isPausedHere
     ? "var(--accent)"
-    : status === "completed"
-      ? "var(--success)"
-      : status === "running"
-        ? "var(--warning)"
-        : "var(--node-border)";
+    : isActiveNode
+      ? "var(--accent)"
+      : status === "completed"
+        ? "var(--success)"
+        : status === "running"
+          ? "var(--warning)"
+          : "var(--node-border)";
 
   return (
     <div
@@ -33,7 +36,8 @@ export default function StartNode({ data }: NodeProps) {
         background: "var(--node-bg)",
         color: "var(--text-primary)",
         border: `2px solid ${borderColor}`,
-        boxShadow: isPausedHere ? "0 0 4px var(--accent)" : undefined,
+        boxShadow: isPausedHere || isActiveNode ? "0 0 4px var(--accent)" : undefined,
+        animation: isActiveNode && !isPausedHere ? "node-pulse 1.5s ease-in-out infinite" : undefined,
       }}
       title={label}
     >

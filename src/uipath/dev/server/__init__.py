@@ -13,7 +13,7 @@ from typing import Any
 from uipath.core.tracing import UiPathTraceManager
 from uipath.runtime import UiPathRuntimeFactoryProtocol
 
-from uipath.dev.models.data import ChatData, LogData, TraceData
+from uipath.dev.models.data import ChatData, LogData, StateData, TraceData
 from uipath.dev.models.execution import ExecutionRun
 from uipath.dev.server.debug_bridge import WebDebugBridge
 from uipath.dev.services.run_service import RunService
@@ -76,6 +76,7 @@ class UiPathDeveloperServer:
             on_log=self._on_log,
             on_trace=self._on_trace,
             on_chat=self._on_chat,
+            on_state=self._on_state,
             debug_bridge_factory=lambda mode: WebDebugBridge(mode=mode),
         )
 
@@ -149,6 +150,10 @@ class UiPathDeveloperServer:
     def _on_chat(self, chat_data: ChatData) -> None:
         """Broadcast chat message to subscribed WebSocket clients."""
         self.connection_manager.broadcast_chat(chat_data)
+
+    def _on_state(self, state_data: StateData) -> None:
+        """Broadcast state transition to subscribed WebSocket clients."""
+        self.connection_manager.broadcast_state(state_data)
 
     @staticmethod
     def _find_free_port(host: str, start_port: int, max_attempts: int = 100) -> int:

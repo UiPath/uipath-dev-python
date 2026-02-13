@@ -1,4 +1,4 @@
-export type ServerEventType = "run.updated" | "log" | "trace" | "chat";
+export type ServerEventType = "run.updated" | "log" | "trace" | "chat" | "state";
 
 export interface ServerMessage {
   type: ServerEventType;
