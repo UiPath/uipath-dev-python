@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { LogEntry } from "../../types/run";
 
 const LEVEL_STYLES: Record<string, { color: string; bg: string; border: string }> = {
@@ -17,11 +17,19 @@ interface Props {
 }
 
 export default function LogPanel({ logs }: Props) {
+  const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs.length]);
+
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setShowScrollTop(el.scrollTop > 100);
+  };
 
   if (logs.length === 0) {
     return (
@@ -32,38 +40,52 @@ export default function LogPanel({ logs }: Props) {
   }
 
   return (
-    <div className="h-full overflow-y-auto font-mono text-xs">
-      {logs.map((log, i) => {
-        const time = new Date(log.timestamp).toLocaleTimeString(undefined, {
-          hour12: false,
-        });
-        const levelKey = log.level.toUpperCase();
-        const levelShort = levelKey.slice(0, 4);
-        const style = LEVEL_STYLES[levelKey] ?? DEFAULT_STYLE;
-        const isEven = i % 2 === 0;
+    <div className="h-full relative">
+      <div ref={scrollRef} onScroll={handleScroll} className="h-full overflow-y-auto font-mono text-xs">
+        {logs.map((log, i) => {
+          const time = new Date(log.timestamp).toLocaleTimeString(undefined, {
+            hour12: false,
+          });
+          const levelKey = log.level.toUpperCase();
+          const levelShort = levelKey.slice(0, 4);
+          const style = LEVEL_STYLES[levelKey] ?? DEFAULT_STYLE;
+          const isEven = i % 2 === 0;
 
-        return (
-          <div
-            key={i}
-            className="flex gap-3 px-3 py-1.5"
-            style={{
-              background: isEven ? "var(--bg-primary)" : "var(--bg-secondary)",
-            }}
-          >
-            <span className="text-[var(--text-muted)] shrink-0">{time}</span>
-            <span
-              className="shrink-0 self-start px-1.5 py-0.5 rounded text-[10px] font-semibold leading-none inline-flex items-center"
-              style={{ color: style.color, background: style.bg }}
+          return (
+            <div
+              key={i}
+              className="flex gap-3 px-3 py-1.5"
+              style={{
+                background: isEven ? "var(--bg-primary)" : "var(--bg-secondary)",
+              }}
             >
-              {levelShort}
-            </span>
-            <span className="text-[var(--text-primary)] whitespace-pre-wrap break-all">
-              {log.message}
-            </span>
-          </div>
-        );
-      })}
-      <div ref={bottomRef} />
+              <span className="text-[var(--text-muted)] shrink-0">{time}</span>
+              <span
+                className="shrink-0 self-start px-1.5 py-0.5 rounded text-[10px] font-semibold leading-none inline-flex items-center"
+                style={{ color: style.color, background: style.bg }}
+              >
+                {levelShort}
+              </span>
+              <span className="text-[var(--text-primary)] whitespace-pre-wrap break-all">
+                {log.message}
+              </span>
+            </div>
+          );
+        })}
+        <div ref={bottomRef} />
+      </div>
+      {showScrollTop && (
+        <button
+          onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })}
+          className="absolute top-2 right-3 w-6 h-6 flex items-center justify-center rounded-full cursor-pointer transition-opacity opacity-70 hover:opacity-100"
+          style={{ background: "var(--bg-tertiary)", color: "var(--text-primary)" }}
+          title="Scroll to top"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="18 15 12 9 6 15" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }

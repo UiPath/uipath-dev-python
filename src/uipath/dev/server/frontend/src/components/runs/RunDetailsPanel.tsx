@@ -178,7 +178,7 @@ export default function RunDetailsPanel({ run, ws }: Props) {
       >
         {/* Sidebar tab bar */}
         <div
-          className="flex items-center gap-1 px-2 border-b shrink-0 h-[33px]"
+          className="flex items-center gap-1 px-2 py-2.5 border-b shrink-0"
           style={{ borderColor: "var(--border)", background: "var(--bg-secondary)" }}
         >
           {sidebarTabs.map((tab) => (
@@ -231,12 +231,7 @@ export default function RunDetailsPanel({ run, ws }: Props) {
             )
           )}
           {sidebarTab === "io" && (
-            <div className="flex flex-col h-full">
-              <OutputSummary run={run} />
-              <div className="flex-1 overflow-hidden">
-                <IOView run={run} />
-              </div>
-            </div>
+            <IOView run={run} />
           )}
           {sidebarTab === "logs" && (
             <LogPanel logs={logs} />
@@ -244,57 +239,6 @@ export default function RunDetailsPanel({ run, ws }: Props) {
         </div>
       </div>
     </div>
-  );
-}
-
-const STATUS_BADGE: Record<string, { bg: string; text: string; label: string }> = {
-  pending: { bg: "color-mix(in srgb, var(--text-muted) 15%, var(--bg-secondary))", text: "var(--text-muted)", label: "Pending" },
-  running: { bg: "color-mix(in srgb, var(--warning) 15%, var(--bg-secondary))", text: "var(--warning)", label: "Running" },
-  suspended: { bg: "color-mix(in srgb, var(--info) 15%, var(--bg-secondary))", text: "var(--info)", label: "Suspended" },
-  completed: { bg: "color-mix(in srgb, var(--success) 15%, var(--bg-secondary))", text: "var(--success)", label: "Completed" },
-  failed: { bg: "color-mix(in srgb, var(--error) 15%, var(--bg-secondary))", text: "var(--error)", label: "Failed" },
-};
-
-function OutputSummary({ run }: { run: RunSummary }) {
-  const badge = STATUS_BADGE[run.status] ?? STATUS_BADGE.pending;
-  const entrypointName = run.entrypoint.split("/").pop() ?? run.entrypoint;
-
-  return (
-    <div
-      className="shrink-0 px-3 py-2 flex items-center gap-2 flex-wrap border-b"
-      style={{ background: "var(--bg-secondary)", borderColor: "var(--border)" }}
-    >
-      <div className="min-w-0 mr-1">
-        <div className="text-xs font-semibold truncate" style={{ color: "var(--text-primary)" }}>
-          {entrypointName}
-        </div>
-        <div className="text-[9px] font-mono truncate" style={{ color: "var(--text-muted)" }}>
-          {run.id}
-        </div>
-      </div>
-      <div
-        className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold"
-        style={{ background: badge.bg, color: badge.text }}
-      >
-        {badge.label}
-      </div>
-      <div className="flex items-center gap-1 flex-wrap ml-auto">
-        <MiniPill label={run.duration || "--"} color="var(--warning)" />
-        <MiniPill label={`${run.trace_count}t`} color="var(--info)" />
-        <MiniPill label={`${run.log_count}l`} color="var(--warning)" />
-      </div>
-    </div>
-  );
-}
-
-function MiniPill({ label, color }: { label: string; color: string }) {
-  return (
-    <span
-      className="text-[9px] font-semibold px-1.5 py-0.5 rounded"
-      style={{ color, background: `color-mix(in srgb, ${color} 10%, var(--bg-primary))` }}
-    >
-      {label}
-    </span>
   );
 }
 
