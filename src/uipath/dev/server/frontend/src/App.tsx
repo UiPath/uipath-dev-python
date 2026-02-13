@@ -21,7 +21,7 @@ export default function App() {
     setChatMessages,
     setEntrypoints,
   } = useRunStore();
-  const { view, runId: routeRunId, tab, setupEntrypoint, setupMode, navigate } = useHashRoute();
+  const { view, runId: routeRunId, setupEntrypoint, setupMode, navigate } = useHashRoute();
 
   // Sync route runId → store selection
   useEffect(() => {
@@ -109,12 +109,6 @@ export default function App() {
     navigate("#/new");
   };
 
-  const handleTabChange = (newTab: "traces" | "output") => {
-    if (selectedRunId) {
-      navigate(`#/runs/${selectedRunId}/${newTab}`);
-    }
-  };
-
   const selectedRun = selectedRunId ? runs[selectedRunId] : null;
 
   return (
@@ -136,7 +130,7 @@ export default function App() {
             onRunCreated={handleRunCreated}
           />
         ) : selectedRun ? (
-          <RunDetailsPanel run={selectedRun} ws={ws} activeTab={tab} onTabChange={handleTabChange} />
+          <RunDetailsPanel run={selectedRun} ws={ws} />
         ) : (
           <div className="flex items-center justify-center h-full text-[var(--text-muted)]">
             Select a run or create a new one
