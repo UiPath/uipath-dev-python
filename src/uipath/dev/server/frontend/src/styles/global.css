@@ -197,3 +197,25 @@ select option {
   color: var(--accent);
   text-decoration: underline;
 }
+
+.chat-markdown table {
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  width: 100%;
+}
+
+.chat-markdown th,
+.chat-markdown td {
+  border: 1px solid var(--border);
+  padding: 0.3em 0.6em;
+  text-align: left;
+}
+
+.chat-markdown th {
+  background: var(--bg-primary);
+  font-weight: 600;
+}
+
+.chat-markdown tr:nth-child(even) {
+  background: var(--bg-primary);
+}

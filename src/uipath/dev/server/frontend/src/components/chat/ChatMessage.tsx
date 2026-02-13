@@ -1,4 +1,5 @@
 import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface ChatMsg {
   message_id: string;
@@ -55,7 +56,7 @@ export default function ChatMessage({ message, onToolCallClick, toolCallIndices 
             className="text-xs leading-relaxed pl-2.5 chat-markdown"
             style={{ color: "var(--text-secondary)" }}
           >
-            <Markdown>{message.content}</Markdown>
+            <Markdown remarkPlugins={[remarkGfm]}>{message.content}</Markdown>
           </div>
         )
       )}
