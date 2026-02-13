@@ -5,6 +5,7 @@ import { listRuns, listEntrypoints, getRun } from "./api/client";
 import { useHashRoute } from "./hooks/useHashRoute";
 import Sidebar from "./components/layout/Sidebar";
 import NewRunPanel from "./components/runs/NewRunPanel";
+import SetupView from "./components/runs/SetupView";
 import RunDetailsPanel from "./components/runs/RunDetailsPanel";
 
 export default function App() {
@@ -20,7 +21,7 @@ export default function App() {
     setChatMessages,
     setEntrypoints,
   } = useRunStore();
-  const { view, runId: routeRunId, tab, navigate } = useHashRoute();
+  const { view, runId: routeRunId, tab, setupEntrypoint, setupMode, navigate } = useHashRoute();
 
   // Sync route runId → store selection
   useEffect(() => {
@@ -126,7 +127,14 @@ export default function App() {
       />
       <main className="flex-1 overflow-hidden bg-[var(--bg-primary)]">
         {view === "new" ? (
-          <NewRunPanel onRunCreated={handleRunCreated} />
+          <NewRunPanel />
+        ) : view === "setup" && setupEntrypoint && setupMode ? (
+          <SetupView
+            entrypoint={setupEntrypoint}
+            mode={setupMode}
+            ws={ws}
+            onRunCreated={handleRunCreated}
+          />
         ) : selectedRun ? (
           <RunDetailsPanel run={selectedRun} ws={ws} activeTab={tab} onTabChange={handleTabChange} />
         ) : (

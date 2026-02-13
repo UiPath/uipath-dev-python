@@ -1,111 +1,29 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useRunStore } from "../../store/useRunStore";
-import { getEntrypointMockInput, createRun } from "../../api/client";
+import { useHashRoute } from "../../hooks/useHashRoute";
 
-interface Props {
-  onRunCreated: (runId: string) => void;
-}
-
-interface SchemaError {
-  message: string;
-  type?: string;
-  error?: string;
-  traceback?: string;
-}
-
-export default function NewRunPanel({ onRunCreated }: Props) {
+export default function NewRunPanel() {
+  const { navigate } = useHashRoute();
   const entrypoints = useRunStore((s) => s.entrypoints);
   const [selectedEp, setSelectedEp] = useState("");
-  const [inputJson, setInputJson] = useState("{}");
-  const [loading, setLoading] = useState<string | null>(null);
-  const [loadingSchema, setLoadingSchema] = useState(false);
-  const [schemaError, setSchemaError] = useState<SchemaError | null>(null);
 
-  // Cache mock inputs so we don't re-fetch on every switch
-  const [mockCache, setMockCache] = useState<Record<string, string>>({});
-
-  // Select first entrypoint when available and none selected
   useEffect(() => {
     if (!selectedEp && entrypoints.length > 0) {
       setSelectedEp(entrypoints[0]);
     }
   }, [entrypoints, selectedEp]);
 
-  // Fetch mock input when entrypoint changes
-  const loadMockInput = useCallback(
-    async (ep: string) => {
-      if (!ep) return;
-
-      // Use cache if available
-      if (mockCache[ep]) {
-        setInputJson(mockCache[ep]);
-        setSchemaError(null);
-        return;
-      }
-
-      setLoadingSchema(true);
-      setSchemaError(null);
-      try {
-        const result = await getEntrypointMockInput(ep);
-        const json = JSON.stringify(result.mock_input, null, 2);
-        setInputJson(json);
-        setMockCache((prev) => ({ ...prev, [ep]: json }));
-      } catch (err: any) {
-        console.error("Failed to load mock input:", err);
-        // Parse error details from the HTTP exception
-        const errorDetail = err.detail || {};
-        setSchemaError({
-          message: errorDetail.message || `Failed to load schema for "${ep}"`,
-          type: errorDetail.type,
-          error: errorDetail.error,
-          traceback: errorDetail.traceback,
-        });
-        setInputJson("{}");
-      } finally {
-        setLoadingSchema(false);
-      }
-    },
-    [mockCache],
-  );
-
-  useEffect(() => {
-    if (selectedEp) {
-      loadMockInput(selectedEp);
-    }
-  }, [selectedEp, loadMockInput]);
-
-  const handleSubmit = async (mode: "run" | "debug" | "chat") => {
+  const handleModeSelect = (mode: "run" | "chat") => {
     if (!selectedEp) return;
-
-    let parsed: Record<string, unknown>;
-    try {
-      parsed = JSON.parse(inputJson);
-    } catch {
-      alert("Invalid JSON input");
-      return;
-    }
-
-    setLoading(mode);
-    try {
-      const run = await createRun(selectedEp, parsed, mode, []);
-      // Immediately add the run to the store so it's available when switching views
-      useRunStore.getState().upsertRun(run);
-      onRunCreated(run.id);
-    } catch (err) {
-      console.error("Failed to create run:", err);
-    } finally {
-      setLoading(null);
-    }
+    navigate(`#/setup/${encodeURIComponent(selectedEp)}/${mode}`);
   };
-
-  const isDisabled = !!loading || !selectedEp || loadingSchema;
 
   return (
     <div className="flex items-center justify-center h-full">
-      <div className="w-full max-w-lg px-6">
+      <div className="w-full max-w-xl px-6">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-2 mb-1">
+        <div className="mb-8 text-center">
+          <div className="flex items-center justify-center gap-2 mb-2">
             <div
               className="w-1.5 h-1.5 rounded-full"
               style={{ background: "var(--accent)" }}
@@ -118,12 +36,12 @@ export default function NewRunPanel({ onRunCreated }: Props) {
             </span>
           </div>
           <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-            Select an entrypoint and configure input
+            Select an entrypoint and choose a mode
           </p>
         </div>
 
         {/* Entrypoint */}
-        <div className="mb-5">
+        <div className="mb-8">
           <label
             className="block text-[10px] uppercase tracking-wider font-semibold mb-2"
             style={{ color: "var(--text-muted)" }}
@@ -151,180 +69,117 @@ export default function NewRunPanel({ onRunCreated }: Props) {
           </select>
         </div>
 
-        {schemaError ? (
-          <SchemaErrorDisplay error={schemaError} />
-        ) : (
-          <>
-            {/* JSON Input */}
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-2">
-                <label
-                  className="text-[10px] uppercase tracking-wider font-semibold"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  Input
-                </label>
-                {loadingSchema && (
-                  <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-                    Loading schema...
-                  </span>
-                )}
-              </div>
-              <textarea
-                value={inputJson}
-                onChange={(e) => setInputJson(e.target.value)}
-                rows={8}
-                spellCheck={false}
-                className="w-full rounded-md px-3 py-2 text-xs font-mono leading-relaxed resize-none focus:outline-none"
-                style={{
-                  background: "var(--bg-secondary)",
-                  border: "1px solid var(--border)",
-                  color: "var(--text-primary)",
-                }}
-              />
-            </div>
-
-            {/* Actions */}
-            <div className="flex gap-2">
-              <button
-                onClick={() => handleSubmit("run")}
-                disabled={isDisabled}
-                className="flex-1 py-1.5 text-xs font-medium rounded-md border cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                style={{
-                  background: "transparent",
-                  borderColor: "var(--success)",
-                  color: "var(--success)",
-                }}
-                onMouseEnter={(e) => {
-                  if (!isDisabled) {
-                    e.currentTarget.style.background = "color-mix(in srgb, var(--success) 10%, transparent)";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "transparent";
-                }}
-              >
-                {loading === "run" ? "Starting..." : "Run"}
-              </button>
-              <button
-                onClick={() => handleSubmit("chat")}
-                disabled={isDisabled}
-                className="flex-1 py-1.5 text-xs font-medium rounded-md border cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                style={{
-                  background: "transparent",
-                  borderColor: "var(--accent)",
-                  color: "var(--accent)",
-                }}
-                onMouseEnter={(e) => {
-                  if (!isDisabled) {
-                    e.currentTarget.style.background = "color-mix(in srgb, var(--accent) 10%, transparent)";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "transparent";
-                }}
-              >
-                {loading === "chat" ? "Starting..." : "Chat"}
-              </button>
-            </div>
-          </>
-        )}
+        {/* Mode cards */}
+        <div className="grid grid-cols-2 gap-4">
+          <ModeCard
+            title="Autonomous"
+            description="Run the agent end-to-end. Set breakpoints to pause and inspect execution."
+            icon={<BoltIcon />}
+            color="var(--success)"
+            onClick={() => handleModeSelect("run")}
+            disabled={!selectedEp}
+          />
+          <ModeCard
+            title="Conversational"
+            description="Interactive chat session. Send messages and receive responses in real time."
+            icon={<ChatIcon />}
+            color="var(--accent)"
+            onClick={() => handleModeSelect("chat")}
+            disabled={!selectedEp}
+          />
+        </div>
       </div>
     </div>
   );
 }
 
-function SchemaErrorDisplay({ error }: { error: SchemaError }) {
-  const [copied, setCopied] = useState(false);
-
-  const copyStacktrace = () => {
-    if (error.traceback) {
-      navigator.clipboard.writeText(error.traceback).then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      });
-    }
-  };
-
+function ModeCard({
+  title,
+  description,
+  icon,
+  color,
+  onClick,
+  disabled,
+}: {
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  color: string;
+  onClick: () => void;
+  disabled: boolean;
+}) {
   return (
-    <div
-      className="rounded-lg border max-h-96 overflow-y-auto"
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="group flex flex-col items-center text-center p-6 rounded-lg border transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
       style={{
-        borderColor: "var(--error)",
-        background: "color-mix(in srgb, var(--error) 5%, var(--bg-secondary))",
+        background: "var(--bg-secondary)",
+        borderColor: "var(--border)",
+      }}
+      onMouseEnter={(e) => {
+        if (!disabled) {
+          e.currentTarget.style.borderColor = color;
+          e.currentTarget.style.background = `color-mix(in srgb, ${color} 5%, var(--bg-secondary))`;
+        }
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = "var(--border)";
+        e.currentTarget.style.background = "var(--bg-secondary)";
       }}
     >
-      {/* Header */}
       <div
-        className="px-4 py-2.5 flex items-center justify-between"
+        className="mb-4 p-3 rounded-xl transition-colors"
         style={{
-          background: "color-mix(in srgb, var(--error) 15%, var(--bg-secondary))",
-          borderBottom: "1px solid var(--error)",
+          background: `color-mix(in srgb, ${color} 10%, var(--bg-primary))`,
+          color,
         }}
       >
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold" style={{ color: "var(--error)" }}>
-            Schema Error
-          </span>
-          {error.type && (
-            <span
-              className="text-xs font-mono px-2 py-0.5 rounded"
-              style={{
-                background: "color-mix(in srgb, var(--error) 20%, var(--bg-secondary))",
-                color: "var(--error)",
-              }}
-            >
-              {error.type}
-            </span>
-          )}
-        </div>
-        {error.traceback && (
-          <button
-            onClick={copyStacktrace}
-            className="text-xs font-semibold px-2.5 py-1 rounded transition-colors cursor-pointer"
-            style={{
-              background: copied ? "var(--success)" : "var(--bg-primary)",
-              color: copied ? "white" : "var(--text-primary)",
-              border: `1px solid ${copied ? "var(--success)" : "var(--border)"}`,
-            }}
-          >
-            {copied ? "Copied!" : "Copy Stacktrace"}
-          </button>
-        )}
+        {icon}
       </div>
+      <h3
+        className="text-sm font-semibold mb-1.5"
+        style={{ color: "var(--text-primary)" }}
+      >
+        {title}
+      </h3>
+      <p className="text-[11px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
+        {description}
+      </p>
+    </button>
+  );
+}
 
-      {/* Message */}
-      <div className="px-4 py-3">
-        <p className="text-sm" style={{ color: "var(--text-primary)" }}>
-          {error.message}
-        </p>
-        {error.error && (
-          <p className="text-xs mt-2 font-mono" style={{ color: "var(--text-secondary)" }}>
-            {error.error}
-          </p>
-        )}
-      </div>
+function BoltIcon() {
+  return (
+    <svg
+      width="28"
+      height="28"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </svg>
+  );
+}
 
-      {/* Stacktrace */}
-      {error.traceback && (
-        <div
-          className="px-4 py-3"
-          style={{
-            background: "var(--bg-primary)",
-            borderTop: "1px solid var(--border)",
-          }}
-        >
-          <div className="text-[10px] uppercase font-semibold mb-2" style={{ color: "var(--text-muted)" }}>
-            Stacktrace
-          </div>
-          <pre
-            className="text-xs font-mono whitespace-pre-wrap"
-            style={{ color: "var(--text-secondary)" }}
-          >
-            {error.traceback}
-          </pre>
-        </div>
-      )}
-    </div>
+function ChatIcon() {
+  return (
+    <svg
+      width="28"
+      height="28"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
   );
 }

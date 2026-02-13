@@ -6,6 +6,7 @@ import GraphPanel from "../graph/GraphPanel";
 import TraceTree from "../traces/TraceTree";
 import LogPanel from "../logs/LogPanel";
 import ChatPanel from "../chat/ChatPanel";
+import RunEventsPanel from "./RunEventsPanel";
 import JsonHighlight from "../shared/JsonHighlight";
 import DebugControls from "../debug/DebugControls";
 
@@ -22,9 +23,11 @@ interface Props {
 const EMPTY_TRACES: never[] = [];
 const EMPTY_LOGS: never[] = [];
 const EMPTY_CHAT: never[] = [];
+const EMPTY_STATE_EVENTS: never[] = [];
 
 export default function RunDetailsPanel({ run, ws, activeTab, onTabChange }: Props) {
   const isChatMode = run.mode === "chat";
+  const isRunMode = run.mode === "run";
   const [graphHeight, setGraphHeight] = useState(280);
   const [chatWidth, setChatWidth] = useState(() => {
     const saved = localStorage.getItem("chatPanelWidth");
@@ -41,6 +44,7 @@ export default function RunDetailsPanel({ run, ws, activeTab, onTabChange }: Pro
   const traces = useRunStore((s) => s.traces[run.id] || EMPTY_TRACES);
   const logs = useRunStore((s) => s.logs[run.id] || EMPTY_LOGS);
   const chatMessages = useRunStore((s) => s.chatMessages[run.id] || EMPTY_CHAT);
+  const stateEvents = useRunStore((s) => s.stateEvents[run.id] || EMPTY_STATE_EVENTS);
   const bpMap = useRunStore((s) => s.breakpoints[run.id]);
 
   // Sync breakpoints to server when switching to this run
@@ -252,6 +256,50 @@ export default function RunDetailsPanel({ run, ws, activeTab, onTabChange }: Pro
                       runStatus={run.status}
                       ws={ws}
                     />
+                  </div>
+                </div>
+              </>
+            )}
+            {/* Events sidebar for run mode */}
+            {isRunMode && (
+              <>
+                <div
+                  onMouseDown={onChatResizeStart}
+                  className="shrink-0 w-1.5 cursor-col-resize bg-[var(--border)] hover:bg-[var(--accent)] transition-colors relative"
+                >
+                  <div className="absolute inset-0 -left-1 -right-1" />
+                </div>
+                <div
+                  className="shrink-0 flex flex-col"
+                  style={{
+                    width: chatWidth,
+                    background: "var(--bg-primary)",
+                  }}
+                >
+                  <div
+                    className="px-4 text-xs font-semibold uppercase border-b flex items-center gap-2 h-[33px]"
+                    style={{
+                      color: "var(--text-muted)",
+                      borderColor: "var(--border)",
+                      background: "var(--bg-secondary)",
+                    }}
+                  >
+                    <span style={{ color: "var(--success)" }}>&#9679;</span>
+                    Events
+                    {run.status === "running" && (
+                      <span
+                        className="ml-auto text-[10px] px-2 py-0.5 rounded-full"
+                        style={{
+                          background: "color-mix(in srgb, var(--warning) 15%, var(--bg-secondary))",
+                          color: "var(--warning)",
+                        }}
+                      >
+                        Running...
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex-1 overflow-hidden">
+                    <RunEventsPanel events={stateEvents} runStatus={run.status} />
                   </div>
                 </div>
               </>

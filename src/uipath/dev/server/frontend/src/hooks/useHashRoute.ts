@@ -3,16 +3,30 @@ import { useSyncExternalStore, useCallback } from "react";
 type Tab = "traces" | "output";
 
 interface Route {
-  view: "new" | "details";
+  view: "new" | "setup" | "details";
   runId: string | null;
   tab: Tab;
+  setupEntrypoint: string | null;
+  setupMode: "run" | "chat" | null;
 }
 
 function parseHash(hash: string): Route {
   const path = hash.replace(/^#\/?/, "");
 
   if (!path || path === "new") {
-    return { view: "new", runId: null, tab: "traces" };
+    return { view: "new", runId: null, tab: "traces", setupEntrypoint: null, setupMode: null };
+  }
+
+  // setup/:entrypoint/:mode
+  const setupMatch = path.match(/^setup\/([^/]+)\/(run|chat)$/);
+  if (setupMatch) {
+    return {
+      view: "setup",
+      runId: null,
+      tab: "traces",
+      setupEntrypoint: decodeURIComponent(setupMatch[1]),
+      setupMode: setupMatch[2] as "run" | "chat",
+    };
   }
 
   // runs/:runId or runs/:runId/traces or runs/:runId/output
@@ -22,10 +36,12 @@ function parseHash(hash: string): Route {
       view: "details",
       runId: match[1],
       tab: (match[2] as Tab) ?? "traces",
+      setupEntrypoint: null,
+      setupMode: null,
     };
   }
 
-  return { view: "new", runId: null, tab: "traces" };
+  return { view: "new", runId: null, tab: "traces", setupEntrypoint: null, setupMode: null };
 }
 
 function getSnapshot(): string {
