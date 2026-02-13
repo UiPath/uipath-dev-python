@@ -16,10 +16,18 @@ export interface RunSummary {
   breakpoints: string[];
 }
 
+export interface StateEventData {
+  run_id: string;
+  node_name: string;
+  timestamp: string;
+  payload?: Record<string, unknown>;
+}
+
 export interface RunDetail extends RunSummary {
   traces: TraceSpan[];
   logs: LogEntry[];
   messages: ChatMessageData[];
+  states: StateEventData[];
 }
 
 export interface TraceSpan {

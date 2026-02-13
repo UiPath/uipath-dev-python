@@ -20,6 +20,7 @@ export default function App() {
     setLogs,
     setChatMessages,
     setEntrypoints,
+    setStateEvents,
   } = useRunStore();
   const { view, runId: routeRunId, setupEntrypoint, setupMode, navigate } = useHashRoute();
 
@@ -75,6 +76,17 @@ export default function App() {
         };
       });
       setChatMessages(selectedRunId, chatMsgs);
+      // Load persisted state events
+      if (detail.states && detail.states.length > 0) {
+        setStateEvents(
+          selectedRunId,
+          detail.states.map((s) => ({
+            node_name: s.node_name,
+            timestamp: new Date(s.timestamp).getTime(),
+            payload: s.payload,
+          })),
+        );
+      }
     };
 
     // Fetch full run details (includes fresh status in case we missed run.updated events)
@@ -93,7 +105,7 @@ export default function App() {
       clearTimeout(retryTimer);
       ws.unsubscribe(selectedRunId);
     };
-  }, [selectedRunId, ws, upsertRun, setTraces, setLogs, setChatMessages]);
+  }, [selectedRunId, ws, upsertRun, setTraces, setLogs, setChatMessages, setStateEvents]);
 
   const handleRunCreated = (runId: string) => {
     navigate(`#/runs/${runId}/traces`);
