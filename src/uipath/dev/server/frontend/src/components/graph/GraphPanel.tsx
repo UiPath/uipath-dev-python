@@ -350,6 +350,7 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [loading, setLoading] = useState(true);
+  const [graphUnavailable, setGraphUnavailable] = useState(false);
   const layoutRef = useRef(0);
   const rfInstance = useRef<ReactFlowInstance | null>(null);
 
@@ -527,9 +528,14 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
     const layoutId = ++layoutRef.current;
     setLoading(true);
 
+    setGraphUnavailable(false);
     getEntrypointGraph(entrypoint)
       .then(async (graphData) => {
         if (layoutRef.current !== layoutId) return;
+        if (!graphData.nodes.length) {
+          setGraphUnavailable(true);
+          return;
+        }
         const { nodes: laidNodes, edges: laidEdges } =
           await runElkLayout(graphData);
         if (layoutRef.current !== layoutId) return;
@@ -549,7 +555,9 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
           rfInstance.current?.fitView({ padding: 0.1, duration: 200 });
         }, 100);
       })
-      .catch(console.error)
+      .catch(() => {
+        if (layoutRef.current === layoutId) setGraphUnavailable(true);
+      })
       .finally(() => {
         if (layoutRef.current === layoutId) setLoading(false);
       });
@@ -600,6 +608,38 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
         style={{ color: "var(--text-muted)" }}
       >
         Loading graph...
+      </div>
+    );
+  }
+
+  if (graphUnavailable) {
+    return (
+      <div
+        className="flex flex-col items-center justify-center h-full gap-4"
+        style={{ color: "var(--text-muted)" }}
+      >
+        <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+          {/* Top node */}
+          <rect x="38" y="10" width="44" height="24" rx="6" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.4" />
+          <line x1="60" y1="34" x2="60" y2="46" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.3" />
+          {/* Middle-left node */}
+          <rect x="12" y="46" width="44" height="24" rx="6" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.3" />
+          {/* Middle-right node */}
+          <rect x="64" y="46" width="44" height="24" rx="6" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.3" />
+          {/* Lines from top to middle nodes */}
+          <line x1="60" y1="46" x2="34" y2="46" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.3" />
+          <line x1="60" y1="46" x2="86" y2="46" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.3" />
+          {/* Lines from middle to bottom */}
+          <line x1="34" y1="70" x2="34" y2="82" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.3" />
+          <line x1="86" y1="70" x2="86" y2="82" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.3" />
+          {/* Converge lines */}
+          <line x1="34" y1="82" x2="60" y2="82" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.3" />
+          <line x1="86" y1="82" x2="60" y2="82" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.3" />
+          <line x1="60" y1="82" x2="60" y2="86" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.3" />
+          {/* Bottom node */}
+          <rect x="38" y="86" width="44" height="24" rx="6" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.4" />
+        </svg>
+        <span className="text-xs">No graph schema available</span>
       </div>
     );
   }
