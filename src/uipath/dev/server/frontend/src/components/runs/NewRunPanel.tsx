@@ -36,38 +36,37 @@ export default function NewRunPanel() {
             </span>
           </div>
           <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-            Select an entrypoint and choose a mode
+            {entrypoints.length > 1 ? "Select an entrypoint and choose a mode" : "Choose a mode"}
           </p>
         </div>
 
         {/* Entrypoint */}
-        <div className="mb-8">
-          <label
-            className="block text-[10px] uppercase tracking-wider font-semibold mb-2"
-            style={{ color: "var(--text-muted)" }}
-          >
-            Entrypoint
-          </label>
-          <select
-            value={selectedEp}
-            onChange={(e) => setSelectedEp(e.target.value)}
-            className="w-full rounded-md px-3 py-1.5 text-xs font-mono cursor-pointer appearance-auto"
-            style={{
-              background: "var(--bg-secondary)",
-              border: "1px solid var(--border)",
-              color: "var(--text-primary)",
-            }}
-          >
-            {entrypoints.length === 0 && (
-              <option value="">Loading...</option>
-            )}
-            {entrypoints.map((ep) => (
-              <option key={ep} value={ep}>
-                {ep}
-              </option>
-            ))}
-          </select>
-        </div>
+        {entrypoints.length > 1 && (
+          <div className="mb-8">
+            <label
+              className="block text-[10px] uppercase tracking-wider font-semibold mb-2"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Entrypoint
+            </label>
+            <select
+              value={selectedEp}
+              onChange={(e) => setSelectedEp(e.target.value)}
+              className="w-full rounded-md px-3 py-1.5 text-xs font-mono cursor-pointer appearance-auto"
+              style={{
+                background: "var(--bg-secondary)",
+                border: "1px solid var(--border)",
+                color: "var(--text-primary)",
+              }}
+            >
+              {entrypoints.map((ep) => (
+                <option key={ep} value={ep}>
+                  {ep}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Mode cards */}
         <div className="grid grid-cols-2 gap-4">
