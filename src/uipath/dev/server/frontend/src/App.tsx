@@ -5,6 +5,7 @@ import { listRuns, listEntrypoints, getRun } from "./api/client";
 import { useHashRoute } from "./hooks/useHashRoute";
 import Sidebar from "./components/layout/Sidebar";
 import NewRunPanel from "./components/runs/NewRunPanel";
+import SetupView from "./components/runs/SetupView";
 import RunDetailsPanel from "./components/runs/RunDetailsPanel";
 
 export default function App() {
@@ -19,8 +20,9 @@ export default function App() {
     setLogs,
     setChatMessages,
     setEntrypoints,
+    setStateEvents,
   } = useRunStore();
-  const { view, runId: routeRunId, tab, navigate } = useHashRoute();
+  const { view, runId: routeRunId, setupEntrypoint, setupMode, navigate } = useHashRoute();
 
   // Sync route runId → store selection
   useEffect(() => {
@@ -74,6 +76,17 @@ export default function App() {
         };
       });
       setChatMessages(selectedRunId, chatMsgs);
+      // Load persisted state events
+      if (detail.states && detail.states.length > 0) {
+        setStateEvents(
+          selectedRunId,
+          detail.states.map((s) => ({
+            node_name: s.node_name,
+            timestamp: new Date(s.timestamp).getTime(),
+            payload: s.payload,
+          })),
+        );
+      }
     };
 
     // Fetch full run details (includes fresh status in case we missed run.updated events)
@@ -92,7 +105,7 @@ export default function App() {
       clearTimeout(retryTimer);
       ws.unsubscribe(selectedRunId);
     };
-  }, [selectedRunId, ws, upsertRun, setTraces, setLogs, setChatMessages]);
+  }, [selectedRunId, ws, upsertRun, setTraces, setLogs, setChatMessages, setStateEvents]);
 
   const handleRunCreated = (runId: string) => {
     navigate(`#/runs/${runId}/traces`);
@@ -108,12 +121,6 @@ export default function App() {
     navigate("#/new");
   };
 
-  const handleTabChange = (newTab: "traces" | "output") => {
-    if (selectedRunId) {
-      navigate(`#/runs/${selectedRunId}/${newTab}`);
-    }
-  };
-
   const selectedRun = selectedRunId ? runs[selectedRunId] : null;
 
   return (
@@ -126,9 +133,16 @@ export default function App() {
       />
       <main className="flex-1 overflow-hidden bg-[var(--bg-primary)]">
         {view === "new" ? (
-          <NewRunPanel onRunCreated={handleRunCreated} />
+          <NewRunPanel />
+        ) : view === "setup" && setupEntrypoint && setupMode ? (
+          <SetupView
+            entrypoint={setupEntrypoint}
+            mode={setupMode}
+            ws={ws}
+            onRunCreated={handleRunCreated}
+          />
         ) : selectedRun ? (
-          <RunDetailsPanel run={selectedRun} ws={ws} activeTab={tab} onTabChange={handleTabChange} />
+          <RunDetailsPanel run={selectedRun} ws={ws} />
         ) : (
           <div className="flex items-center justify-center h-full text-[var(--text-muted)]">
             Select a run or create a new one

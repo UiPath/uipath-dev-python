@@ -11,7 +11,7 @@ from uipath.core.chat import UiPathConversationMessage, UiPathConversationMessag
 from uipath.runtime.errors import UiPathErrorContract
 
 from uipath.dev.models.chat import ChatEvents
-from uipath.dev.models.data import LogData, TraceData
+from uipath.dev.models.data import LogData, StateData, TraceData
 
 
 class ExecutionMode(Enum):
@@ -43,6 +43,7 @@ class ExecutionRun:
         self.status = "pending"  # pending, running, completed, failed, suspended
         self.traces: list[TraceData] = []
         self.logs: list[LogData] = []
+        self.states: list[StateData] = []
         self.error: UiPathErrorContract | None = None
         self.breakpoints: list[str] = []
         self.breakpoint_node: str | None = None

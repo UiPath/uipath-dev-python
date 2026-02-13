@@ -27,15 +27,21 @@ def _go_to_new_run(page: Page, url: str) -> None:
     _wait_for_entrypoints(page)
 
 
-def _run_and_wait_completed(page: Page) -> None:
-    """Click Run, switch to Output tab, wait for completed status."""
-    page.get_by_role("button", name="Run", exact=True).click()
+def _run_autonomous_and_wait_completed(page: Page) -> None:
+    """Click Autonomous, then Execute, switch to I/O tab, wait for completed."""
+    # Click Autonomous mode card
+    page.get_by_role("button", name="Autonomous").click()
 
-    # After clicking Run, the app navigates to run details (Trace tab).
-    # Switch to Output tab where the status badge lives.
-    output_tab = page.get_by_role("button", name="Output")
-    expect(output_tab).to_be_visible(timeout=10000)
-    output_tab.click()
+    # Wait for setup view with Execute button
+    execute_btn = page.get_by_role("button", name="Execute")
+    expect(execute_btn).to_be_visible(timeout=10000)
+    execute_btn.click()
+
+    # After clicking Execute, the app navigates to run details.
+    # Switch to I/O tab where the status badge lives.
+    io_tab = page.get_by_role("button", name="I/O")
+    expect(io_tab).to_be_visible(timeout=10000)
+    io_tab.click()
 
     # Wait for the completed status badge
     expect(page.get_by_text("Completed", exact=True)).to_be_visible(timeout=15000)
@@ -57,21 +63,28 @@ def test_run_greeting_and_check_output(page: Page, live_server_url: str):
     """Run the default entrypoint and verify output JSON appears."""
     _go_to_new_run(page, live_server_url)
 
-    _run_and_wait_completed(page)
+    _run_autonomous_and_wait_completed(page)
 
-    # The output tab should render the JSON output from the greeting runtime
+    # The I/O tab should render the JSON output from the greeting runtime
     expect(page.locator("pre").first).to_be_visible(timeout=5000)
 
 
-def test_run_shows_traces(page: Page, live_server_url: str):
-    """Run and verify the Trace/Output tab bar is shown."""
+def test_run_shows_sidebar_tabs(page: Page, live_server_url: str):
+    """Run and verify the sidebar tabs (Events, I/O, Logs) are shown."""
     _go_to_new_run(page, live_server_url)
 
-    page.get_by_role("button", name="Run", exact=True).click()
+    # Click Autonomous mode card
+    page.get_by_role("button", name="Autonomous").click()
 
-    # Run details view should show both tab buttons
-    expect(page.get_by_role("button", name="Trace")).to_be_visible(timeout=10000)
-    expect(page.get_by_role("button", name="Output")).to_be_visible()
+    # Wait for setup view, then execute
+    execute_btn = page.get_by_role("button", name="Execute")
+    expect(execute_btn).to_be_visible(timeout=10000)
+    execute_btn.click()
+
+    # Run details view should show sidebar tab buttons
+    expect(page.get_by_role("button", name="Events")).to_be_visible(timeout=10000)
+    expect(page.get_by_role("button", name="I/O")).to_be_visible()
+    expect(page.get_by_role("button", name="Logs")).to_be_visible()
 
 
 def test_sidebar_shows_run_history(page: Page, live_server_url: str):
@@ -81,7 +94,13 @@ def test_sidebar_shows_run_history(page: Page, live_server_url: str):
     sidebar = page.locator("aside")
     before_count = sidebar.get_by_role("button").count()
 
-    page.get_by_role("button", name="Run", exact=True).click()
+    # Click Autonomous mode card
+    page.get_by_role("button", name="Autonomous").click()
+
+    # Wait for setup view, then execute
+    execute_btn = page.get_by_role("button", name="Execute")
+    expect(execute_btn).to_be_visible(timeout=10000)
+    execute_btn.click()
 
     # Sidebar should now have one more button (the new run entry)
     expect(sidebar.get_by_role("button").nth(before_count)).to_be_visible(

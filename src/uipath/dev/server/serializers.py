@@ -49,10 +49,14 @@ def serialize_chat(chat_data: ChatData) -> dict[str, Any]:
 
 def serialize_state(state_data: StateData) -> dict[str, Any]:
     """Serialize a StateData instance to a JSON-compatible dict."""
-    return {
+    result: dict[str, Any] = {
         "run_id": state_data.run_id,
         "node_name": state_data.node_name,
+        "timestamp": state_data.timestamp.isoformat(),
     }
+    if state_data.payload is not None:
+        result["payload"] = state_data.payload
+    return result
 
 
 def serialize_run(run: ExecutionRun) -> dict[str, Any]:
@@ -92,4 +96,5 @@ def serialize_run_detail(run: ExecutionRun) -> dict[str, Any]:
     base["messages"] = [
         msg.model_dump(by_alias=True, exclude_none=True) for msg in run.messages
     ]
+    base["states"] = [serialize_state(s) for s in run.states]
     return base

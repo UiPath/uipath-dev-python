@@ -38,6 +38,8 @@ class StateData:
 
     run_id: str
     node_name: str
+    payload: dict[str, Any] | None = None
+    timestamp: datetime = field(default_factory=datetime.now)
 
 
 @dataclass
