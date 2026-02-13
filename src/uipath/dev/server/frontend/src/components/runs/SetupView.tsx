@@ -21,6 +21,11 @@ export default function SetupView({ entrypoint, mode, ws, onRunCreated }: Props)
   const [schemaError, setSchemaError] = useState<string | null>(null);
   const [chatText, setChatText] = useState("");
   const [fitViewTrigger, setFitViewTrigger] = useState(0);
+  const [jsonValid, setJsonValid] = useState(true);
+  const [textareaHeight, setTextareaHeight] = useState(() => {
+    const saved = localStorage.getItem("setupTextareaHeight");
+    return saved ? parseInt(saved, 10) : 140;
+  });
   const containerRef = useRef<HTMLDivElement>(null);
   const [panelWidth, setPanelWidth] = useState(() => {
     const saved = localStorage.getItem("setupPanelWidth");
@@ -109,6 +114,44 @@ export default function SetupView({ entrypoint, mode, ws, onRunCreated }: Props)
       setLoading(false);
     }
   };
+
+  // Validate JSON whenever inputJson changes
+  useEffect(() => {
+    try {
+      JSON.parse(inputJson);
+      setJsonValid(true);
+    } catch {
+      setJsonValid(false);
+    }
+  }, [inputJson]);
+
+  // Textarea top-border drag resize
+  const onTextareaDragStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      const startY = e.clientY;
+      const startH = textareaHeight;
+
+      const onMove = (ev: MouseEvent) => {
+        const newH = Math.max(60, startH + (startY - ev.clientY));
+        setTextareaHeight(newH);
+      };
+
+      const onUp = () => {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        localStorage.setItem("setupTextareaHeight", String(textareaHeight));
+      };
+
+      document.body.style.cursor = "row-resize";
+      document.body.style.userSelect = "none";
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    },
+    [textareaHeight],
+  );
 
   // Panel resize
   const onPanelResizeStart = useCallback(
@@ -226,10 +269,13 @@ export default function SetupView({ entrypoint, mode, ws, onRunCreated }: Props)
         {/* Bottom input section */}
         {isRunMode ? (
           /* Autonomous: JSON textarea + Execute */
-          <div
-            className="border-t px-4 py-3"
-            style={{ borderColor: "var(--border)" }}
-          >
+          <div className="flex flex-col" style={{ background: "var(--bg-primary)" }}>
+            {/* Drag handle (the top border) */}
+            <div
+              onMouseDown={onTextareaDragStart}
+              className="shrink-0 h-1.5 cursor-row-resize bg-[var(--border)] hover:bg-[var(--accent)] transition-colors"
+            />
+          <div className="px-4 py-3">
             {schemaError ? (
               <div
                 className="text-xs mb-3 px-3 py-2 rounded"
@@ -255,12 +301,12 @@ export default function SetupView({ entrypoint, mode, ws, onRunCreated }: Props)
                 <textarea
                   value={inputJson}
                   onChange={(e) => setInputJson(e.target.value)}
-                  rows={6}
                   spellCheck={false}
                   className="w-full rounded-md px-3 py-2 text-xs font-mono leading-relaxed resize-none focus:outline-none mb-3"
                   style={{
+                    height: textareaHeight,
                     background: "var(--bg-secondary)",
-                    border: "1px solid var(--border)",
+                    border: `1px solid ${jsonValid ? "var(--border)" : "#b91c1c"}`,
                     color: "var(--text-primary)",
                   }}
                 />
@@ -301,6 +347,7 @@ export default function SetupView({ entrypoint, mode, ws, onRunCreated }: Props)
                 </>
               )}
             </button>
+          </div>
           </div>
         ) : (
           /* Conversational: chat input + Send */
