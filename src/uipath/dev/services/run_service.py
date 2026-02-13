@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import traceback
 from datetime import datetime
 from typing import Any, Callable, Literal, Protocol, cast
@@ -328,10 +327,8 @@ class RunService:
     def _handle_state_update(self, run_id: str, state: UiPathRuntimeStateEvent) -> None:
         """Handle state update from debug runtime."""
         run = self.runs.get(run_id)
-        if run:
-            self._add_info_log(run, json.dumps(state.payload))
-            if state.node_name and self.on_state is not None:
-                self.on_state(StateData(run_id=run_id, node_name=state.node_name))
+        if run and state.node_name and self.on_state is not None:
+            self.on_state(StateData(run_id=run_id, node_name=state.node_name))
 
     def _handle_debug_started(self, run_id: str) -> None:
         """Handle debug started event."""
