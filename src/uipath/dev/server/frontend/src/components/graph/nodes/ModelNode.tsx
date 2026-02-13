@@ -42,7 +42,7 @@ export default function ModelNode({ data }: NodeProps) {
         boxShadow: isPausedHere || isActiveNode ? "0 0 4px var(--accent)" : undefined,
         animation: isActiveNode && !isPausedHere ? "node-pulse 1.5s ease-in-out infinite" : undefined,
       }}
-      title={label}
+      title={modelName ? `${label}\n${modelName}` : label}
     >
       {hasBreakpoint && (
         <div
