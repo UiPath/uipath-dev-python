@@ -343,9 +343,10 @@ interface Props {
   runId: string;
   breakpointNode?: string | null;
   onBreakpointChange?: (breakpoints: string[]) => void;
+  fitViewTrigger?: number;
 }
 
-export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, onBreakpointChange }: Props) {
+export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, onBreakpointChange, fitViewTrigger }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [loading, setLoading] = useState(true);
@@ -561,6 +562,13 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
     }, 100);
     return () => clearTimeout(t);
   }, [runId]);
+
+  // Fit view when parent container is resized (drag handles)
+  useEffect(() => {
+    if (fitViewTrigger) {
+      rfInstance.current?.fitView({ padding: 0.1, duration: 200 });
+    }
+  }, [fitViewTrigger]);
 
   // Update node status from traces
   useEffect(() => {

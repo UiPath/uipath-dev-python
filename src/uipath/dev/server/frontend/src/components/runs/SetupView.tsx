@@ -20,6 +20,7 @@ export default function SetupView({ entrypoint, mode, ws, onRunCreated }: Props)
   const [loadingSchema, setLoadingSchema] = useState(true);
   const [schemaError, setSchemaError] = useState<string | null>(null);
   const [chatText, setChatText] = useState("");
+  const [fitViewTrigger, setFitViewTrigger] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const [panelWidth, setPanelWidth] = useState(() => {
     const saved = localStorage.getItem("setupPanelWidth");
@@ -130,6 +131,7 @@ export default function SetupView({ entrypoint, mode, ws, onRunCreated }: Props)
         document.body.style.cursor = "";
         document.body.style.userSelect = "";
         localStorage.setItem("setupPanelWidth", String(panelWidth));
+        setFitViewTrigger((n) => n + 1);
       };
 
       document.body.style.cursor = "col-resize";
@@ -151,6 +153,7 @@ export default function SetupView({ entrypoint, mode, ws, onRunCreated }: Props)
           entrypoint={entrypoint}
           traces={[]}
           runId={SETUP_RUN_ID}
+          fitViewTrigger={fitViewTrigger}
         />
       </div>
 

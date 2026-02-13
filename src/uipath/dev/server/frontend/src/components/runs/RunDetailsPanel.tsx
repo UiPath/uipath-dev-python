@@ -31,6 +31,7 @@ export default function RunDetailsPanel({ run, ws }: Props) {
     return saved ? parseInt(saved, 10) : 380;
   });
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("primary");
+  const [fitViewTrigger, setFitViewTrigger] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const outerRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
@@ -76,6 +77,7 @@ export default function RunDetailsPanel({ run, ws }: Props) {
       document.removeEventListener("mouseup", onUp);
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
+      setFitViewTrigger((n) => n + 1);
     };
 
     document.body.style.cursor = "row-resize";
@@ -104,6 +106,7 @@ export default function RunDetailsPanel({ run, ws }: Props) {
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
       localStorage.setItem("chatPanelWidth", String(sidebarWidth));
+      setFitViewTrigger((n) => n + 1);
     };
 
     document.body.style.cursor = "col-resize";
@@ -145,7 +148,7 @@ export default function RunDetailsPanel({ run, ws }: Props) {
         )}
         {/* Graph panel — resizable */}
         <div className="shrink-0" style={{ height: graphHeight }}>
-          <GraphPanel entrypoint={run.entrypoint} traces={traces} runId={run.id} breakpointNode={run.breakpoint_node} onBreakpointChange={handleBreakpointChange} />
+          <GraphPanel entrypoint={run.entrypoint} traces={traces} runId={run.id} breakpointNode={run.breakpoint_node} onBreakpointChange={handleBreakpointChange} fitViewTrigger={fitViewTrigger} />
         </div>
         {/* Drag handle */}
         <div
