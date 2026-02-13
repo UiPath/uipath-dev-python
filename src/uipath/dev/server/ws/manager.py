@@ -44,7 +44,6 @@ class ConnectionManager:
         """Accept a new WebSocket connection."""
         await websocket.accept()
         self._connections.add(websocket)
-        logger.info(f"WebSocket connected: {id(websocket)}")
 
     def disconnect(self, websocket: WebSocket) -> None:
         """Remove a WebSocket connection and all its subscriptions."""
@@ -53,7 +52,6 @@ class ConnectionManager:
             self._subscriptions[run_id].discard(websocket)
             if not self._subscriptions[run_id]:
                 del self._subscriptions[run_id]
-        logger.info(f"WebSocket disconnected: {id(websocket)}")
 
     async def disconnect_all(self) -> None:
         """Close all WebSocket connections gracefully."""

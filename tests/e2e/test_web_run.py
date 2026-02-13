@@ -28,7 +28,7 @@ def _go_to_new_run(page: Page, url: str) -> None:
 
 
 def _run_autonomous_and_wait_completed(page: Page) -> None:
-    """Click Autonomous, then Execute, switch to I/O tab, wait for completed."""
+    """Click Autonomous, then Execute, switch to I/O tab, wait for output."""
     # Click Autonomous mode card
     page.get_by_role("button", name="Autonomous").click()
 
@@ -38,13 +38,13 @@ def _run_autonomous_and_wait_completed(page: Page) -> None:
     execute_btn.click()
 
     # After clicking Execute, the app navigates to run details.
-    # Switch to I/O tab where the status badge lives.
+    # Switch to I/O tab and wait for output to appear (proves run completed).
     io_tab = page.get_by_role("button", name="I/O")
     expect(io_tab).to_be_visible(timeout=10000)
     io_tab.click()
 
-    # Wait for the completed status badge
-    expect(page.get_by_text("Completed", exact=True)).to_be_visible(timeout=15000)
+    # Wait for the Output section to appear (only rendered after run completes)
+    expect(page.get_by_text("Output", exact=True)).to_be_visible(timeout=15000)
 
 
 def test_new_run_page_loads(page: Page, live_server_url: str):
