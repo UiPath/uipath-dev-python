@@ -3,6 +3,7 @@ import ReactFlow, {
   Background,
   Controls,
   MiniMap,
+  Panel,
   MarkerType,
   useNodesState,
   useEdgesState,
@@ -353,6 +354,7 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
 
   const bpMap = useRunStore((s) => s.breakpoints[runId]);
   const toggleBreakpoint = useRunStore((s) => s.toggleBreakpoint);
+  const clearBreakpoints = useRunStore((s) => s.clearBreakpoints);
   const activeNode = useRunStore((s) => s.activeNodes[runId]);
 
   const onNodeClick = useCallback(
@@ -367,6 +369,28 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
     },
     [runId, toggleBreakpoint, onBreakpointChange],
   );
+
+  const hasAnyBreakpoint = bpMap && Object.keys(bpMap).length > 0;
+
+  const onToggleAllBreakpoints = useCallback(() => {
+    if (hasAnyBreakpoint) {
+      clearBreakpoints(runId);
+      onBreakpointChange?.([]);
+    } else {
+      // Set breakpoints on all non-group, non-start, non-end nodes
+      const nodeIds: string[] = [];
+      for (const n of nodes) {
+        if (n.type === "groupNode" || n.type === "startNode" || n.type === "endNode") continue;
+        const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
+        nodeIds.push(plainId);
+      }
+      for (const id of nodeIds) {
+        if (!bpMap?.[id]) toggleBreakpoint(runId, id);
+      }
+      const updated = useRunStore.getState().breakpoints[runId] ?? {};
+      onBreakpointChange?.(Object.keys(updated));
+    }
+  }, [runId, hasAnyBreakpoint, bpMap, nodes, clearBreakpoints, toggleBreakpoint, onBreakpointChange]);
 
   // Inject hasBreakpoint into node data when breakpoints change
   useEffect(() => {
@@ -617,6 +641,33 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
       >
         <Background color="var(--bg-tertiary)" gap={16} />
         <Controls showInteractive={false} />
+        <Panel position="top-right">
+          <button
+            onClick={onToggleAllBreakpoints}
+            title={hasAnyBreakpoint ? "Remove all breakpoints" : "Set breakpoints on all nodes"}
+            style={{
+              background: "var(--bg-secondary)",
+              color: hasAnyBreakpoint ? "var(--error)" : "var(--text-muted)",
+              border: `1px solid ${hasAnyBreakpoint ? "var(--error)" : "var(--node-border)"}`,
+              borderRadius: 6,
+              padding: "4px 10px",
+              fontSize: 11,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+            }}
+          >
+            <span style={{
+              display: "inline-block",
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: hasAnyBreakpoint ? "var(--error)" : "var(--node-border)",
+            }} />
+            {hasAnyBreakpoint ? "Clear all" : "Break all"}
+          </button>
+        </Panel>
         <MiniMap
           nodeColor={(n) => {
             if (n.type === "groupNode") return "var(--bg-tertiary)";
