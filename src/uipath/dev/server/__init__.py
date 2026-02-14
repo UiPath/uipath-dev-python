@@ -13,27 +13,22 @@ import webbrowser
 from collections.abc import Callable
 from typing import Any
 
+import uvicorn
 from uipath.core.tracing import UiPathTraceManager
 from uipath.runtime import UiPathRuntimeFactoryProtocol
 
-from uipath.dev.models.data import ChatData, LogData, StateData, TraceData
+from uipath.dev.models.data import (
+    ChatData,
+    InterruptData,
+    LogData,
+    StateData,
+    TraceData,
+)
 from uipath.dev.models.execution import ExecutionRun
 from uipath.dev.server.debug_bridge import WebDebugBridge
 from uipath.dev.services.run_service import RunService
 
 logger = logging.getLogger(__name__)
-
-try:
-    import fastapi  # noqa: F401
-    import uvicorn  # noqa: F401
-
-    HAS_EXTRAS = True
-except ModuleNotFoundError:
-    HAS_EXTRAS = False
-
-_MISSING_EXTRAS_MSG = (
-    "Server extras are not installed. Install them with: pip install uipath-dev[server]"
-)
 
 
 class UiPathDeveloperServer:
@@ -86,14 +81,12 @@ class UiPathDeveloperServer:
             on_trace=self._on_trace,
             on_chat=self._on_chat,
             on_state=self._on_state,
+            on_interrupt=self._on_interrupt,
             debug_bridge_factory=lambda mode: WebDebugBridge(mode=mode),
         )
 
     def create_app(self) -> Any:
         """Create and return a FastAPI application."""
-        if not HAS_EXTRAS:
-            raise ImportError(_MISSING_EXTRAS_MSG)
-
         from uipath.dev.server.app import create_app
 
         return create_app(self)
@@ -104,9 +97,6 @@ class UiPathDeveloperServer:
         This is the main entry point — mirrors UiPathDeveloperConsole.run_async().
         Blocks until the server is shut down (Ctrl-C / SIGINT).
         """
-        if not HAS_EXTRAS:
-            raise ImportError(_MISSING_EXTRAS_MSG)
-
         await self.run_service.apply_factory_settings()
         self.port = self._find_free_port(self.host, self.port)
         app = self.create_app()
@@ -232,6 +222,10 @@ class UiPathDeveloperServer:
         """Broadcast chat message to subscribed WebSocket clients."""
         self.connection_manager.broadcast_chat(chat_data)
 
+    def _on_interrupt(self, interrupt_data: InterruptData) -> None:
+        """Broadcast chat interrupt to subscribed WebSocket clients."""
+        self.connection_manager.broadcast_interrupt(interrupt_data)
+
     def _on_state(self, state_data: StateData) -> None:
         """Broadcast state transition to subscribed WebSocket clients."""
         self.connection_manager.broadcast_state(state_data)
@@ -259,6 +253,11 @@ class UiPathDeveloperServer:
         """Print a welcome banner to the console."""
         import sys
 
+        from rich.console import Console
+        from rich.text import Text
+
+        console = Console()
+
         # Use emojis only if stdout supports unicode (not Windows cp1252)
         try:
             "\U0001f916".encode(sys.stdout.encoding or "utf-8")
@@ -266,20 +265,31 @@ class UiPathDeveloperServer:
         except (UnicodeEncodeError, LookupError):
             server_icon, docs_icon = ">>", ">>"
 
-        banner = (
-            "\n"
-            " _   _ _ ____       _   _       ____\n"
-            "| | | (_)  _ \\ __ _| |_| |__   |  _ \\  _____   __\n"
-            "| | | | | |_) / _` | __| '_ \\  | | | |/ _ \\ \\ / /\n"
-            "| |_| | |  __/ (_| | |_| | | | | |_| |  __/\\ V /\n"
-            " \\___/|_|_|   \\__,_|\\__|_| |_| |____/ \\___| \\_/\n"
-            "\n"
-            f"  {server_icon} Server: {base_url}\n"
-            f"  {docs_icon} Docs:   https://uipath.github.io/uipath-python/\n"
-            "\n"
-            "  This server is designed for development and testing.\n"
+        art_lines = [
+            " _   _ _ ____       _   _       ____",
+            "| | | (_)  _ \\ __ _| |_| |__   |  _ \\  _____   __",
+            "| | | | | |_) / _` | __| '_ \\  | | | |/ _ \\ \\ / /",
+            "| |_| | |  __/ (_| | |_| | | | | |_| |  __/\\ V /",
+            " \\___/|_|_|   \\__,_|\\__|_| |_| |____/ \\___| \\_/",
+        ]
+
+        console.print()
+        for line in art_lines:
+            styled = Text(line)
+            styled.stylize("bold orange1")
+            console.print(styled)
+        console.print()
+
+        console.print(f"  {server_icon} Server: [bold cyan]{base_url}[/bold cyan]")
+        console.print(
+            f"  {docs_icon} Docs:   [link=https://uipath.github.io/uipath-python/]"
+            "https://uipath.github.io/uipath-python/[/link]"
         )
-        print(banner)
+        console.print()
+        console.print(
+            "  [dim]This server is designed for development and testing.[/dim]"
+        )
+        console.print()
 
     def _deferred_open_browser(self) -> None:
         """Open the browser after a short delay to let uvicorn bind."""

@@ -38,7 +38,8 @@ const edgeTypes = { elk: ElkEdge };
 
 // ─── Node size helpers ───────────────────────────────────────────────
 const MIN_NODE_WIDTH = 80;
-const BASE_NODE_HEIGHT = 36;
+const BASE_NODE_HEIGHT = 32; // 2(border) + 6(py) + 16(text-xs) + 6(py) + 2(border)
+const TYPE_LABEL_HEIGHT = 13; // fontSize 9 (~11px line) + marginBottom 1
 
 function computeNodeWidth(data: Record<string, unknown>): number {
   const label = (data?.label as string) ?? "";
@@ -46,8 +47,15 @@ function computeNodeWidth(data: Record<string, unknown>): number {
   return Math.max(MIN_NODE_WIDTH, label.length * 8 + 32);
 }
 
-function computeNodeHeight(data: Record<string, unknown>): number {
+function computeNodeHeight(
+  data: Record<string, unknown>,
+  type?: string,
+): number {
   let h = BASE_NODE_HEIGHT;
+  // ModelNode and ToolNode always render a type label above the main label
+  if (type === "modelNode" || type === "toolNode") {
+    h += TYPE_LABEL_HEIGHT;
+  }
   const toolNames = data?.tool_names as string[] | undefined;
   if (toolNames && toolNames.length > 0) {
     h +=
@@ -90,7 +98,7 @@ function buildElkGraph(graphData: GraphData): ElkNode {
     const elkNode: ElkNode = {
       id: node.id,
       width: computeNodeWidth(data),
-      height: computeNodeHeight(data),
+      height: computeNodeHeight(data, node.type),
     };
 
     // Compound node with subgraph children
@@ -106,7 +114,7 @@ function buildElkGraph(graphData: GraphData): ElkNode {
       elkNode.children = sub.nodes.map((cn) => ({
         id: `${node.id}/${cn.id}`,
         width: computeNodeWidth(cn.data as Record<string, unknown>),
-        height: computeNodeHeight(cn.data as Record<string, unknown>),
+        height: computeNodeHeight(cn.data as Record<string, unknown>, cn.type),
       }));
       elkNode.edges = sub.edges.map((e) => ({
         id: `${node.id}/${e.id}`,

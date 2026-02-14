@@ -56,6 +56,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 if run_id and text:
                     await _handle_chat_message(server, run_id, text)
 
+            elif command == ClientCommand.CHAT_INTERRUPT_RESPONSE.value:
+                run_id = payload.get("run_id", "")
+                data = payload.get("data", {})
+                if run_id:
+                    _handle_interrupt_response(server, run_id, data)
+
             elif command == ClientCommand.DEBUG_STEP.value:
                 run_id = payload.get("run_id", "")
                 if run_id:
@@ -92,6 +98,17 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         manager.disconnect(websocket)
 
 
+def _handle_interrupt_response(server: Any, run_id: str, data: Any) -> None:
+    """Process an interrupt response from a WebSocket client."""
+    run = server.run_service.get_run(run_id)
+    if run is None or run.status != "suspended":
+        return
+
+    chat_bridge = server.run_service.get_chat_bridge(run_id)
+    if chat_bridge:
+        server.run_service.resume_chat(run, data if isinstance(data, dict) else {})
+
+
 async def _handle_chat_message(server: Any, run_id: str, text: str) -> None:
     """Process an incoming chat message from a WebSocket client."""
     run = server.run_service.get_run(run_id)
@@ -102,6 +119,12 @@ async def _handle_chat_message(server: Any, run_id: str, text: str) -> None:
         return  # Ignore while processing
 
     if run.status == "suspended":
+        # If there's an active chat bridge, ignore regular chat messages
+        # (user should respond via interrupt response)
+        chat_bridge = server.run_service.get_chat_bridge(run_id)
+        if chat_bridge:
+            return
+
         # Try JSON parse for resume data
         import json
 

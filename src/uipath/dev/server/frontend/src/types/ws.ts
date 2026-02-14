@@ -1,4 +1,4 @@
-export type ServerEventType = "run.updated" | "log" | "trace" | "chat" | "state" | "reload";
+export type ServerEventType = "run.updated" | "log" | "trace" | "chat" | "chat.interrupt" | "state" | "reload";
 
 export interface ServerMessage {
   type: ServerEventType;
@@ -9,6 +9,7 @@ export type ClientCommandType =
   | "subscribe"
   | "unsubscribe"
   | "chat.message"
+  | "chat.interrupt_response"
   | "debug.step"
   | "debug.continue"
   | "debug.stop"

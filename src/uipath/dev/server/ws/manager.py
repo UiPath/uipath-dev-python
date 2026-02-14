@@ -8,10 +8,17 @@ from typing import Any
 
 from fastapi import WebSocket
 
-from uipath.dev.models.data import ChatData, LogData, StateData, TraceData
+from uipath.dev.models.data import (
+    ChatData,
+    InterruptData,
+    LogData,
+    StateData,
+    TraceData,
+)
 from uipath.dev.models.execution import ExecutionRun
 from uipath.dev.server.serializers import (
     serialize_chat,
+    serialize_interrupt,
     serialize_log,
     serialize_run,
     serialize_state,
@@ -96,6 +103,13 @@ class ConnectionManager:
         """Broadcast a chat message to run subscribers."""
         msg = server_message(ServerEvent.CHAT, serialize_chat(chat_data))
         self._schedule_broadcast(chat_data.run_id, msg)
+
+    def broadcast_interrupt(self, interrupt_data: InterruptData) -> None:
+        """Broadcast a chat interrupt to run subscribers."""
+        msg = server_message(
+            ServerEvent.CHAT_INTERRUPT, serialize_interrupt(interrupt_data)
+        )
+        self._schedule_broadcast(interrupt_data.run_id, msg)
 
     def broadcast_state(self, state_data: StateData) -> None:
         """Broadcast a state transition to run subscribers."""

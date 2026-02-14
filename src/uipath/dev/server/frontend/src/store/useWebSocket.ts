@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { WsClient } from "../api/websocket";
 import { useRunStore } from "./useRunStore";
-import type { RunSummary, TraceSpan, LogEntry } from "../types/run";
+import type { RunSummary, TraceSpan, LogEntry, InterruptEvent } from "../types/run";
 
 let sharedWs: WsClient | null = null;
 
@@ -15,7 +15,7 @@ function getWs(): WsClient {
 
 export function useWebSocket() {
   const ws = useRef(getWs());
-  const { upsertRun, addTrace, addLog, addChatEvent, setActiveNode, addStateEvent, setReloadPending } = useRunStore();
+  const { upsertRun, addTrace, addLog, addChatEvent, setActiveInterrupt, setActiveNode, addStateEvent, setReloadPending } = useRunStore();
 
   useEffect(() => {
     const client = ws.current;
@@ -36,6 +36,11 @@ export function useWebSocket() {
           addChatEvent(runId, msg.payload);
           break;
         }
+        case "chat.interrupt": {
+          const runId = msg.payload.run_id as string;
+          setActiveInterrupt(runId, msg.payload as unknown as InterruptEvent);
+          break;
+        }
         case "state": {
           const runId = msg.payload.run_id as string;
           const nodeName = msg.payload.node_name as string;
@@ -52,7 +57,7 @@ export function useWebSocket() {
     });
 
     return unsub;
-  }, [upsertRun, addTrace, addLog, addChatEvent, setActiveNode, addStateEvent, setReloadPending]);
+  }, [upsertRun, addTrace, addLog, addChatEvent, setActiveInterrupt, setActiveNode, addStateEvent, setReloadPending]);
 
   return ws.current;
 }

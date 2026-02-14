@@ -3,6 +3,7 @@ import type { WsClient } from "../../api/websocket";
 import { useRunStore } from "../../store/useRunStore";
 import ChatMessage from "./ChatMessage";
 import ChatInput from "./ChatInput";
+import ChatInterrupt from "./ChatInterrupt";
 
 interface ChatMsg {
   message_id: string;
@@ -23,6 +24,8 @@ export default function ChatPanel({ messages, runId, runStatus, ws }: Props) {
   const stickToBottom = useRef(true);
   const addLocalChatMessage = useRunStore((s) => s.addLocalChatMessage);
   const setFocusedSpan = useRunStore((s) => s.setFocusedSpan);
+  const interrupt = useRunStore((s) => s.activeInterrupt[runId] ?? null);
+  const setActiveInterrupt = useRunStore((s) => s.setActiveInterrupt);
 
   // Precompute per-tool-call occurrence indices across all messages
   const toolCallIndicesMap = useMemo(() => {
@@ -71,7 +74,13 @@ export default function ChatPanel({ messages, runId, runStatus, ws }: Props) {
     ws.sendChatMessage(runId, text);
   };
 
-  const isDisabled = runStatus === "running";
+  const handleInterruptResponse = (data: Record<string, unknown>) => {
+    stickToBottom.current = true;
+    ws.sendInterruptResponse(runId, data);
+    setActiveInterrupt(runId, null);
+  };
+
+  const isDisabled = runStatus === "running" || !!interrupt;
 
   return (
     <div className="flex flex-col h-full">
@@ -94,6 +103,12 @@ export default function ChatPanel({ messages, runId, runStatus, ws }: Props) {
               onToolCallClick={(name, idx) => setFocusedSpan({ name, index: idx })}
             />
           ))}
+          {interrupt && (
+            <ChatInterrupt
+              interrupt={interrupt}
+              onRespond={handleInterruptResponse}
+            />
+          )}
         </div>
         {showScrollTop && (
           <button
@@ -111,7 +126,7 @@ export default function ChatPanel({ messages, runId, runStatus, ws }: Props) {
       <ChatInput
         onSend={handleSend}
         disabled={isDisabled}
-        placeholder={isDisabled ? "Waiting for response..." : "Message..."}
+        placeholder={interrupt ? "Respond to the interrupt above..." : isDisabled ? "Waiting for response..." : "Message..."}
       />
     </div>
   );

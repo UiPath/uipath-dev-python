@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { RunSummary, TraceSpan, LogEntry } from "../types/run";
+import type { RunSummary, TraceSpan, LogEntry, InterruptEvent } from "../types/run";
 import type { GraphData } from "../types/graph";
 
 interface ChatMsg {
@@ -47,6 +47,9 @@ interface RunStore {
   focusedSpan: { name: string; index: number } | null;
   setFocusedSpan: (span: { name: string; index: number } | null) => void;
 
+  activeInterrupt: Record<string, InterruptEvent | null>;
+  setActiveInterrupt: (runId: string, interrupt: InterruptEvent | null) => void;
+
   reloadPending: boolean;
   setReloadPending: (val: boolean) => void;
 
@@ -91,6 +94,11 @@ export const useRunStore = create<RunStore>((set) => ({
       ) {
         const { [run.id]: _, ...rest } = state.activeNodes;
         result.activeNodes = rest;
+      }
+      // Clear active interrupt when status changes away from suspended
+      if (run.status !== "suspended" && state.activeInterrupt[run.id]) {
+        const { [run.id]: _, ...rest } = state.activeInterrupt;
+        result.activeInterrupt = rest;
       }
       return result;
     }),
@@ -240,6 +248,12 @@ export const useRunStore = create<RunStore>((set) => ({
 
   focusedSpan: null,
   setFocusedSpan: (span) => set({ focusedSpan: span }),
+
+  activeInterrupt: {},
+  setActiveInterrupt: (runId, interrupt) =>
+    set((state) => ({
+      activeInterrupt: { ...state.activeInterrupt, [runId]: interrupt },
+    })),
 
   reloadPending: false,
   setReloadPending: (val) => set({ reloadPending: val }),

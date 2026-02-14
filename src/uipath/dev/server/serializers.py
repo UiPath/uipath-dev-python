@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from uipath.dev.models.data import ChatData, LogData, StateData, TraceData
+from uipath.dev.models.data import (
+    ChatData,
+    InterruptData,
+    LogData,
+    StateData,
+    TraceData,
+)
 from uipath.dev.models.execution import ExecutionRun
 
 
@@ -58,6 +64,26 @@ def serialize_state(state_data: StateData) -> dict[str, Any]:
         result["qualified_node_name"] = state_data.qualified_node_name
     if state_data.payload is not None:
         result["payload"] = state_data.payload
+    return result
+
+
+def serialize_interrupt(interrupt_data: InterruptData) -> dict[str, Any]:
+    """Serialize an InterruptData instance to a JSON-compatible dict."""
+    result: dict[str, Any] = {
+        "run_id": interrupt_data.run_id,
+        "interrupt_id": interrupt_data.interrupt_id,
+        "interrupt_type": interrupt_data.interrupt_type,
+    }
+    if interrupt_data.tool_call_id is not None:
+        result["tool_call_id"] = interrupt_data.tool_call_id
+    if interrupt_data.tool_name is not None:
+        result["tool_name"] = interrupt_data.tool_name
+    if interrupt_data.input_schema is not None:
+        result["input_schema"] = interrupt_data.input_schema
+    if interrupt_data.input_value is not None:
+        result["input_value"] = interrupt_data.input_value
+    if interrupt_data.content is not None:
+        result["content"] = interrupt_data.content
     return result
 
 
