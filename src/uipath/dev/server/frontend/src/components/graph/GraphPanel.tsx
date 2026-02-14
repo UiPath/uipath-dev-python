@@ -342,15 +342,17 @@ interface Props {
   traces: TraceSpan[];
   runId: string;
   breakpointNode?: string | null;
+  breakpointNextNodes?: string[];
   onBreakpointChange?: (breakpoints: string[]) => void;
   fitViewTrigger?: number;
 }
 
-export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, onBreakpointChange, fitViewTrigger }: Props) {
+export default function GraphPanel({ entrypoint, runId, breakpointNode, breakpointNextNodes, onBreakpointChange, fitViewTrigger }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [loading, setLoading] = useState(true);
   const [graphUnavailable, setGraphUnavailable] = useState(false);
+  const [layoutSeq, setLayoutSeq] = useState(0);
   const layoutRef = useRef(0);
   const rfInstance = useRef<ReactFlowInstance | null>(null);
 
@@ -358,12 +360,14 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
   const toggleBreakpoint = useRunStore((s) => s.toggleBreakpoint);
   const clearBreakpoints = useRunStore((s) => s.clearBreakpoints);
   const activeNode = useRunStore((s) => s.activeNodes[runId]);
+  const runStatus = useRunStore((s) => s.runs[runId]?.status);
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
-      if (node.type === "groupNode") return;
+      if (node.type === "startNode" || node.type === "endNode") return;
       // For compound children, extract the plain ID from "parentId/childId"
-      const plainId = node.id.includes("/") ? node.id.split("/").pop()! : node.id;
+      // For group nodes (subgraphs), use the node ID directly
+      const plainId = node.type === "groupNode" ? node.id : node.id.includes("/") ? node.id.split("/").pop()! : node.id;
       toggleBreakpoint(runId, plainId);
       // Immediately notify parent with the updated breakpoints
       const updated = useRunStore.getState().breakpoints[runId] ?? {};
@@ -379,11 +383,12 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
       clearBreakpoints(runId);
       onBreakpointChange?.([]);
     } else {
-      // Set breakpoints on all non-group, non-start, non-end nodes
+      // Set breakpoints on all non-start, non-end, non-subgraph-child nodes
       const nodeIds: string[] = [];
       for (const n of nodes) {
-        if (n.type === "groupNode" || n.type === "startNode" || n.type === "endNode") continue;
-        const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
+        if (n.type === "startNode" || n.type === "endNode") continue;
+        if (n.parentNode) continue; // skip subgraph children — use the group node instead
+        const plainId = n.type === "groupNode" ? n.id : n.id.includes("/") ? n.id.split("/").pop()! : n.id;
         nodeIds.push(plainId);
       }
       for (const id of nodeIds) {
@@ -398,8 +403,8 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
   useEffect(() => {
     setNodes((nds) =>
       nds.map((n) => {
-        if (n.type === "groupNode") return n;
-        const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
+        if (n.type === "startNode" || n.type === "endNode") return n;
+        const plainId = n.type === "groupNode" ? n.id : n.id.includes("/") ? n.id.split("/").pop()! : n.id;
         const has = !!(bpMap && bpMap[plainId]);
         return has !== !!n.data?.hasBreakpoint
           ? { ...n, data: { ...n.data, hasBreakpoint: has } }
@@ -415,8 +420,8 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
       : null;
     setNodes((nds) =>
       nds.map((n) => {
-        if (n.type === "groupNode") return n;
-        const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
+        if (n.type === "startNode" || n.type === "endNode") return n;
+        const plainId = n.type === "groupNode" ? n.id : n.id.includes("/") ? n.id.split("/").pop()! : n.id;
         const label = n.data?.label as string | undefined;
         const paused = bpNames != null && (bpNames.has(plainId) || (label != null && bpNames.has(label)));
         return paused !== !!n.data?.isPausedHere
@@ -424,54 +429,113 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
           : n;
       }),
     );
-  }, [breakpointNode, setNodes]);
+  }, [breakpointNode, layoutSeq, setNodes]);
 
   // Highlight edges + nodes during execution
-  // - Paused at breakpoint (before node X): edges INTO X, node X (via isPausedHere)
-  // - Running (state event after node Y completes): edges OUT of Y, target nodes of those edges
+  // - Paused at breakpoint: edges INTO breakpoint node + edges to next_nodes
+  // - Running: edges OUT of completed node, target nodes of those edges
+  // - __start__: highlighted on first state event; __end__: highlighted when run completes
   useEffect(() => {
     const isPaused = !!breakpointNode;
-    let matchIds = new Set<string>();
-    const activeTargetIds = new Set<string>();
+    let matchIds = new Set<string>(); // Full React Flow node IDs of the "current" node
+    const prevNodeIds = new Set<string>(); // Full RF IDs of the previous node (for edge filtering when paused)
+    const nextNodeIds = new Set<string>(); // Full RF IDs of breakpoint next_nodes
+    const activeTargetIds = new Set<string>(); // Full RF IDs for isActiveNode
+    const nodeTypeById = new Map<string, string>();
 
-    // 1) Build label→ID lookup (read-only pass, returns nds unchanged)
+    // 1) Build matchIds, nextNodeIds, node type map
     setNodes((nds) => {
-      const labelToIds = new Map<string, Set<string>>();
       for (const n of nds) {
-        const label = n.data?.label as string | undefined;
-        if (!label) continue;
-        const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
-        for (const key of [plainId, label]) {
-          let s = labelToIds.get(key);
-          if (!s) { s = new Set(); labelToIds.set(key, s); }
-          s.add(plainId);
-        }
+        if (n.type) nodeTypeById.set(n.id, n.type);
       }
+
+      // Helper: find full RF node ID(s) matching a plain name
+      const findNodeIds = (name: string): string[] => {
+        const result: string[] = [];
+        for (const n of nds) {
+          const plainId = n.type === "groupNode" ? n.id : n.id.includes("/") ? n.id.split("/").pop()! : n.id;
+          const label = n.data?.label as string | undefined;
+          if (plainId === name || (label != null && label === name)) {
+            result.push(n.id);
+          }
+        }
+        return result;
+      };
 
       if (isPaused && breakpointNode) {
         const bpNames = breakpointNode.split(",").map((s) => s.trim()).filter(Boolean);
         for (const name of bpNames) {
-          (labelToIds.get(name) ?? new Set()).forEach((id) => matchIds.add(id));
+          findNodeIds(name).forEach((id) => matchIds.add(id));
+        }
+        // Resolve next_nodes to full RF IDs
+        if (breakpointNextNodes?.length) {
+          for (const name of breakpointNextNodes) {
+            findNodeIds(name).forEach((id) => nextNodeIds.add(id));
+          }
+        }
+        // Resolve previous node so we only highlight the incoming edge from it
+        if (activeNode?.prev) {
+          findNodeIds(activeNode.prev).forEach((id) => prevNodeIds.add(id));
         }
       } else if (activeNode) {
-        matchIds = labelToIds.get(activeNode.current) ?? new Set<string>();
+        // Try qualified name first (exact match via "subgraph:node" → "subgraph/node")
+        const qualifiedName = activeNode.qualifiedNodeName;
+        if (qualifiedName) {
+          const qualifiedId = qualifiedName.replace(/:/g, "/");
+          for (const n of nds) {
+            if (n.id === qualifiedId) {
+              matchIds.add(n.id);
+            }
+          }
+        }
+        // Fallback: label/plainId matching
+        if (matchIds.size === 0) {
+          const labelToIds = new Map<string, Set<string>>();
+          for (const n of nds) {
+            const label = n.data?.label as string | undefined;
+            if (!label) continue;
+            const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
+            for (const key of [plainId, label]) {
+              let s = labelToIds.get(key);
+              if (!s) { s = new Set(); labelToIds.set(key, s); }
+              s.add(n.id);
+            }
+          }
+          matchIds = labelToIds.get(activeNode.current) ?? new Set<string>();
+        }
+
+        // __start__: include top-level on first event so its outgoing edges highlight
+        if (activeNode.prev === null) {
+          for (const n of nds) {
+            if (n.type === "startNode" && !n.parentNode) matchIds.add(n.id);
+          }
+        }
       }
 
       return nds;
     });
 
-    // 2) Highlight edges + collect target IDs for running mode
+    // 2) Highlight edges
     setEdges((eds) =>
       eds.map((e) => {
-        const srcPlain = e.source.includes("/") ? e.source.split("/").pop()! : e.source;
-        const tgtPlain = e.target.includes("/") ? e.target.split("/").pop()! : e.target;
-
-        const isActive = isPaused
-          ? matchIds.has(tgtPlain)   // breakpoint: edges INTO paused node
-          : matchIds.has(srcPlain);  // running: edges OUT of completed node
+        let isActive: boolean;
+        if (isPaused) {
+          // Edge from previous node INTO breakpoint node + edges FROM breakpoint node TO next_nodes
+          const intoBreakpoint = matchIds.has(e.target)
+            && (prevNodeIds.size === 0 || prevNodeIds.has(e.source));
+          isActive = intoBreakpoint
+            || (matchIds.has(e.source) && nextNodeIds.has(e.target));
+        } else {
+          // Running: edges OUT of completed node
+          isActive = matchIds.has(e.source);
+          // For __end__: also highlight edges INTO it
+          if (!isActive && nodeTypeById.get(e.target) === "endNode" && matchIds.has(e.target)) {
+            isActive = true;
+          }
+        }
 
         if (isActive) {
-          if (!isPaused) activeTargetIds.add(tgtPlain);
+          if (!isPaused) activeTargetIds.add(e.target);
           return {
             ...e,
             style: { stroke: "var(--accent)", strokeWidth: 2.5 },
@@ -495,33 +559,28 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
       }),
     );
 
-    // 3) Mark target nodes as active (running mode only; breakpoint uses isPausedHere)
+    // 3) Mark nodes as active
+    // - Running: targets of highlighted edges + __start__/__end__ when matched
+    // - Paused: next_nodes get isActiveNode (about to execute)
     setNodes((nds) =>
       nds.map((n) => {
-        if (n.type === "groupNode") return n;
-        const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
-        const active = activeTargetIds.has(plainId);
+        if (n.type === "startNode" || n.type === "endNode") {
+          const active = activeTargetIds.has(n.id) || (!isPaused && matchIds.has(n.id));
+          return active !== !!n.data?.isActiveNode
+            ? { ...n, data: { ...n.data, isActiveNode: active } }
+            : n;
+        }
+        const active = isPaused
+          ? nextNodeIds.has(n.id)
+          : activeTargetIds.has(n.id);
         return active !== !!n.data?.isActiveNode
           ? { ...n, data: { ...n.data, isActiveNode: active } }
           : n;
       }),
     );
-  }, [activeNode, breakpointNode, setNodes, setEdges]);
+  }, [activeNode, breakpointNode, breakpointNextNodes, runStatus, layoutSeq, setNodes, setEdges]);
 
-  const nodeStatusMap = useCallback(() => {
-    const map: Record<string, string> = {};
-    traces.forEach((t) => {
-      const current = map[t.span_name];
-      if (
-        !current ||
-        t.status === "failed" ||
-        (t.status === "running" && current !== "failed")
-      ) {
-        map[t.span_name] = t.status;
-      }
-    });
-    return map;
-  }, [traces]);
+  const stateEvents = useRunStore((s) => s.stateEvents[runId]);
 
   // Subscribe to cached graph reactively (populated async from run detail)
   const cachedGraph = useRunStore((s) => s.graphCache[runId]);
@@ -553,13 +612,14 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
         const curBp = useRunStore.getState().breakpoints[runId];
         const nodesWithBp = curBp
           ? laidNodes.map((n) => {
-              if (n.type === "groupNode") return n;
-              const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
+              if (n.type === "startNode" || n.type === "endNode") return n;
+              const plainId = n.type === "groupNode" ? n.id : n.id.includes("/") ? n.id.split("/").pop()! : n.id;
               return curBp[plainId] ? { ...n, data: { ...n.data, hasBreakpoint: true } } : n;
             })
           : laidNodes;
         setNodes(nodesWithBp);
         setEdges(laidEdges);
+        setLayoutSeq((s) => s + 1);
         // Fit view after nodes are rendered
         setTimeout(() => {
           rfInstance.current?.fitView({ padding: 0.1, duration: 200 });
@@ -588,28 +648,81 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
     }
   }, [fitViewTrigger]);
 
-  // Update node status from traces
+  // Update node status from state events (uses qualified_node_name for precise subgraph matching)
   useEffect(() => {
-    const statusMap = nodeStatusMap();
-    setNodes((nds) =>
-      nds.map((n) => {
-        if (n.type === "groupNode") {
+    setNodes((nds) => {
+      const hasEvents = !!stateEvents?.length;
+      const isTerminal = runStatus === "completed" || runStatus === "failed";
+
+      // Build set of completed React Flow node IDs from state events
+      const completedIds = new Set<string>();
+      if (hasEvents) {
+        const allNodeIds = new Set(nds.map((n) => n.id));
+        // Fallback label→fullId map (used when no qualified name)
+        const labelToIds = new Map<string, Set<string>>();
+        for (const n of nds) {
           const label = n.data?.label as string | undefined;
-          const status = label ? statusMap[label] : undefined;
-          return status !== n.data?.status
-            ? { ...n, data: { ...n.data, status } }
-            : n;
+          if (!label) continue;
+          const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
+          for (const key of [plainId, label]) {
+            let s = labelToIds.get(key);
+            if (!s) { s = new Set(); labelToIds.set(key, s); }
+            s.add(n.id);
+          }
         }
-        const label = n.data?.label as string | undefined;
-        const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
-        const status =
-          (label ? statusMap[label] : undefined) ?? statusMap[plainId];
+
+        for (const evt of stateEvents) {
+          let matched = false;
+          if (evt.qualified_node_name) {
+            const qId = evt.qualified_node_name.replace(/:/g, "/");
+            if (allNodeIds.has(qId)) {
+              completedIds.add(qId);
+              matched = true;
+            }
+          }
+          if (!matched) {
+            const ids = labelToIds.get(evt.node_name);
+            if (ids) ids.forEach((id) => completedIds.add(id));
+          }
+        }
+      }
+
+      // Track which subgraphs were actually visited
+      const visitedParents = new Set<string>();
+      for (const n of nds) {
+        if (n.parentNode && completedIds.has(n.id)) {
+          visitedParents.add(n.parentNode);
+        }
+      }
+
+      return nds.map((n) => {
+        let status: string | undefined;
+
+        if (completedIds.has(n.id)) {
+          status = "completed";
+        } else if (n.type === "startNode") {
+          // Top-level: completed once execution begins; subgraph: only if visited
+          if (!n.parentNode && hasEvents) status = "completed";
+          else if (n.parentNode && visitedParents.has(n.parentNode)) status = "completed";
+        } else if (n.type === "endNode") {
+          // Top-level: completed when run finishes; subgraph: as soon as visited
+          if (!n.parentNode && isTerminal) {
+            status = runStatus === "failed" ? "failed" : "completed";
+          } else if (n.parentNode && visitedParents.has(n.parentNode)) {
+            status = "completed";
+          }
+        } else if (n.type === "groupNode") {
+          // Group is completed if any child completed
+          if (visitedParents.has(n.id)) status = "completed";
+        }
+
         return status !== n.data?.status
           ? { ...n, data: { ...n.data, status } }
           : n;
-      }),
-    );
-  }, [nodeStatusMap, setNodes]);
+      });
+    });
+    // layoutSeq ensures this re-runs after graph layout completes
+  }, [stateEvents, runStatus, layoutSeq, setNodes]);
 
   if (loading) {
     return (

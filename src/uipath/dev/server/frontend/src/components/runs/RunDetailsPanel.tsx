@@ -148,7 +148,7 @@ export default function RunDetailsPanel({ run, ws }: Props) {
         )}
         {/* Graph panel — resizable */}
         <div className="shrink-0" style={{ height: graphHeight }}>
-          <GraphPanel entrypoint={run.entrypoint} traces={traces} runId={run.id} breakpointNode={run.breakpoint_node} onBreakpointChange={handleBreakpointChange} fitViewTrigger={fitViewTrigger} />
+          <GraphPanel entrypoint={run.entrypoint} traces={traces} runId={run.id} breakpointNode={run.breakpoint_node} breakpointNextNodes={run.breakpoint_next_nodes} onBreakpointChange={handleBreakpointChange} fitViewTrigger={fitViewTrigger} />
         </div>
         {/* Drag handle */}
         <div

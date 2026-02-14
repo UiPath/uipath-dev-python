@@ -1,17 +1,32 @@
 import { useEffect, useState } from "react";
 import { useRunStore } from "../../store/useRunStore";
 import { useHashRoute } from "../../hooks/useHashRoute";
+import { getEntrypointSchema } from "../../api/client";
 
 export default function NewRunPanel() {
   const { navigate } = useHashRoute();
   const entrypoints = useRunStore((s) => s.entrypoints);
   const [selectedEp, setSelectedEp] = useState("");
+  const [chatSupported, setChatSupported] = useState(true);
 
   useEffect(() => {
     if (!selectedEp && entrypoints.length > 0) {
       setSelectedEp(entrypoints[0]);
     }
   }, [entrypoints, selectedEp]);
+
+  useEffect(() => {
+    if (!selectedEp) return;
+    setChatSupported(true);
+    getEntrypointSchema(selectedEp)
+      .then((schema) => {
+        const props = (schema.input as any)?.properties;
+        setChatSupported(!!props?.messages);
+      })
+      .catch(() => {
+        setChatSupported(true); // don't block on schema fetch errors
+      });
+  }, [selectedEp]);
 
   const handleModeSelect = (mode: "run" | "chat") => {
     if (!selectedEp) return;
@@ -80,11 +95,15 @@ export default function NewRunPanel() {
           />
           <ModeCard
             title="Conversational"
-            description="Interactive chat session. Send messages and receive responses in real time."
+            description={
+              !chatSupported
+                ? "Requires a \"messages\" property in the input schema."
+                : "Interactive chat session. Send messages and receive responses in real time."
+            }
             icon={<ChatIcon />}
             color="var(--accent)"
             onClick={() => handleModeSelect("chat")}
-            disabled={!selectedEp}
+            disabled={!selectedEp || !chatSupported}
           />
         </div>
       </div>

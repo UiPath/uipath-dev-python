@@ -37,12 +37,12 @@ interface RunStore {
   toggleBreakpoint: (runId: string, nodeId: string) => void;
   clearBreakpoints: (runId: string) => void;
 
-  activeNodes: Record<string, { prev: string | null; current: string }>;
-  setActiveNode: (runId: string, nodeName: string) => void;
+  activeNodes: Record<string, { prev: string | null; current: string; qualifiedNodeName?: string | null }>;
+  setActiveNode: (runId: string, nodeName: string, qualifiedNodeName?: string | null) => void;
 
-  stateEvents: Record<string, { node_name: string; timestamp: number; payload?: Record<string, unknown> }[]>;
-  addStateEvent: (runId: string, nodeName: string, payload?: Record<string, unknown>) => void;
-  setStateEvents: (runId: string, events: { node_name: string; timestamp: number; payload?: Record<string, unknown> }[]) => void;
+  stateEvents: Record<string, { node_name: string; qualified_node_name?: string | null; timestamp: number; payload?: Record<string, unknown> }[]>;
+  addStateEvent: (runId: string, nodeName: string, payload?: Record<string, unknown>, qualifiedNodeName?: string | null) => void;
+  setStateEvents: (runId: string, events: { node_name: string; qualified_node_name?: string | null; timestamp: number; payload?: Record<string, unknown> }[]) => void;
 
   focusedSpan: { name: string; index: number } | null;
   setFocusedSpan: (span: { name: string; index: number } | null) => void;
@@ -211,25 +211,25 @@ export const useRunStore = create<RunStore>((set) => ({
     }),
 
   activeNodes: {},
-  setActiveNode: (runId, nodeName) =>
+  setActiveNode: (runId, nodeName, qualifiedNodeName) =>
     set((state) => {
       const existing = state.activeNodes[runId];
       return {
         activeNodes: {
           ...state.activeNodes,
-          [runId]: { prev: existing?.current ?? null, current: nodeName },
+          [runId]: { prev: existing?.current ?? null, current: nodeName, qualifiedNodeName },
         },
       };
     }),
 
   stateEvents: {},
-  addStateEvent: (runId, nodeName, payload) =>
+  addStateEvent: (runId, nodeName, payload, qualifiedNodeName) =>
     set((state) => {
       const existing = state.stateEvents[runId] ?? [];
       return {
         stateEvents: {
           ...state.stateEvents,
-          [runId]: [...existing, { node_name: nodeName, timestamp: Date.now(), payload }],
+          [runId]: [...existing, { node_name: nodeName, qualified_node_name: qualifiedNodeName, timestamp: Date.now(), payload }],
         },
       };
     }),

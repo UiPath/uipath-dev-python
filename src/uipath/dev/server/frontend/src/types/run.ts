@@ -15,12 +15,14 @@ export interface RunSummary {
   log_count: number;
   message_count: number;
   breakpoint_node: string | null;
+  breakpoint_next_nodes: string[];
   breakpoints: string[];
 }
 
 export interface StateEventData {
   run_id: string;
   node_name: string;
+  qualified_node_name?: string | null;
   timestamp: string;
   payload?: Record<string, unknown>;
 }
