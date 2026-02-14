@@ -335,6 +335,7 @@ class RunService:
             state_data = StateData(
                 run_id=run_id,
                 node_name=state.node_name,
+                qualified_node_name=state.qualified_node_name,
                 payload=state.payload if state.payload else None,
             )
             run.states.append(state_data)

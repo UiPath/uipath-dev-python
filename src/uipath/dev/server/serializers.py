@@ -54,6 +54,8 @@ def serialize_state(state_data: StateData) -> dict[str, Any]:
         "node_name": state_data.node_name,
         "timestamp": state_data.timestamp.isoformat(),
     }
+    if state_data.qualified_node_name is not None:
+        result["qualified_node_name"] = state_data.qualified_node_name
     if state_data.payload is not None:
         result["payload"] = state_data.payload
     return result
