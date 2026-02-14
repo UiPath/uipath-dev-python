@@ -98,6 +98,7 @@ class UiPathDeveloperServer:
         if not HAS_EXTRAS:
             raise ImportError(_MISSING_EXTRAS_MSG)
 
+        await self.run_service.apply_factory_settings()
         self.port = self._find_free_port(self.host, self.port)
         app = self.create_app()
 

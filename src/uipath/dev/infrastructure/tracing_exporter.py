@@ -23,12 +23,15 @@ class RunContextExporter(SpanExporter):
         """Initialize RunContextExporter with callbacks for trace and log messages."""
         self.on_trace = on_trace
         self.on_log = on_log
+        self.span_filter: Callable[[ReadableSpan], bool] | None = None
         self.logger = logging.getLogger(__name__)
 
     def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:
         """Export spans to CLI UI."""
         try:
             for span in spans:
+                if self.span_filter and not self.span_filter(span):
+                    continue
                 self._export_span(span)
             return SpanExportResult.SUCCESS
         except Exception as e:
