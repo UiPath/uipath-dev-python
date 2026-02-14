@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from uipath.dev.models.execution import ExecutionMode, ExecutionRun
+from uipath.dev.server.routes.graph import snapshot_graph
 from uipath.dev.server.serializers import serialize_run, serialize_run_detail
 
 router = APIRouter(tags=["runs"])
@@ -44,6 +45,9 @@ async def create_run(request: Request, body: CreateRunRequest) -> dict[str, Any]
     )
 
     run.breakpoints = body.breakpoints
+
+    # Snapshot graph at creation time so it persists across reloads
+    run.graph_data = await snapshot_graph(server.runtime_factory, body.entrypoint)
 
     server.run_service.register_run(run)
 

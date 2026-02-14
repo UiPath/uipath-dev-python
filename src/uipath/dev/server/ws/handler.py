@@ -10,7 +10,12 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from uipath.dev.models.chat import get_user_message, get_user_message_event
 from uipath.dev.models.data import ChatData
-from uipath.dev.server.ws.protocol import ClientCommand, parse_client_message
+from uipath.dev.server.ws.protocol import (
+    ClientCommand,
+    ServerEvent,
+    parse_client_message,
+    server_message,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -23,6 +28,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     manager = server.connection_manager
 
     await manager.connect(websocket)
+
+    # If a reload is pending (file changed before this client connected), notify immediately
+    if server.reload_pending:
+        await websocket.send_json(server_message(ServerEvent.RELOAD, {"files": []}))
 
     try:
         while True:

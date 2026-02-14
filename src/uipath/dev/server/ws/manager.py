@@ -102,6 +102,20 @@ class ConnectionManager:
         msg = server_message(ServerEvent.STATE, serialize_state(state_data))
         self._schedule_broadcast(state_data.run_id, msg)
 
+    def broadcast_reload(self, changed_files: list[str]) -> None:
+        """Broadcast a reload event to all connected clients."""
+        msg = server_message(ServerEvent.RELOAD, {"files": changed_files})
+        if not self._connections:
+            return
+
+        try:
+            loop = self._get_loop()
+            asyncio.ensure_future(
+                self._send_to_all(self._connections.copy(), msg), loop=loop
+            )
+        except RuntimeError:
+            logger.debug("No event loop available for reload broadcast")
+
     def _schedule_broadcast(self, run_id: str, message: dict[str, Any]) -> None:
         """Schedule an async broadcast from a potentially sync callback."""
         subscribers = self._subscriptions.get(run_id, set())

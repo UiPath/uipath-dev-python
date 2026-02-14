@@ -134,12 +134,14 @@ def create_app(server: UiPathDeveloperServer) -> FastAPI:
     # Register routes
     from uipath.dev.server.routes.entrypoints import router as entrypoints_router
     from uipath.dev.server.routes.graph import router as graph_router
+    from uipath.dev.server.routes.reload import router as reload_router
     from uipath.dev.server.routes.runs import router as runs_router
     from uipath.dev.server.ws.handler import router as ws_router
 
     app.include_router(entrypoints_router, prefix="/api")
     app.include_router(runs_router, prefix="/api")
     app.include_router(graph_router, prefix="/api")
+    app.include_router(reload_router, prefix="/api")
     app.include_router(ws_router)
 
     # Auto-build frontend if source is available and build is stale

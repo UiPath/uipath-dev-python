@@ -15,7 +15,7 @@ function getWs(): WsClient {
 
 export function useWebSocket() {
   const ws = useRef(getWs());
-  const { upsertRun, addTrace, addLog, addChatEvent, setActiveNode, addStateEvent } = useRunStore();
+  const { upsertRun, addTrace, addLog, addChatEvent, setActiveNode, addStateEvent, setReloadPending } = useRunStore();
 
   useEffect(() => {
     const client = ws.current;
@@ -44,11 +44,14 @@ export function useWebSocket() {
           addStateEvent(runId, nodeName, payload);
           break;
         }
+        case "reload":
+          setReloadPending(true);
+          break;
       }
     });
 
     return unsub;
-  }, [upsertRun, addTrace, addLog, addChatEvent, setActiveNode, addStateEvent]);
+  }, [upsertRun, addTrace, addLog, addChatEvent, setActiveNode, addStateEvent, setReloadPending]);
 
   return ws.current;
 }
