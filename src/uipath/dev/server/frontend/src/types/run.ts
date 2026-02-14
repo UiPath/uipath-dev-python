@@ -1,3 +1,5 @@
+import type { GraphData } from "./graph";
+
 export interface RunSummary {
   id: string;
   entrypoint: string;
@@ -28,6 +30,7 @@ export interface RunDetail extends RunSummary {
   logs: LogEntry[];
   messages: ChatMessageData[];
   states: StateEventData[];
+  graph: GraphData | null;
 }
 
 export interface TraceSpan {

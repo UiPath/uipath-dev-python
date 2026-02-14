@@ -93,13 +93,11 @@ class RunService:
         self.on_state = on_state
         self._debug_bridge_factory = debug_bridge_factory
 
-        self.trace_manager.add_span_exporter(
-            RunContextExporter(
-                on_trace=self.handle_trace,
-                on_log=self.handle_log,
-            ),
-            batch=False,
+        self._exporter = RunContextExporter(
+            on_trace=self.handle_trace,
+            on_log=self.handle_log,
         )
+        self.trace_manager.add_span_exporter(self._exporter, batch=False)
 
         self.debug_bridges: dict[str, DebugBridgeProtocol] = {}
 
@@ -111,6 +109,12 @@ class RunService:
     def get_run(self, run_id: str) -> ExecutionRun | None:
         """Get a registered run."""
         return self.runs.get(run_id)
+
+    async def apply_factory_settings(self) -> None:
+        """Fetch factory settings and configure span filter on exporter."""
+        settings = await self.runtime_factory.get_settings()
+        if settings and settings.trace_settings and settings.trace_settings.span_filter:
+            self._exporter.span_filter = settings.trace_settings.span_filter
 
     async def execute(self, run: ExecutionRun) -> None:
         """Execute or resume a run."""

@@ -64,3 +64,7 @@ export async function listRuns(): Promise<RunSummary[]> {
 export async function getRun(runId: string): Promise<RunDetail> {
   return fetchJson(`${BASE}/runs/${runId}`);
 }
+
+export async function reloadFactory(): Promise<{ status: string }> {
+  return fetchJson(`${BASE}/reload`, { method: "POST" });
+}

@@ -79,6 +79,10 @@ class UiPathDeveloperConsole(App[Any]):
         self.initial_entrypoint: str = "main.py"
         self.initial_input: str = '{\n  "message": "Hello World"\n}'
 
+    async def on_mount(self) -> None:
+        """Apply factory settings on mount."""
+        await self.run_service.apply_factory_settings()
+
     def compose(self) -> ComposeResult:
         """Compose the UI layout."""
         with Horizontal():

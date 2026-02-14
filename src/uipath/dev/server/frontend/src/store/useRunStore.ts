@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { RunSummary, TraceSpan, LogEntry } from "../types/run";
+import type { GraphData } from "../types/graph";
 
 interface ChatMsg {
   message_id: string;
@@ -45,6 +46,12 @@ interface RunStore {
 
   focusedSpan: { name: string; index: number } | null;
   setFocusedSpan: (span: { name: string; index: number } | null) => void;
+
+  reloadPending: boolean;
+  setReloadPending: (val: boolean) => void;
+
+  graphCache: Record<string, GraphData>;
+  setGraphCache: (runId: string, data: GraphData) => void;
 }
 
 export const useRunStore = create<RunStore>((set) => ({
@@ -233,4 +240,11 @@ export const useRunStore = create<RunStore>((set) => ({
 
   focusedSpan: null,
   setFocusedSpan: (span) => set({ focusedSpan: span }),
+
+  reloadPending: false,
+  setReloadPending: (val) => set({ reloadPending: val }),
+
+  graphCache: {},
+  setGraphCache: (runId, data) =>
+    set((state) => ({ graphCache: { ...state.graphCache, [runId]: data } })),
 }));

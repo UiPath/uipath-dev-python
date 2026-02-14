@@ -86,12 +86,8 @@ def _process_graph(graph: Any) -> dict[str, Any]:
     return {"nodes": nodes, "edges": edges}
 
 
-@router.get("/entrypoints/{entrypoint:path}/graph")
-async def get_graph(request: Request, entrypoint: str) -> dict[str, Any]:
-    """Get the execution graph for an entrypoint in React Flow format."""
-    server = request.app.state.server
-    factory = server.runtime_factory
-
+async def snapshot_graph(factory: Any, entrypoint: str) -> dict[str, Any]:
+    """Fetch the graph for an entrypoint and return serialised React Flow data."""
     runtime = None
     try:
         runtime = await factory.new_runtime(
@@ -99,7 +95,6 @@ async def get_graph(request: Request, entrypoint: str) -> dict[str, Any]:
             runtime_id="graph-preview",
         )
 
-        # Try to get graph from schema first, then from runtime directly
         graph = None
         if hasattr(runtime, "get_schema"):
             try:
@@ -126,3 +121,10 @@ async def get_graph(request: Request, entrypoint: str) -> dict[str, Any]:
                 pass
 
     return {"nodes": [], "edges": []}
+
+
+@router.get("/entrypoints/{entrypoint:path}/graph")
+async def get_graph(request: Request, entrypoint: str) -> dict[str, Any]:
+    """Get the execution graph for an entrypoint in React Flow format."""
+    server = request.app.state.server
+    return await snapshot_graph(server.runtime_factory, entrypoint)

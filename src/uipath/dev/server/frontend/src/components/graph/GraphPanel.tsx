@@ -523,13 +523,23 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
     return map;
   }, [traces]);
 
+  // Subscribe to cached graph reactively (populated async from run detail)
+  const cachedGraph = useRunStore((s) => s.graphCache[runId]);
+
   // Fetch graph data and run ELK layout
   useEffect(() => {
+    // For non-setup runs, wait for cache to be populated from run detail
+    if (!cachedGraph && runId !== "__setup__") return;
+
+    const graphPromise = cachedGraph
+      ? Promise.resolve(cachedGraph)
+      : getEntrypointGraph(entrypoint);
+
     const layoutId = ++layoutRef.current;
     setLoading(true);
-
     setGraphUnavailable(false);
-    getEntrypointGraph(entrypoint)
+
+    graphPromise
       .then(async (graphData) => {
         if (layoutRef.current !== layoutId) return;
         if (!graphData.nodes.length) {
@@ -561,7 +571,7 @@ export default function GraphPanel({ entrypoint, traces, runId, breakpointNode, 
       .finally(() => {
         if (layoutRef.current === layoutId) setLoading(false);
       });
-  }, [entrypoint, setNodes, setEdges]);
+  }, [entrypoint, runId, cachedGraph, setNodes, setEdges]);
 
   // Fit view when switching runs (even if entrypoint is the same)
   useEffect(() => {

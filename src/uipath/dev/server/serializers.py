@@ -97,4 +97,5 @@ def serialize_run_detail(run: ExecutionRun) -> dict[str, Any]:
         msg.model_dump(by_alias=True, exclude_none=True) for msg in run.messages
     ]
     base["states"] = [serialize_state(s) for s in run.states]
+    base["graph"] = run.graph_data
     return base

@@ -14,6 +14,7 @@ class ServerEvent(str, Enum):
     TRACE = "trace"
     CHAT = "chat"
     STATE = "state"
+    RELOAD = "reload"
 
 
 class ClientCommand(str, Enum):

@@ -7,6 +7,7 @@ import Sidebar from "./components/layout/Sidebar";
 import NewRunPanel from "./components/runs/NewRunPanel";
 import SetupView from "./components/runs/SetupView";
 import RunDetailsPanel from "./components/runs/RunDetailsPanel";
+import ReloadToast from "./components/shared/ReloadToast";
 
 export default function App() {
   const ws = useWebSocket();
@@ -21,6 +22,7 @@ export default function App() {
     setChatMessages,
     setEntrypoints,
     setStateEvents,
+    setGraphCache,
   } = useRunStore();
   const { view, runId: routeRunId, setupEntrypoint, setupMode, navigate } = useHashRoute();
 
@@ -76,6 +78,10 @@ export default function App() {
         };
       });
       setChatMessages(selectedRunId, chatMsgs);
+      // Cache graph data per run (persists across reloads)
+      if (detail.graph && detail.graph.nodes.length > 0) {
+        setGraphCache(selectedRunId, detail.graph);
+      }
       // Load persisted state events
       if (detail.states && detail.states.length > 0) {
         setStateEvents(
@@ -105,7 +111,7 @@ export default function App() {
       clearTimeout(retryTimer);
       ws.unsubscribe(selectedRunId);
     };
-  }, [selectedRunId, ws, upsertRun, setTraces, setLogs, setChatMessages, setStateEvents]);
+  }, [selectedRunId, ws, upsertRun, setTraces, setLogs, setChatMessages, setStateEvents, setGraphCache]);
 
   const handleRunCreated = (runId: string) => {
     navigate(`#/runs/${runId}/traces`);
@@ -149,6 +155,7 @@ export default function App() {
           </div>
         )}
       </main>
+      <ReloadToast />
     </div>
   );
 }
