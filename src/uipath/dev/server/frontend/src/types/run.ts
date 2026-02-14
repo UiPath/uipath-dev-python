@@ -15,6 +15,7 @@ export interface RunSummary {
   log_count: number;
   message_count: number;
   breakpoint_node: string | null;
+  breakpoint_next_nodes: string[];
   breakpoints: string[];
 }
 

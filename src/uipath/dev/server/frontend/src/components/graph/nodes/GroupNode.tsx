@@ -14,9 +14,13 @@ const invisibleHandle = {
 export default function GroupNode({ data }: NodeProps) {
   const label = (data.label as string) ?? "";
   const status = data.status as string | undefined;
+  const hasBreakpoint = data.hasBreakpoint as boolean | undefined;
+  const isPausedHere = data.isPausedHere as boolean | undefined;
+  const isActiveNode = data.isActiveNode as boolean | undefined;
 
-  const borderColor =
-    status === "completed"
+  const borderColor = isPausedHere || isActiveNode
+    ? "var(--accent)"
+    : status === "completed"
       ? "var(--success)"
       : status === "running"
         ? "var(--warning)"
@@ -26,14 +30,33 @@ export default function GroupNode({ data }: NodeProps) {
 
   return (
     <div
+      className="relative cursor-pointer"
       style={{
         width: "100%",
         height: "100%",
         background: "var(--bg-secondary)",
-        border: `1.5px dashed ${borderColor}`,
+        border: `1.5px ${isPausedHere || isActiveNode ? "solid" : "dashed"} ${borderColor}`,
         borderRadius: 8,
+        boxShadow: isPausedHere || isActiveNode ? "0 0 4px var(--accent)" : undefined,
+        animation: isActiveNode && !isPausedHere ? "node-pulse 1.5s ease-in-out infinite" : undefined,
       }}
     >
+      {hasBreakpoint && (
+        <div
+          className="absolute"
+          style={{
+            top: 4,
+            left: 4,
+            width: 12,
+            height: 12,
+            borderRadius: "50%",
+            background: "var(--error)",
+            border: "2px solid var(--bg-tertiary)",
+            boxShadow: "0 0 4px var(--error)",
+            zIndex: 1,
+          }}
+        />
+      )}
       <Handle type="target" position={Position.Top} style={invisibleHandle} />
       <div
         style={{
@@ -41,6 +64,7 @@ export default function GroupNode({ data }: NodeProps) {
           fontSize: 10,
           color: "var(--text-muted)",
           fontWeight: 600,
+          textAlign: "center",
           borderBottom: `1px solid ${borderColor}`,
           background: "var(--bg-tertiary)",
           borderRadius: "8px 8px 0 0",

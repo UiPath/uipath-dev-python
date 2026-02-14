@@ -268,6 +268,7 @@ class RunService:
             debug_bridge.set_breakpoints("*")
             # Resume execution (will pause at next node)
             run.breakpoint_node = None
+            run.breakpoint_next_nodes = []
             run.status = "running"
             self._emit_run_updated(run)
             debug_bridge.resume(resume_data={})
@@ -280,6 +281,7 @@ class RunService:
             debug_bridge.set_breakpoints(run.breakpoints)
             # Resume execution
             run.breakpoint_node = None
+            run.breakpoint_next_nodes = []
             run.status = "running"
             self._emit_run_updated(run)
             debug_bridge.resume(resume_data={})
@@ -354,6 +356,7 @@ class RunService:
         run = self.runs.get(run_id)
         if run:
             run.breakpoint_node = bp.breakpoint_node
+            run.breakpoint_next_nodes = bp.next_nodes if bp.next_nodes else []
             run.status = "suspended"
             self._emit_run_updated(run)
 
