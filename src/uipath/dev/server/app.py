@@ -4,14 +4,12 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, Response
 
-if TYPE_CHECKING:
-    from uipath.dev.server import UiPathDeveloperServer
+from uipath.dev.server import UiPathDeveloperServer
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +73,7 @@ def _fallback_html() -> str:
                 "The frontend source directory was not found. "
                 "If you installed from PyPI, the pre-built static files should "
                 "be included. Try reinstalling with "
-                "<code>pip install uipath-dev[server]</code>."
+                "<code>pip install uipath-dev</code>."
             ),
         )
 

@@ -8,6 +8,8 @@ dependencies = [
   "uipath-runtime>=0.8.2, <0.9.0",
   "textual>=7.5.0, <8.0.0",
   "pyperclip>=1.11.0, <2.0.0",
+  "fastapi>=0.128.8",
+  "uvicorn[standard]>=0.40.0",
 ]
 classifiers = [
   "Intended Audience :: Developers",
@@ -19,12 +21,6 @@ classifiers = [
 ]
 maintainers = [
   { name = "Cristian Pufu", email = "cristian.pufu@uipath.com" },
-]
-
-[project.optional-dependencies]
-server = [
-  "fastapi>=0.128.8",
-  "uvicorn[standard]>=0.40.0",
 ]
 
 [project.urls]

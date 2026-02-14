@@ -40,7 +40,7 @@ def live_server_url():
 
         from uipath.dev.server import UiPathDeveloperServer
     except ImportError:
-        pytest.skip("server extras not installed (pip install uipath-dev[server])")
+        pytest.skip("server dependencies not installed (pip install uipath-dev)")
 
     factory = MockRuntimeFactory()
     trace_mgr = UiPathTraceManager()

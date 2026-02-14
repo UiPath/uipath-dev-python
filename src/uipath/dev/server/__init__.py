@@ -13,6 +13,7 @@ import webbrowser
 from collections.abc import Callable
 from typing import Any
 
+import uvicorn
 from uipath.core.tracing import UiPathTraceManager
 from uipath.runtime import UiPathRuntimeFactoryProtocol
 
@@ -22,18 +23,6 @@ from uipath.dev.server.debug_bridge import WebDebugBridge
 from uipath.dev.services.run_service import RunService
 
 logger = logging.getLogger(__name__)
-
-try:
-    import fastapi  # noqa: F401
-    import uvicorn  # noqa: F401
-
-    HAS_EXTRAS = True
-except ModuleNotFoundError:
-    HAS_EXTRAS = False
-
-_MISSING_EXTRAS_MSG = (
-    "Server extras are not installed. Install them with: pip install uipath-dev[server]"
-)
 
 
 class UiPathDeveloperServer:
@@ -91,9 +80,6 @@ class UiPathDeveloperServer:
 
     def create_app(self) -> Any:
         """Create and return a FastAPI application."""
-        if not HAS_EXTRAS:
-            raise ImportError(_MISSING_EXTRAS_MSG)
-
         from uipath.dev.server.app import create_app
 
         return create_app(self)
@@ -104,9 +90,6 @@ class UiPathDeveloperServer:
         This is the main entry point — mirrors UiPathDeveloperConsole.run_async().
         Blocks until the server is shut down (Ctrl-C / SIGINT).
         """
-        if not HAS_EXTRAS:
-            raise ImportError(_MISSING_EXTRAS_MSG)
-
         await self.run_service.apply_factory_settings()
         self.port = self._find_free_port(self.host, self.port)
         app = self.create_app()
@@ -292,7 +275,9 @@ class UiPathDeveloperServer:
             "https://uipath.github.io/uipath-python/[/link]"
         )
         console.print()
-        console.print("  [dim]This server is designed for development and testing.[/dim]")
+        console.print(
+            "  [dim]This server is designed for development and testing.[/dim]"
+        )
         console.print()
 
     def _deferred_open_browser(self) -> None:

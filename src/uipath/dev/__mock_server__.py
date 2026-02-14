@@ -32,7 +32,7 @@ def main():
         server.run()
     except ImportError as e:
         print(f"Required dependencies not available: {e}")
-        print("Install server dependencies: pip install uipath-dev[server]")
+        print("Install server dependencies: pip install uipath-dev")
 
 
 if __name__ == "__main__":
