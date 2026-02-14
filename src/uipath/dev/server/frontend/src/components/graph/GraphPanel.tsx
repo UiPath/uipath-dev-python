@@ -438,6 +438,7 @@ export default function GraphPanel({ entrypoint, runId, breakpointNode, breakpoi
   useEffect(() => {
     const isPaused = !!breakpointNode;
     let matchIds = new Set<string>(); // Full React Flow node IDs of the "current" node
+    const prevNodeIds = new Set<string>(); // Full RF IDs of the previous node (for edge filtering when paused)
     const nextNodeIds = new Set<string>(); // Full RF IDs of breakpoint next_nodes
     const activeTargetIds = new Set<string>(); // Full RF IDs for isActiveNode
     const nodeTypeById = new Map<string, string>();
@@ -471,6 +472,10 @@ export default function GraphPanel({ entrypoint, runId, breakpointNode, breakpoi
           for (const name of breakpointNextNodes) {
             findNodeIds(name).forEach((id) => nextNodeIds.add(id));
           }
+        }
+        // Resolve previous node so we only highlight the incoming edge from it
+        if (activeNode?.prev) {
+          findNodeIds(activeNode.prev).forEach((id) => prevNodeIds.add(id));
         }
       } else if (activeNode) {
         // Try qualified name first (exact match via "subgraph:node" → "subgraph/node")
@@ -515,8 +520,10 @@ export default function GraphPanel({ entrypoint, runId, breakpointNode, breakpoi
       eds.map((e) => {
         let isActive: boolean;
         if (isPaused) {
-          // Edges INTO breakpoint node + edges FROM breakpoint node TO next_nodes
-          isActive = matchIds.has(e.target)
+          // Edge from previous node INTO breakpoint node + edges FROM breakpoint node TO next_nodes
+          const intoBreakpoint = matchIds.has(e.target)
+            && (prevNodeIds.size === 0 || prevNodeIds.has(e.source));
+          isActive = intoBreakpoint
             || (matchIds.has(e.source) && nextNodeIds.has(e.target));
         } else {
           // Running: edges OUT of completed node
