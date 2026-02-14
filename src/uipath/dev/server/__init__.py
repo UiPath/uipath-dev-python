@@ -259,6 +259,11 @@ class UiPathDeveloperServer:
         """Print a welcome banner to the console."""
         import sys
 
+        from rich.console import Console
+        from rich.text import Text
+
+        console = Console()
+
         # Use emojis only if stdout supports unicode (not Windows cp1252)
         try:
             "\U0001f916".encode(sys.stdout.encoding or "utf-8")
@@ -266,20 +271,29 @@ class UiPathDeveloperServer:
         except (UnicodeEncodeError, LookupError):
             server_icon, docs_icon = ">>", ">>"
 
-        banner = (
-            "\n"
-            " _   _ _ ____       _   _       ____\n"
-            "| | | (_)  _ \\ __ _| |_| |__   |  _ \\  _____   __\n"
-            "| | | | | |_) / _` | __| '_ \\  | | | |/ _ \\ \\ / /\n"
-            "| |_| | |  __/ (_| | |_| | | | | |_| |  __/\\ V /\n"
-            " \\___/|_|_|   \\__,_|\\__|_| |_| |____/ \\___| \\_/\n"
-            "\n"
-            f"  {server_icon} Server: {base_url}\n"
-            f"  {docs_icon} Docs:   https://uipath.github.io/uipath-python/\n"
-            "\n"
-            "  This server is designed for development and testing.\n"
+        art_lines = [
+            " _   _ _ ____       _   _       ____",
+            "| | | (_)  _ \\ __ _| |_| |__   |  _ \\  _____   __",
+            "| | | | | |_) / _` | __| '_ \\  | | | |/ _ \\ \\ / /",
+            "| |_| | |  __/ (_| | |_| | | | | |_| |  __/\\ V /",
+            " \\___/|_|_|   \\__,_|\\__|_| |_| |____/ \\___| \\_/",
+        ]
+
+        console.print()
+        for line in art_lines:
+            styled = Text(line)
+            styled.stylize("bold orange1")
+            console.print(styled)
+        console.print()
+
+        console.print(f"  {server_icon} Server: [bold cyan]{base_url}[/bold cyan]")
+        console.print(
+            f"  {docs_icon} Docs:   [link=https://uipath.github.io/uipath-python/]"
+            "https://uipath.github.io/uipath-python/[/link]"
         )
-        print(banner)
+        console.print()
+        console.print("  [dim]This server is designed for development and testing.[/dim]")
+        console.print()
 
     def _deferred_open_browser(self) -> None:
         """Open the browser after a short delay to let uvicorn bind."""
