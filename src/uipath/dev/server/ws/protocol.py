@@ -13,6 +13,7 @@ class ServerEvent(str, Enum):
     LOG = "log"
     TRACE = "trace"
     CHAT = "chat"
+    CHAT_INTERRUPT = "chat.interrupt"
     STATE = "state"
     RELOAD = "reload"
 
@@ -23,6 +24,7 @@ class ClientCommand(str, Enum):
     SUBSCRIBE = "subscribe"
     UNSUBSCRIBE = "unsubscribe"
     CHAT_MESSAGE = "chat.message"
+    CHAT_INTERRUPT_RESPONSE = "chat.interrupt_response"
     DEBUG_STEP = "debug.step"
     DEBUG_CONTINUE = "debug.continue"
     DEBUG_STOP = "debug.stop"

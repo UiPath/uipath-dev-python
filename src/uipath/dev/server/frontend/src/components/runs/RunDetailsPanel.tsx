@@ -124,6 +124,8 @@ export default function RunDetailsPanel({ run, ws }: Props) {
     { id: "logs", label: "Logs", count: logs.length },
   ];
 
+  const interrupt = useRunStore((s) => s.activeInterrupt[run.id] ?? null);
+
   // Status indicator for the tab bar
   const statusIndicator =
     run.status === "running" ? (
@@ -136,6 +138,16 @@ export default function RunDetailsPanel({ run, ws }: Props) {
       >
         {isChatMode ? "Thinking..." : "Running..."}
       </span>
+    ) : isChatMode && run.status === "suspended" && interrupt ? (
+      <span
+        className="ml-auto text-[10px] px-2 py-0.5 rounded-full shrink-0"
+        style={{
+          background: "color-mix(in srgb, var(--warning) 15%, var(--bg-secondary))",
+          color: "var(--warning)",
+        }}
+      >
+        Action Required
+      </span>
     ) : null;
 
   return (
@@ -143,7 +155,7 @@ export default function RunDetailsPanel({ run, ws }: Props) {
       {/* Main content: graph + trace tree */}
       <div ref={containerRef} className="flex flex-col flex-1 min-w-0">
         {/* Debug controls */}
-        {(run.mode === "debug" || run.status === "suspended" || (bpMap && Object.keys(bpMap).length > 0)) && (
+        {(run.mode === "debug" || (run.status === "suspended" && !interrupt) || (bpMap && Object.keys(bpMap).length > 0)) && (
           <DebugControls runId={run.id} status={run.status} ws={ws} breakpointNode={run.breakpoint_node} />
         )}
         {/* Graph panel — resizable */}

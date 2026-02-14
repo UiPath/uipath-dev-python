@@ -96,6 +96,10 @@ export class WsClient {
     this.send("chat.message", { run_id: runId, text });
   }
 
+  sendInterruptResponse(runId: string, data: Record<string, unknown>): void {
+    this.send("chat.interrupt_response", { run_id: runId, data });
+  }
+
   debugStep(runId: string): void {
     this.send("debug.step", { run_id: runId });
   }

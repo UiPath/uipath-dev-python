@@ -81,3 +81,14 @@ export interface RunError {
   title: string;
   detail: string;
 }
+
+export interface InterruptEvent {
+  run_id: string;
+  interrupt_id: string;
+  interrupt_type: "tool_call_confirmation" | "generic";
+  tool_call_id?: string;
+  tool_name?: string;
+  input_schema?: unknown;
+  input_value?: unknown;
+  content?: unknown;
+}

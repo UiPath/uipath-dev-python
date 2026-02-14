@@ -7,6 +7,10 @@ from datetime import datetime
 from typing import Any, Callable, Literal, Protocol, cast
 
 from pydantic import BaseModel
+from uipath.core.chat import (
+    UiPathConversationMessageEvent,
+    UiPathConversationToolCallConfirmationValue,
+)
 from uipath.core.tracing import UiPathTraceManager
 from uipath.runtime import (
     UiPathExecuteOptions,
@@ -17,23 +21,33 @@ from uipath.runtime import (
     UiPathRuntimeStatus,
     UiPathStreamOptions,
 )
+from uipath.runtime.chat import UiPathChatRuntime
 from uipath.runtime.debug import (
     UiPathBreakpointResult,
     UiPathDebugProtocol,
     UiPathDebugRuntime,
 )
 from uipath.runtime.errors import UiPathErrorContract, UiPathRuntimeError
-from uipath.runtime.events import UiPathRuntimeMessageEvent, UiPathRuntimeStateEvent
+from uipath.runtime.events import UiPathRuntimeStateEvent
+from uipath.runtime.resumable.trigger import UiPathResumeTrigger
 
 from uipath.dev.infrastructure import RunContextExporter, RunContextLogHandler
-from uipath.dev.models.data import ChatData, LogData, StateData, TraceData
+from uipath.dev.models.data import (
+    ChatData,
+    InterruptData,
+    LogData,
+    StateData,
+    TraceData,
+)
 from uipath.dev.models.execution import ExecutionMode, ExecutionRun
+from uipath.dev.services.chat_bridge import WebChatBridge
 
 RunUpdatedCallback = Callable[[ExecutionRun], None]
 LogCallback = Callable[[LogData], None]
 TraceCallback = Callable[[TraceData], None]
 ChatCallback = Callable[[ChatData], None]
 StateCallback = Callable[[StateData], None]
+InterruptCallback = Callable[[InterruptData], None]
 
 
 class DebugBridgeProtocol(UiPathDebugProtocol, Protocol):
@@ -79,6 +93,7 @@ class RunService:
         on_trace: TraceCallback | None = None,
         on_chat: ChatCallback | None = None,
         on_state: StateCallback | None = None,
+        on_interrupt: InterruptCallback | None = None,
         debug_bridge_factory: DebugBridgeFactory | None = None,
     ) -> None:
         """Initialize RunService with runtime factory and trace manager."""
@@ -91,6 +106,7 @@ class RunService:
         self.on_trace = on_trace
         self.on_chat = on_chat
         self.on_state = on_state
+        self.on_interrupt = on_interrupt
         self._debug_bridge_factory = debug_bridge_factory
 
         self._exporter = RunContextExporter(
@@ -100,6 +116,7 @@ class RunService:
         self.trace_manager.add_span_exporter(self._exporter, batch=False)
 
         self.debug_bridges: dict[str, DebugBridgeProtocol] = {}
+        self.chat_bridges: dict[str, WebChatBridge] = {}
 
     def register_run(self, run: ExecutionRun) -> None:
         """Register a new run and emit an initial update."""
@@ -177,14 +194,30 @@ class RunService:
             else:
                 runtime = new_runtime
 
-            execution_runtime = UiPathExecutionRuntime(
-                delegate=runtime,
-                trace_manager=self.trace_manager,
-                log_handler=log_handler,
-                execution_id=run.id,
-            )
-
             if run.mode == ExecutionMode.CHAT:
+                chat_bridge = WebChatBridge()
+                chat_bridge.on_message = lambda evt: self._handle_chat_message_event(
+                    run, evt
+                )
+                chat_bridge.on_interrupt = lambda trigger: self._handle_interrupt(
+                    run, trigger
+                )
+                self.chat_bridges[run.id] = chat_bridge
+
+                # Wrap: ExecutionRuntime(ChatRuntime(runtime))
+                # ChatRuntime handles suspend/resume internally,
+                # ExecutionRuntime's OTel span wraps the entire session.
+                chat_runtime = UiPathChatRuntime(
+                    delegate=runtime,
+                    chat_bridge=chat_bridge,
+                )
+                execution_runtime = UiPathExecutionRuntime(
+                    delegate=cast(UiPathRuntimeProtocol, chat_runtime),
+                    trace_manager=self.trace_manager,
+                    log_handler=log_handler,
+                    execution_id=run.id,
+                )
+
                 result: UiPathRuntimeResult | None = None
                 async for event in execution_runtime.stream(
                     execution_input,
@@ -192,15 +225,15 @@ class RunService:
                 ):
                     if isinstance(event, UiPathRuntimeResult):
                         result = event
-                    elif isinstance(event, UiPathRuntimeMessageEvent):
-                        if self.on_chat is not None:
-                            chat_data = ChatData(
-                                event=event.payload,
-                                message=run.add_event(event.payload),
-                                run_id=run.id,
-                            )
-                            self.on_chat(chat_data)
+                    # Message events are handled by the chat bridge's
+                    # on_message callback — don't broadcast again here.
             else:
+                execution_runtime = UiPathExecutionRuntime(
+                    delegate=runtime,
+                    trace_manager=self.trace_manager,
+                    log_handler=log_handler,
+                    execution_id=run.id,
+                )
                 result = await execution_runtime.execute(
                     execution_input, execution_options
                 )
@@ -251,6 +284,8 @@ class RunService:
 
         if run.id in self.debug_bridges:
             del self.debug_bridges[run.id]
+        if run.id in self.chat_bridges:
+            del self.chat_bridges[run.id]
 
     async def resume_debug(self, run: ExecutionRun, resume_data: Any) -> None:
         """Resume debug execution from a breakpoint."""
@@ -326,9 +361,83 @@ class RunService:
         if self.on_trace is not None:
             self.on_trace(trace_data)
 
+    def get_chat_bridge(self, run_id: str) -> WebChatBridge | None:
+        """Get the chat bridge for a run."""
+        return self.chat_bridges.get(run_id)
+
+    def resume_chat(self, run: ExecutionRun, data: dict[str, Any]) -> None:
+        """Resume a suspended chat run with interrupt response data."""
+        chat_bridge = self.chat_bridges.get(run.id)
+        if chat_bridge:
+            run.status = "running"
+            self._emit_run_updated(run)
+            chat_bridge.resume(data)
+
     def get_debug_bridge(self, run_id: str) -> DebugBridgeProtocol | None:
         """Get the debug bridge for a run."""
         return self.debug_bridges.get(run_id)
+
+    def _handle_chat_message_event(
+        self, run: ExecutionRun, event: UiPathConversationMessageEvent
+    ) -> None:
+        """Handle a chat message event from the chat bridge."""
+        if self.on_chat is not None:
+            chat_data = ChatData(
+                event=event,
+                message=run.add_event(event),
+                run_id=run.id,
+            )
+            self.on_chat(chat_data)
+
+    def _handle_interrupt(
+        self, run: ExecutionRun, trigger: UiPathResumeTrigger
+    ) -> None:
+        """Handle an interrupt event from the chat bridge."""
+        payload = trigger.payload
+        interrupt_id = trigger.interrupt_id or ""
+        interrupt_data: InterruptData
+
+        # Try strongly-typed tool call confirmation first
+        tc = self._try_parse_tool_call_confirmation(payload)
+        if tc is not None:
+            interrupt_data = InterruptData(
+                run_id=run.id,
+                interrupt_id=interrupt_id,
+                interrupt_type="tool_call_confirmation",
+                tool_call_id=tc.tool_call_id,
+                tool_name=tc.tool_name,
+                input_schema=tc.input_schema,
+                input_value=tc.input_value,
+            )
+        else:
+            interrupt_data = InterruptData(
+                run_id=run.id,
+                interrupt_id=interrupt_id,
+                interrupt_type="generic",
+                content=payload,
+            )
+
+        run.status = "suspended"
+        self._emit_run_updated(run)
+
+        if self.on_interrupt is not None:
+            self.on_interrupt(interrupt_data)
+
+    @staticmethod
+    def _try_parse_tool_call_confirmation(
+        payload: Any,
+    ) -> UiPathConversationToolCallConfirmationValue | None:
+        """Try to parse payload as a tool call confirmation value."""
+        if isinstance(payload, UiPathConversationToolCallConfirmationValue):
+            return payload
+        if isinstance(payload, dict):
+            try:
+                return UiPathConversationToolCallConfirmationValue.model_validate(
+                    payload
+                )
+            except Exception:
+                return None
+        return None
 
     def _handle_state_update(self, run_id: str, state: UiPathRuntimeStateEvent) -> None:
         """Handle state update from debug runtime."""
