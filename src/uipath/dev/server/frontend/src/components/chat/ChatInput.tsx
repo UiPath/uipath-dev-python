@@ -42,7 +42,7 @@ export default function ChatInput({ onSend, disabled, placeholder }: Props) {
       <button
         onClick={handleSubmit}
         disabled={!canSend}
-        className="text-[10px] uppercase tracking-wider font-semibold px-2 py-1 rounded transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+        className="text-[11px] uppercase tracking-wider font-semibold px-2 py-1 rounded transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
         style={{
           color: canSend ? "var(--accent)" : "var(--text-muted)",
           background: "transparent",

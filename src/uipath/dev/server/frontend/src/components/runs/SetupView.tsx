@@ -315,7 +315,7 @@ export default function SetupView({ entrypoint, mode, ws, onRunCreated }: Props)
             <button
               onClick={handleExecute}
               disabled={loading || loadingSchema || !!schemaError}
-              className="w-full py-2 text-xs font-semibold rounded-md border cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              className="w-full py-2 text-sm font-semibold rounded-md border cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
               style={{
                 background: "transparent",
                 borderColor: modeColor,
@@ -372,7 +372,7 @@ export default function SetupView({ entrypoint, mode, ws, onRunCreated }: Props)
             <button
               onClick={handleChatSend}
               disabled={loading || loadingSchema || !chatText.trim()}
-              className="text-[10px] uppercase tracking-wider font-semibold px-2 py-1 rounded transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+              className="text-[11px] uppercase tracking-wider font-semibold px-2 py-1 rounded transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
               style={{
                 color:
                   !loading && chatText.trim()
