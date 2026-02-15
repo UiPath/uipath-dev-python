@@ -524,13 +524,18 @@ export default function GraphPanel({ entrypoint, runId, breakpointNode, breakpoi
     });
 
     // 2) Highlight edges
-    setEdges((eds) =>
-      eds.map((e) => {
+    setEdges((eds) => {
+      // Check if prev node actually has a direct edge into the breakpoint node.
+      // If not (e.g. prev is a sibling child of the same parent), fall back to
+      // highlighting all incoming edges to the breakpoint node.
+      const prevHasDirectEdge = prevNodeIds.size === 0
+        || eds.some((e) => matchIds.has(e.target) && prevNodeIds.has(e.source));
+
+      return eds.map((e) => {
         let isActive: boolean;
         if (isPaused) {
-          // Edge from previous node INTO breakpoint node + edges FROM breakpoint node TO next_nodes
           const intoBreakpoint = matchIds.has(e.target)
-            && (prevNodeIds.size === 0 || prevNodeIds.has(e.source));
+            && (prevNodeIds.size === 0 || !prevHasDirectEdge || prevNodeIds.has(e.source));
           isActive = intoBreakpoint
             || (matchIds.has(e.source) && nextNodeIds.has(e.target));
         } else {
@@ -564,8 +569,8 @@ export default function GraphPanel({ entrypoint, runId, breakpointNode, breakpoi
         }
 
         return e;
-      }),
-    );
+      });
+    });
 
     // 3) Mark nodes as active
     // - Running: targets of highlighted edges + __start__/__end__ when matched
