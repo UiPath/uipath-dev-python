@@ -244,6 +244,23 @@ class RunService:
                     and result.trigger
                 ):
                     run.status = "suspended"
+                elif result.status == UiPathRuntimeStatus.FAULTED.value:
+                    run.status = "failed"
+                    run.error = result.error
+                    err = result.error
+                    error_state = StateData(
+                        run_id=run.id,
+                        node_name="__error__",
+                        payload={
+                            "status": "failed",
+                            "code": err.code if err else "Unknown",
+                            "title": err.title if err else "Unknown error",
+                            "detail": err.detail if err else "",
+                        },
+                    )
+                    run.states.append(error_state)
+                    if self.on_state is not None:
+                        self.on_state(error_state)
                 else:
                     run.status = "completed"
 
@@ -257,7 +274,12 @@ class RunService:
                 if run.output_data:
                     self._add_info_log(run, f"Execution result: {run.output_data}")
 
-            self._add_info_log(run, "✅ Execution completed successfully")
+            if run.status == "failed":
+                err = run.error
+                detail = f"{err.title}: {err.detail}" if err else "Unknown error"
+                self._add_error_log(run, detail)
+            else:
+                self._add_info_log(run, "✅ Execution completed successfully")
             run.end_time = datetime.now()
 
         except UiPathRuntimeError as e:
