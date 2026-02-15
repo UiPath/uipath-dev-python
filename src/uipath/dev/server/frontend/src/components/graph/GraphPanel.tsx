@@ -524,13 +524,18 @@ export default function GraphPanel({ entrypoint, runId, breakpointNode, breakpoi
     });
 
     // 2) Highlight edges
-    setEdges((eds) =>
-      eds.map((e) => {
+    setEdges((eds) => {
+      // Check if prev node actually has a direct edge into the breakpoint node.
+      // If not (e.g. prev is a sibling child of the same parent), fall back to
+      // highlighting all incoming edges to the breakpoint node.
+      const prevHasDirectEdge = prevNodeIds.size === 0
+        || eds.some((e) => matchIds.has(e.target) && prevNodeIds.has(e.source));
+
+      return eds.map((e) => {
         let isActive: boolean;
         if (isPaused) {
-          // Edge from previous node INTO breakpoint node + edges FROM breakpoint node TO next_nodes
           const intoBreakpoint = matchIds.has(e.target)
-            && (prevNodeIds.size === 0 || prevNodeIds.has(e.source));
+            && (prevNodeIds.size === 0 || !prevHasDirectEdge || prevNodeIds.has(e.source));
           isActive = intoBreakpoint
             || (matchIds.has(e.source) && nextNodeIds.has(e.target));
         } else {
@@ -564,8 +569,8 @@ export default function GraphPanel({ entrypoint, runId, breakpointNode, breakpoi
         }
 
         return e;
-      }),
-    );
+      });
+    });
 
     // 3) Mark nodes as active
     // - Running: targets of highlighted edges + __start__/__end__ when matched
@@ -664,21 +669,20 @@ export default function GraphPanel({ entrypoint, runId, breakpointNode, breakpoi
 
       // Build set of completed React Flow node IDs from state events
       const completedIds = new Set<string>();
-      if (hasEvents) {
-        const allNodeIds = new Set(nds.map((n) => n.id));
-        // Fallback label→fullId map (used when no qualified name)
-        const labelToIds = new Map<string, Set<string>>();
-        for (const n of nds) {
-          const label = n.data?.label as string | undefined;
-          if (!label) continue;
-          const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
-          for (const key of [plainId, label]) {
-            let s = labelToIds.get(key);
-            if (!s) { s = new Set(); labelToIds.set(key, s); }
-            s.add(n.id);
-          }
+      const allNodeIds = new Set(nds.map((n) => n.id));
+      const labelToIds = new Map<string, Set<string>>();
+      for (const n of nds) {
+        const label = n.data?.label as string | undefined;
+        if (!label) continue;
+        const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
+        for (const key of [plainId, label]) {
+          let s = labelToIds.get(key);
+          if (!s) { s = new Set(); labelToIds.set(key, s); }
+          s.add(n.id);
         }
+      }
 
+      if (hasEvents) {
         for (const evt of stateEvents) {
           let matched = false;
           if (evt.qualified_node_name) {
@@ -703,10 +707,18 @@ export default function GraphPanel({ entrypoint, runId, breakpointNode, breakpoi
         }
       }
 
+      // When run failed and no nodes were highlighted, mark the root node as failed
+      let failedRootId: string | undefined;
+      if (runStatus === "failed" && completedIds.size === 0) {
+        failedRootId = nds.find((n) => !n.parentNode && n.type !== "startNode" && n.type !== "endNode" && n.type !== "groupNode")?.id;
+      }
+
       return nds.map((n) => {
         let status: string | undefined;
 
-        if (completedIds.has(n.id)) {
+        if (n.id === failedRootId) {
+          status = "failed";
+        } else if (completedIds.has(n.id)) {
           status = "completed";
         } else if (n.type === "startNode") {
           // Top-level: completed once execution begins; subgraph: only if visited

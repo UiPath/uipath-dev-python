@@ -109,39 +109,8 @@ function AttributeValue({ value }: { value: unknown }) {
   );
 }
 
-function IdRow({ label, value }: { label: string; value: string }) {
-  const [copied, setCopied] = useState(false);
-  const copy = useCallback(() => {
-    navigator.clipboard.writeText(value).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  }, [value]);
-
-  return (
-    <div className="flex items-center gap-2 group">
-      <span className="text-[10px] uppercase font-semibold shrink-0 w-12" style={{ color: "var(--text-muted)" }}>
-        {label}
-      </span>
-      <span
-        className="text-[11px] font-mono truncate flex-1"
-        style={{ color: "var(--text-secondary)" }}
-        title={value}
-      >
-        {value}
-      </span>
-      <button
-        onClick={copy}
-        className="opacity-0 group-hover:opacity-100 text-[10px] cursor-pointer shrink-0"
-        style={{ color: copied ? "var(--success)" : "var(--text-muted)" }}
-      >
-        {copied ? "copied" : "copy"}
-      </button>
-    </div>
-  );
-}
-
 export default function SpanDetails({ span }: Props) {
+  const [attrsOpen, setAttrsOpen] = useState(true);
   const [idsOpen, setIdsOpen] = useState(false);
   const status = STATUS_CONFIG[span.status.toLowerCase()] ?? { ...DEFAULT_STATUS, label: span.status };
 
@@ -188,16 +157,20 @@ export default function SpanDetails({ span }: Props) {
         </span>
       </div>
 
-      {/* Attributes — flat rows */}
+      {/* Attributes — collapsible */}
       {attrEntries.length > 0 && (
         <>
           <div
-            className="px-2 py-1 text-[10px] uppercase font-bold tracking-wider border-b"
+            className="px-2 py-1 text-[10px] uppercase font-bold tracking-wider border-b cursor-pointer flex items-center"
             style={{ color: "var(--accent)", borderColor: "var(--border)", background: "var(--bg-secondary)" }}
+            onClick={() => setAttrsOpen((o) => !o)}
           >
-            Attributes ({attrEntries.length})
+            <span className="flex-1">Attributes ({attrEntries.length})</span>
+            <span style={{ color: "var(--text-muted)", transform: attrsOpen ? "rotate(0deg)" : "rotate(-90deg)" }}>
+              &#x25BE;
+            </span>
           </div>
-          {attrEntries.map(([key, value], idx) => (
+          {attrsOpen && attrEntries.map(([key, value], idx) => (
             <div
               key={key}
               className="flex gap-2 px-2 py-1 items-start border-b"
@@ -224,21 +197,37 @@ export default function SpanDetails({ span }: Props) {
       {/* Identifiers — collapsible */}
       <div
         className="px-2 py-1 text-[10px] uppercase font-bold tracking-wider border-b cursor-pointer flex items-center"
-        style={{ color: "var(--info)", borderColor: "var(--border)", background: "var(--bg-secondary)" }}
+        style={{ color: "var(--accent)", borderColor: "var(--border)", background: "var(--bg-secondary)" }}
         onClick={() => setIdsOpen((o) => !o)}
       >
-        <span className="flex-1">Identifiers</span>
+        <span className="flex-1">Identifiers ({ids.length})</span>
         <span style={{ color: "var(--text-muted)", transform: idsOpen ? "rotate(0deg)" : "rotate(-90deg)" }}>
           &#x25BE;
         </span>
       </div>
-      {idsOpen && (
-        <div className="px-2 py-1 space-y-0.5" style={{ background: "var(--bg-primary)" }}>
-          {ids.map((id) => (
-            <IdRow key={id.label} label={id.label} value={id.value} />
-          ))}
+      {idsOpen && ids.map((id, idx) => (
+        <div
+          key={id.label}
+          className="flex gap-2 px-2 py-1 items-start border-b"
+          style={{
+            borderColor: "var(--border)",
+            background: idx % 2 === 0 ? "var(--bg-primary)" : "var(--bg-secondary)",
+          }}
+        >
+          <span
+            className="font-mono font-semibold shrink-0 pt-px truncate text-[11px]"
+            style={{ color: "var(--info)", width: "35%" }}
+            title={id.label}
+          >
+            {id.label}
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="font-mono text-[11px] break-all" style={{ color: "var(--text-primary)" }}>
+              {id.value}
+            </span>
+          </span>
         </div>
-      )}
+      ))}
     </div>
   );
 }

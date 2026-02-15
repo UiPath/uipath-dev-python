@@ -164,7 +164,26 @@ class RunService:
                 runtime_id=run.id,
             )
 
-            runtime: UiPathRuntimeProtocol
+            runtime: UiPathRuntimeProtocol = new_runtime
+
+            if run.mode == ExecutionMode.CHAT:
+                chat_bridge = WebChatBridge()
+                chat_bridge.on_message = lambda evt: self._handle_chat_message_event(
+                    run, evt
+                )
+                chat_bridge.on_interrupt = lambda trigger: self._handle_interrupt(
+                    run, trigger
+                )
+                self.chat_bridges[run.id] = chat_bridge
+
+                # ChatRuntime handles suspend/resume internally
+                runtime = cast(
+                    UiPathRuntimeProtocol,
+                    UiPathChatRuntime(
+                        delegate=runtime,
+                        chat_bridge=chat_bridge,
+                    ),
+                )
 
             if self._debug_bridge_factory:
                 debug_bridge = self._debug_bridge_factory(run.mode)
@@ -188,31 +207,15 @@ class RunService:
                 self.debug_bridges[run.id] = debug_bridge
 
                 runtime = UiPathDebugRuntime(
-                    delegate=new_runtime,
+                    delegate=runtime,
                     debug_bridge=debug_bridge,
                 )
-            else:
-                runtime = new_runtime
 
             if run.mode == ExecutionMode.CHAT:
-                chat_bridge = WebChatBridge()
-                chat_bridge.on_message = lambda evt: self._handle_chat_message_event(
-                    run, evt
-                )
-                chat_bridge.on_interrupt = lambda trigger: self._handle_interrupt(
-                    run, trigger
-                )
-                self.chat_bridges[run.id] = chat_bridge
-
-                # Wrap: ExecutionRuntime(ChatRuntime(runtime))
-                # ChatRuntime handles suspend/resume internally,
+                # Wrap: ExecutionRuntime(Debug(Chat(base)))
                 # ExecutionRuntime's OTel span wraps the entire session.
-                chat_runtime = UiPathChatRuntime(
-                    delegate=runtime,
-                    chat_bridge=chat_bridge,
-                )
                 execution_runtime = UiPathExecutionRuntime(
-                    delegate=cast(UiPathRuntimeProtocol, chat_runtime),
+                    delegate=runtime,
                     trace_manager=self.trace_manager,
                     log_handler=log_handler,
                     execution_id=run.id,
@@ -244,6 +247,23 @@ class RunService:
                     and result.trigger
                 ):
                     run.status = "suspended"
+                elif result.status == UiPathRuntimeStatus.FAULTED.value:
+                    run.status = "failed"
+                    run.error = result.error
+                    err = result.error
+                    error_state = StateData(
+                        run_id=run.id,
+                        node_name="__error__",
+                        payload={
+                            "status": "failed",
+                            "code": err.code if err else "Unknown",
+                            "title": err.title if err else "Unknown error",
+                            "detail": err.detail if err else "",
+                        },
+                    )
+                    run.states.append(error_state)
+                    if self.on_state is not None:
+                        self.on_state(error_state)
                 else:
                     run.status = "completed"
 
@@ -257,7 +277,12 @@ class RunService:
                 if run.output_data:
                     self._add_info_log(run, f"Execution result: {run.output_data}")
 
-            self._add_info_log(run, "✅ Execution completed successfully")
+            if run.status == "failed":
+                err = run.error
+                detail = f"{err.title}: {err.detail}" if err else "Unknown error"
+                self._add_error_log(run, detail)
+            else:
+                self._add_info_log(run, "✅ Execution completed successfully")
             run.end_time = datetime.now()
 
         except UiPathRuntimeError as e:
