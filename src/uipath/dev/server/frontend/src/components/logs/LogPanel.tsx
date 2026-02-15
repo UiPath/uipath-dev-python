@@ -41,7 +41,7 @@ export default function LogPanel({ logs }: Props) {
 
   return (
     <div className="h-full relative">
-      <div ref={scrollRef} onScroll={handleScroll} className="h-full overflow-y-auto font-mono text-xs">
+      <div ref={scrollRef} onScroll={handleScroll} className="h-full overflow-y-auto font-mono text-xs leading-normal">
         {logs.map((log, i) => {
           const time = new Date(log.timestamp).toLocaleTimeString(undefined, {
             hour12: false,

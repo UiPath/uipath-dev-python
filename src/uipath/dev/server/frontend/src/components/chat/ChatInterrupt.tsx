@@ -29,7 +29,7 @@ export default function ChatInterrupt({ interrupt, onRespond }: Props) {
           </span>
           {interrupt.tool_name && (
             <span
-              className="text-[10px] font-mono px-1.5 py-0.5 rounded"
+              className="text-[11px] font-mono px-1.5 py-0.5 rounded"
               style={{
                 background: "color-mix(in srgb, var(--warning) 15%, var(--bg-secondary))",
                 color: "var(--text-primary)",
@@ -41,7 +41,7 @@ export default function ChatInterrupt({ interrupt, onRespond }: Props) {
         </div>
         {interrupt.input_value != null && (
           <pre
-            className="px-3 py-2 text-[11px] font-mono whitespace-pre-wrap break-words overflow-y-auto"
+            className="px-3 py-2 text-[11px] font-mono whitespace-pre-wrap break-words overflow-y-auto leading-normal"
             style={{
               background: "var(--bg-secondary)",
               color: "var(--text-secondary)",
@@ -120,7 +120,7 @@ export default function ChatInterrupt({ interrupt, onRespond }: Props) {
       </div>
       {interrupt.content != null && (
         <div
-          className="px-3 py-2 text-xs"
+          className="px-3 py-2 text-sm leading-relaxed"
           style={{
             background: "var(--bg-secondary)",
             color: "var(--text-secondary)",
@@ -148,7 +148,7 @@ export default function ChatInterrupt({ interrupt, onRespond }: Props) {
             }
           }}
           placeholder="Type your response..."
-          className="flex-1 bg-transparent text-xs py-1 focus:outline-none placeholder:text-[var(--text-muted)]"
+          className="flex-1 bg-transparent text-sm py-1 focus:outline-none placeholder:text-[var(--text-muted)]"
           style={{ color: "var(--text-primary)" }}
         />
         <button

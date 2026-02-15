@@ -36,7 +36,7 @@ export default function ChatInput({ onSend, disabled, placeholder }: Props) {
         onKeyDown={handleKeyDown}
         disabled={disabled}
         placeholder={placeholder ?? "Message..."}
-        className="flex-1 bg-transparent text-xs py-1 focus:outline-none disabled:opacity-40 placeholder:text-[var(--text-muted)]"
+        className="flex-1 bg-transparent text-sm py-1 focus:outline-none disabled:opacity-40 placeholder:text-[var(--text-muted)]"
         style={{ color: "var(--text-primary)" }}
       />
       <button

@@ -128,7 +128,7 @@ export default function SpanDetails({ span }: Props) {
   ];
 
   return (
-    <div className="overflow-y-auto h-full text-xs">
+    <div className="overflow-y-auto h-full text-xs leading-normal">
       {/* Header: name + pills */}
       <div
         className="px-2 py-1.5 border-b flex items-center gap-2 flex-wrap"
@@ -138,7 +138,7 @@ export default function SpanDetails({ span }: Props) {
           {span.span_name}
         </span>
         <span
-          className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase"
+          className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"
           style={{
             background: `color-mix(in srgb, ${status.color} 15%, var(--bg-secondary))`,
             color: status.color,

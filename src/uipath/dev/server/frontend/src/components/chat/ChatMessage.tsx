@@ -46,14 +46,14 @@ export default function ChatMessage({ message, onToolCallClick, toolCallIndices 
       {message.content && (
         isUser ? (
           <div
-            className="text-xs leading-relaxed pl-2.5"
+            className="text-sm leading-relaxed pl-2.5 max-w-prose"
             style={{ color: "var(--text-primary)" }}
           >
             {message.content}
           </div>
         ) : (
           <div
-            className="text-xs leading-relaxed pl-2.5 chat-markdown"
+            className="text-sm leading-relaxed pl-2.5 max-w-prose chat-markdown"
             style={{ color: "var(--text-secondary)" }}
           >
             <Markdown remarkPlugins={[remarkGfm]}>{message.content}</Markdown>
@@ -67,7 +67,7 @@ export default function ChatMessage({ message, onToolCallClick, toolCallIndices 
           {message.tool_calls.map((tc, i) => (
             <span
               key={`${tc.name}-${i}`}
-              className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded cursor-pointer hover:brightness-125"
+              className="inline-flex items-center gap-1 text-[11px] font-mono px-1.5 py-0.5 rounded cursor-pointer hover:brightness-125"
               style={{
                 background: "var(--bg-primary)",
                 border: "1px solid var(--border)",

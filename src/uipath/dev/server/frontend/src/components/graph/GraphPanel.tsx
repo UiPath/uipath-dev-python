@@ -853,7 +853,7 @@ export default function GraphPanel({ entrypoint, runId, breakpointNode, breakpoi
               border: `1px solid ${hasAnyBreakpoint ? "var(--error)" : "var(--node-border)"}`,
               borderRadius: 6,
               padding: "4px 10px",
-              fontSize: 11,
+              fontSize: 12,
               cursor: "pointer",
               display: "flex",
               alignItems: "center",

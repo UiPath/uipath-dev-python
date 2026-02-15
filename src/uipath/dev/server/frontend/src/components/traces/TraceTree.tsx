@@ -337,7 +337,7 @@ function TreeNodeView({
       <button
         data-span-id={span.span_id}
         onClick={() => onSelect(span)}
-        className="w-full text-left text-xs py-1.5 pr-2 flex items-center gap-1.5 transition-colors relative"
+        className="w-full text-left text-xs leading-normal py-1.5 pr-2 flex items-center gap-1.5 transition-colors relative"
         style={{
           paddingLeft: `${indent + 4}px`,
           background: isSelected
