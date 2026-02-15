@@ -8,6 +8,7 @@ export default function NewRunPanel() {
   const entrypoints = useRunStore((s) => s.entrypoints);
   const [selectedEp, setSelectedEp] = useState("");
   const [chatSupported, setChatSupported] = useState(true);
+  const [entrypointError, setEntrypointError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selectedEp && entrypoints.length > 0) {
@@ -18,13 +19,17 @@ export default function NewRunPanel() {
   useEffect(() => {
     if (!selectedEp) return;
     setChatSupported(true);
+    setEntrypointError(null);
     getEntrypointSchema(selectedEp)
       .then((schema) => {
         const props = (schema.input as any)?.properties;
         setChatSupported(!!props?.messages);
       })
-      .catch(() => {
-        setChatSupported(true); // don't block on schema fetch errors
+      .catch((err: any) => {
+        const detail = err.detail || {};
+        setEntrypointError(
+          detail.error || detail.message || `Failed to load entrypoint "${selectedEp}"`
+        );
       });
   }, [selectedEp]);
 
@@ -41,7 +46,7 @@ export default function NewRunPanel() {
           <div className="flex items-center justify-center gap-2 mb-2">
             <div
               className="w-1.5 h-1.5 rounded-full"
-              style={{ background: "var(--accent)" }}
+              style={{ background: entrypointError ? "var(--error)" : "var(--accent)" }}
             />
             <span
               className="text-[10px] uppercase tracking-widest font-semibold"
@@ -50,9 +55,11 @@ export default function NewRunPanel() {
               New Run
             </span>
           </div>
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-            {entrypoints.length > 1 ? "Select an entrypoint and choose a mode" : "Choose a mode"}
-          </p>
+          {!entrypointError && (
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              {entrypoints.length > 1 ? "Select an entrypoint and choose a mode" : "Choose a mode"}
+            </p>
+          )}
         </div>
 
         {/* Entrypoint */}
@@ -83,29 +90,65 @@ export default function NewRunPanel() {
           </div>
         )}
 
-        {/* Mode cards */}
-        <div className="grid grid-cols-2 gap-4">
-          <ModeCard
-            title="Autonomous"
-            description="Run the agent end-to-end. Set breakpoints to pause and inspect execution."
-            icon={<BoltIcon />}
-            color="var(--success)"
-            onClick={() => handleModeSelect("run")}
-            disabled={!selectedEp}
-          />
-          <ModeCard
-            title="Conversational"
-            description={
-              !chatSupported
-                ? "Requires a \"messages\" property in the input schema."
-                : "Interactive chat session. Send messages and receive responses in real time."
-            }
-            icon={<ChatIcon />}
-            color="var(--accent)"
-            onClick={() => handleModeSelect("chat")}
-            disabled={!selectedEp || !chatSupported}
-          />
-        </div>
+        {/* Mode cards or error */}
+        {entrypointError ? (
+          <div
+            className="rounded-md border overflow-hidden"
+            style={{
+              borderColor: "color-mix(in srgb, var(--error) 25%, var(--border))",
+              background: "var(--bg-secondary)",
+            }}
+          >
+            <div
+              className="px-3 py-2 flex items-center gap-2"
+              style={{
+                borderBottom: "1px solid color-mix(in srgb, var(--error) 15%, var(--border))",
+                background: "color-mix(in srgb, var(--error) 4%, var(--bg-secondary))",
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+                <path
+                  d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM7.25 4.75h1.5v4h-1.5v-4zm.75 6.75a.75.75 0 110-1.5.75.75 0 010 1.5z"
+                  fill="var(--error)"
+                />
+              </svg>
+              <span className="text-[11px] font-medium" style={{ color: "var(--error)" }}>
+                Failed to load entrypoint
+              </span>
+            </div>
+            <div className="overflow-auto max-h-48 p-3">
+              <pre
+                className="text-[11px] font-mono whitespace-pre-wrap break-words leading-relaxed m-0"
+                style={{ color: "var(--text-muted)" }}
+              >
+                {entrypointError}
+              </pre>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-4">
+            <ModeCard
+              title="Autonomous"
+              description="Run the agent end-to-end. Set breakpoints to pause and inspect execution."
+              icon={<BoltIcon />}
+              color="var(--success)"
+              onClick={() => handleModeSelect("run")}
+              disabled={!selectedEp}
+            />
+            <ModeCard
+              title="Conversational"
+              description={
+                !chatSupported
+                  ? "Requires a \"messages\" property in the input schema."
+                  : "Interactive chat session. Send messages and receive responses in real time."
+              }
+              icon={<ChatIcon />}
+              color="var(--accent)"
+              onClick={() => handleModeSelect("chat")}
+              disabled={!selectedEp || !chatSupported}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

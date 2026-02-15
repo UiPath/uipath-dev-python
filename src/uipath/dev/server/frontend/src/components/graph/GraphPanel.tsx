@@ -713,11 +713,22 @@ export default function GraphPanel({ entrypoint, runId, breakpointNode, breakpoi
         failedRootId = nds.find((n) => !n.parentNode && n.type !== "startNode" && n.type !== "endNode" && n.type !== "groupNode")?.id;
       }
 
+      // When run completed and root node is not already highlighted, mark it as completed
+      let completedRootId: string | undefined;
+      if (runStatus === "completed") {
+        const rootId = nds.find((n) => !n.parentNode && n.type !== "startNode" && n.type !== "endNode" && n.type !== "groupNode")?.id;
+        if (rootId && !completedIds.has(rootId)) {
+          completedRootId = rootId;
+        }
+      }
+
       return nds.map((n) => {
         let status: string | undefined;
 
         if (n.id === failedRootId) {
           status = "failed";
+        } else if (n.id === completedRootId) {
+          status = "completed";
         } else if (completedIds.has(n.id)) {
           status = "completed";
         } else if (n.type === "startNode") {
