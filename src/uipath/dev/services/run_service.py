@@ -164,7 +164,26 @@ class RunService:
                 runtime_id=run.id,
             )
 
-            runtime: UiPathRuntimeProtocol
+            runtime: UiPathRuntimeProtocol = new_runtime
+
+            if run.mode == ExecutionMode.CHAT:
+                chat_bridge = WebChatBridge()
+                chat_bridge.on_message = lambda evt: self._handle_chat_message_event(
+                    run, evt
+                )
+                chat_bridge.on_interrupt = lambda trigger: self._handle_interrupt(
+                    run, trigger
+                )
+                self.chat_bridges[run.id] = chat_bridge
+
+                # ChatRuntime handles suspend/resume internally
+                runtime = cast(
+                    UiPathRuntimeProtocol,
+                    UiPathChatRuntime(
+                        delegate=runtime,
+                        chat_bridge=chat_bridge,
+                    ),
+                )
 
             if self._debug_bridge_factory:
                 debug_bridge = self._debug_bridge_factory(run.mode)
@@ -188,31 +207,15 @@ class RunService:
                 self.debug_bridges[run.id] = debug_bridge
 
                 runtime = UiPathDebugRuntime(
-                    delegate=new_runtime,
+                    delegate=runtime,
                     debug_bridge=debug_bridge,
                 )
-            else:
-                runtime = new_runtime
 
             if run.mode == ExecutionMode.CHAT:
-                chat_bridge = WebChatBridge()
-                chat_bridge.on_message = lambda evt: self._handle_chat_message_event(
-                    run, evt
-                )
-                chat_bridge.on_interrupt = lambda trigger: self._handle_interrupt(
-                    run, trigger
-                )
-                self.chat_bridges[run.id] = chat_bridge
-
-                # Wrap: ExecutionRuntime(ChatRuntime(runtime))
-                # ChatRuntime handles suspend/resume internally,
+                # Wrap: ExecutionRuntime(Debug(Chat(base)))
                 # ExecutionRuntime's OTel span wraps the entire session.
-                chat_runtime = UiPathChatRuntime(
-                    delegate=runtime,
-                    chat_bridge=chat_bridge,
-                )
                 execution_runtime = UiPathExecutionRuntime(
-                    delegate=cast(UiPathRuntimeProtocol, chat_runtime),
+                    delegate=runtime,
                     trace_manager=self.trace_manager,
                     log_handler=log_handler,
                     execution_id=run.id,
