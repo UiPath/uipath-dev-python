@@ -158,7 +158,7 @@ export default function ChatInterrupt({ interrupt, onRespond }: Props) {
             }
           }}
           disabled={!responseText.trim()}
-          className="text-[10px] uppercase tracking-wider font-semibold px-2 py-1 rounded transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+          className="text-[11px] uppercase tracking-wider font-semibold px-2 py-1 rounded transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
           style={{
             color: responseText.trim() ? "var(--accent)" : "var(--text-muted)",
             background: "transparent",
