@@ -215,7 +215,7 @@ export default function SetupView({ entrypoint, mode, ws, onRunCreated }: Props)
       >
         {/* Header */}
         <div
-          className="px-4 text-xs font-semibold uppercase border-b flex items-center gap-2 h-[33px]"
+          className="px-4 text-xs font-semibold uppercase tracking-wider border-b flex items-center gap-2 h-[33px]"
           style={{
             color: "var(--text-muted)",
             borderColor: "var(--border)",
@@ -250,12 +250,12 @@ export default function SetupView({ entrypoint, mode, ws, onRunCreated }: Props)
           </svg>
           <div className="text-center space-y-1.5">
             <p
-              className="text-xs font-medium"
+              className="text-sm font-medium"
               style={{ color: "var(--text-secondary)" }}
             >
               {isRunMode ? "Ready to execute" : "Ready to chat"}
             </p>
-            <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+            <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
               Click nodes to set breakpoints
               {isRunMode ? (
                 <>,<br />configure input below, then run</>
@@ -366,7 +366,7 @@ export default function SetupView({ entrypoint, mode, ws, onRunCreated }: Props)
               }}
               disabled={loading || loadingSchema}
               placeholder={loading ? "Starting..." : "Message..."}
-              className="flex-1 bg-transparent text-xs py-1 focus:outline-none disabled:opacity-40 placeholder:text-[var(--text-muted)]"
+              className="flex-1 bg-transparent text-sm py-1 focus:outline-none disabled:opacity-40 placeholder:text-[var(--text-muted)]"
               style={{ color: "var(--text-primary)" }}
             />
             <button

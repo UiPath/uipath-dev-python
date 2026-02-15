@@ -197,7 +197,7 @@ export default function RunDetailsPanel({ run, ws }: Props) {
             <button
               key={tab.id}
               onClick={() => setSidebarTab(tab.id)}
-              className="px-2 py-0.5 h-5 text-[10px] uppercase tracking-wider font-semibold rounded transition-colors cursor-pointer"
+              className="px-2 py-0.5 h-5 text-[11px] uppercase tracking-wider font-semibold rounded transition-colors cursor-pointer"
               style={{
                 color:
                   sidebarTab === tab.id
@@ -301,12 +301,12 @@ function IOView({ run }: { run: RunSummary }) {
               {run.error.code}
             </span>
           </div>
-          <div className="p-4 text-xs" style={{ background: "var(--bg-secondary)" }}>
+          <div className="p-4 text-xs leading-normal" style={{ background: "var(--bg-secondary)" }}>
             <div className="font-semibold mb-2" style={{ color: "var(--text-primary)" }}>
               {run.error.title}
             </div>
             <pre
-              className="whitespace-pre-wrap font-mono text-[11px]"
+              className="whitespace-pre-wrap font-mono text-[11px] max-w-prose"
               style={{ color: "var(--text-secondary)" }}
             >
               {run.error.detail}
@@ -343,7 +343,7 @@ function DataSection({
     <div>
       <div className="flex items-center gap-2 mb-2">
         <div className="w-1 h-4 rounded-full" style={{ background: color }} />
-        <span className="text-xs font-semibold uppercase" style={{ color }}>{title}</span>
+        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color }}>{title}</span>
         {copyText && (
           <button
             onClick={copy}

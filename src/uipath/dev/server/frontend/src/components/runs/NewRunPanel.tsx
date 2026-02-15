@@ -49,14 +49,14 @@ export default function NewRunPanel() {
               style={{ background: entrypointError ? "var(--error)" : "var(--accent)" }}
             />
             <span
-              className="text-[10px] uppercase tracking-widest font-semibold"
+              className="text-xs uppercase tracking-widest font-semibold"
               style={{ color: "var(--text-muted)" }}
             >
               New Run
             </span>
           </div>
           {!entrypointError && (
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
               {entrypoints.length > 1 ? "Select an entrypoint and choose a mode" : "Choose a mode"}
             </p>
           )}
@@ -204,7 +204,7 @@ function ModeCard({
       >
         {title}
       </h3>
-      <p className="text-[11px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
+      <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
         {description}
       </p>
     </button>

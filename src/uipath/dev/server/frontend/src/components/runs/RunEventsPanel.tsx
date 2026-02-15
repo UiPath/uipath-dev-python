@@ -43,7 +43,7 @@ export default function RunEventsPanel({ events, runStatus }: Props) {
     <div
       ref={scrollRef}
       onScroll={handleScroll}
-      className="h-full overflow-y-auto font-mono text-xs"
+      className="h-full overflow-y-auto font-mono text-xs leading-normal"
     >
       {events.map((event, i) => {
         const time = new Date(event.timestamp).toLocaleTimeString(undefined, {

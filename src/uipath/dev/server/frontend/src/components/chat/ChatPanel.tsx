@@ -91,7 +91,7 @@ export default function ChatPanel({ messages, runId, runStatus, ws }: Props) {
           className="h-full overflow-y-auto px-3 py-2 space-y-0.5"
         >
           {messages.length === 0 && (
-            <p className="text-[var(--text-muted)] text-xs text-center py-6">
+            <p className="text-[var(--text-muted)] text-sm text-center py-6">
               No messages yet
             </p>
           )}
