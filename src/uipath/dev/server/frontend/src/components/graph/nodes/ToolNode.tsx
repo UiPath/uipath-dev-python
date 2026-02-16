@@ -21,18 +21,23 @@ export default function ToolNode({ data }: NodeProps) {
   const hasBreakpoint = data.hasBreakpoint as boolean | undefined;
   const isPausedHere = data.isPausedHere as boolean | undefined;
   const isActiveNode = data.isActiveNode as boolean | undefined;
+  const isExecutingNode = data.isExecutingNode as boolean | undefined;
 
   const borderColor = isPausedHere
     ? "var(--accent)"
-    : isActiveNode
-      ? "var(--accent)"
-      : status === "completed"
-        ? "var(--success)"
-        : status === "running"
-          ? "var(--warning)"
-          : status === "failed"
-            ? "var(--error)"
-            : "var(--node-border)";
+    : isExecutingNode
+      ? "var(--success)"
+      : isActiveNode
+        ? "var(--accent)"
+        : status === "completed"
+          ? "var(--success)"
+          : status === "running"
+            ? "var(--warning)"
+            : status === "failed"
+              ? "var(--error)"
+              : "var(--node-border)";
+
+  const glowColor = isExecutingNode ? "var(--success)" : "var(--accent)";
 
   const visibleTools = toolNames?.slice(0, MAX_VISIBLE_TOOLS) ?? [];
   const remaining = (toolCount ?? toolNames?.length ?? 0) - visibleTools.length;
@@ -45,8 +50,8 @@ export default function ToolNode({ data }: NodeProps) {
         background: "var(--node-bg)",
         color: "var(--text-primary)",
         border: `2px solid ${borderColor}`,
-        boxShadow: isPausedHere || isActiveNode ? "0 0 4px var(--accent)" : undefined,
-        animation: isActiveNode && !isPausedHere ? "node-pulse 1.5s ease-in-out infinite" : undefined,
+        boxShadow: isPausedHere || isActiveNode || isExecutingNode ? `0 0 4px ${glowColor}` : undefined,
+        animation: (isActiveNode || isExecutingNode) && !isPausedHere ? `node-pulse-${isExecutingNode ? "green" : "accent"} 1.5s ease-in-out infinite` : undefined,
       }}
       title={toolNames?.length ? `${label}\n\n${toolNames.join("\n")}` : label}
     >

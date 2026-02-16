@@ -472,6 +472,7 @@ class RunService:
                 run_id=run_id,
                 node_name=state.node_name,
                 qualified_node_name=state.qualified_node_name,
+                phase=state.phase.value if state.phase else None,
                 payload=state.payload if state.payload else None,
             )
             run.states.append(state_data)

@@ -17,16 +17,23 @@ export default function GroupNode({ data }: NodeProps) {
   const hasBreakpoint = data.hasBreakpoint as boolean | undefined;
   const isPausedHere = data.isPausedHere as boolean | undefined;
   const isActiveNode = data.isActiveNode as boolean | undefined;
+  const isExecutingNode = data.isExecutingNode as boolean | undefined;
 
-  const borderColor = isPausedHere || isActiveNode
+  const borderColor = isPausedHere
     ? "var(--accent)"
-    : status === "completed"
+    : isExecutingNode
       ? "var(--success)"
-      : status === "running"
-        ? "var(--warning)"
-        : status === "failed"
-          ? "var(--error)"
-          : "var(--bg-tertiary)";
+      : isActiveNode
+        ? "var(--accent)"
+        : status === "completed"
+          ? "var(--success)"
+          : status === "running"
+            ? "var(--warning)"
+            : status === "failed"
+              ? "var(--error)"
+              : "var(--bg-tertiary)";
+
+  const glowColor = isExecutingNode ? "var(--success)" : "var(--accent)";
 
   return (
     <div
@@ -35,10 +42,10 @@ export default function GroupNode({ data }: NodeProps) {
         width: "100%",
         height: "100%",
         background: "var(--bg-secondary)",
-        border: `1.5px ${isPausedHere || isActiveNode ? "solid" : "dashed"} ${borderColor}`,
+        border: `1.5px ${isPausedHere || isActiveNode || isExecutingNode ? "solid" : "dashed"} ${borderColor}`,
         borderRadius: 8,
-        boxShadow: isPausedHere || isActiveNode ? "0 0 4px var(--accent)" : undefined,
-        animation: isActiveNode && !isPausedHere ? "node-pulse 1.5s ease-in-out infinite" : undefined,
+        boxShadow: isPausedHere || isActiveNode || isExecutingNode ? `0 0 4px ${glowColor}` : undefined,
+        animation: (isActiveNode || isExecutingNode) && !isPausedHere ? `node-pulse-${isExecutingNode ? "green" : "accent"} 1.5s ease-in-out infinite` : undefined,
       }}
     >
       {hasBreakpoint && (

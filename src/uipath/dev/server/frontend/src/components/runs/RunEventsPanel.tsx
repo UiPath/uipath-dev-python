@@ -4,8 +4,18 @@ import JsonHighlight from "../shared/JsonHighlight";
 interface StateEvent {
   node_name: string;
   timestamp: number;
+  phase?: string | null;
   payload?: Record<string, unknown>;
 }
+
+const phaseConfig: Record<string, { color: string; label: string }> = {
+  started:   { color: "var(--accent)",  label: "started" },
+  updated:   { color: "var(--info)",    label: "updated" },
+  completed: { color: "var(--success)", label: "completed" },
+  faulted:   { color: "var(--error)",   label: "faulted" },
+};
+
+const defaultPhase = { color: "var(--text-muted)", label: "" };
 
 interface Props {
   events: StateEvent[];
@@ -51,6 +61,7 @@ export default function RunEventsPanel({ events, runStatus }: Props) {
         });
         const hasPayload = event.payload && Object.keys(event.payload).length > 0;
         const isExpanded = expandedIdx === i;
+        const phase = event.phase ? (phaseConfig[event.phase] ?? defaultPhase) : defaultPhase;
 
         return (
           <div key={i}>
@@ -67,12 +78,17 @@ export default function RunEventsPanel({ events, runStatus }: Props) {
               <span className="shrink-0" style={{ color: "var(--text-muted)" }}>
                 {time}
               </span>
-              <span className="shrink-0" style={{ color: "var(--accent)" }}>
-                &#9656;
+              <span className="shrink-0" style={{ color: phase.color }}>
+                ●
               </span>
               <span className="flex-1 truncate" style={{ color: "var(--text-primary)" }}>
                 {event.node_name}
               </span>
+              {phase.label && (
+                <span className="shrink-0 text-[10px]" style={{ color: "var(--text-muted)" }}>
+                  {phase.label}
+                </span>
+              )}
               {hasPayload && (
                 <span
                   className="shrink-0 text-[9px] transition-transform"
