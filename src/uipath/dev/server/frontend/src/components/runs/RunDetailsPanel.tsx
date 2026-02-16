@@ -300,6 +300,12 @@ function IOView({ run }: { run: RunSummary }) {
             >
               {run.error.code}
             </span>
+            <span
+              className="px-1.5 py-0.5 rounded text-[10px] font-mono"
+              style={{ background: "color-mix(in srgb, var(--error) 20%, var(--bg-secondary))" }}
+            >
+              {run.error.category}
+            </span>
           </div>
           <div className="p-4 text-xs leading-normal" style={{ background: "var(--bg-secondary)" }}>
             <div className="font-semibold mb-2" style={{ color: "var(--text-primary)" }}>

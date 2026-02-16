@@ -106,6 +106,9 @@ def serialize_run(run: ExecutionRun) -> dict[str, Any]:
                 "code": run.error.code,
                 "title": run.error.title,
                 "detail": run.error.detail,
+                "category": run.error.category.value
+                if hasattr(run.error.category, "value")
+                else str(run.error.category),
             }
             if run.error
             else None

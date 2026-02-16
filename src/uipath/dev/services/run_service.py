@@ -27,7 +27,10 @@ from uipath.runtime.debug import (
     UiPathDebugProtocol,
     UiPathDebugRuntime,
 )
-from uipath.runtime.errors import UiPathErrorContract, UiPathRuntimeError
+from uipath.runtime.errors import (
+    UiPathBaseRuntimeError,
+    UiPathErrorContract,
+)
 from uipath.runtime.events import UiPathRuntimeStateEvent
 from uipath.runtime.resumable.trigger import UiPathResumeTrigger
 
@@ -259,6 +262,9 @@ class RunService:
                             "code": err.code if err else "Unknown",
                             "title": err.title if err else "Unknown error",
                             "detail": err.detail if err else "",
+                            "category": err.category.value
+                            if err and hasattr(err.category, "value")
+                            else "Unknown",
                         },
                     )
                     run.states.append(error_state)
@@ -285,7 +291,7 @@ class RunService:
                 self._add_info_log(run, "✅ Execution completed successfully")
             run.end_time = datetime.now()
 
-        except UiPathRuntimeError as e:
+        except UiPathBaseRuntimeError as e:
             self._add_error_log(run)
             run.status = "failed"
             run.end_time = datetime.now()
