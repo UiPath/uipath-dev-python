@@ -40,9 +40,9 @@ interface RunStore {
   activeNodes: Record<string, { prev: string | null; current: string; qualifiedNodeName?: string | null }>;
   setActiveNode: (runId: string, nodeName: string, qualifiedNodeName?: string | null) => void;
 
-  stateEvents: Record<string, { node_name: string; qualified_node_name?: string | null; timestamp: number; payload?: Record<string, unknown> }[]>;
-  addStateEvent: (runId: string, nodeName: string, payload?: Record<string, unknown>, qualifiedNodeName?: string | null) => void;
-  setStateEvents: (runId: string, events: { node_name: string; qualified_node_name?: string | null; timestamp: number; payload?: Record<string, unknown> }[]) => void;
+  stateEvents: Record<string, { node_name: string; qualified_node_name?: string | null; phase?: string | null; timestamp: number; payload?: Record<string, unknown> }[]>;
+  addStateEvent: (runId: string, nodeName: string, payload?: Record<string, unknown>, qualifiedNodeName?: string | null, phase?: string | null) => void;
+  setStateEvents: (runId: string, events: { node_name: string; qualified_node_name?: string | null; phase?: string | null; timestamp: number; payload?: Record<string, unknown> }[]) => void;
 
   focusedSpan: { name: string; index: number } | null;
   setFocusedSpan: (span: { name: string; index: number } | null) => void;
@@ -231,13 +231,13 @@ export const useRunStore = create<RunStore>((set) => ({
     }),
 
   stateEvents: {},
-  addStateEvent: (runId, nodeName, payload, qualifiedNodeName) =>
+  addStateEvent: (runId, nodeName, payload, qualifiedNodeName, phase) =>
     set((state) => {
       const existing = state.stateEvents[runId] ?? [];
       return {
         stateEvents: {
           ...state.stateEvents,
-          [runId]: [...existing, { node_name: nodeName, qualified_node_name: qualifiedNodeName, timestamp: Date.now(), payload }],
+          [runId]: [...existing, { node_name: nodeName, qualified_node_name: qualifiedNodeName, phase, timestamp: Date.now(), payload }],
         },
       };
     }),

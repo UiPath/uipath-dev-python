@@ -575,19 +575,21 @@ export default function GraphPanel({ entrypoint, runId, breakpointNode, breakpoi
     // 3) Mark nodes as active
     // - Running: targets of highlighted edges + __start__/__end__ when matched
     // - Paused: next_nodes get isActiveNode (about to execute)
+    // - Executing: matchIds get isExecutingNode (currently running node, green glow)
     setNodes((nds) =>
       nds.map((n) => {
+        const executing = !isPaused && matchIds.has(n.id);
         if (n.type === "startNode" || n.type === "endNode") {
           const active = activeTargetIds.has(n.id) || (!isPaused && matchIds.has(n.id));
-          return active !== !!n.data?.isActiveNode
-            ? { ...n, data: { ...n.data, isActiveNode: active } }
+          return active !== !!n.data?.isActiveNode || executing !== !!n.data?.isExecutingNode
+            ? { ...n, data: { ...n.data, isActiveNode: active, isExecutingNode: executing } }
             : n;
         }
         const active = isPaused
           ? nextNodeIds.has(n.id)
           : activeTargetIds.has(n.id);
-        return active !== !!n.data?.isActiveNode
-          ? { ...n, data: { ...n.data, isActiveNode: active } }
+        return active !== !!n.data?.isActiveNode || executing !== !!n.data?.isExecutingNode
+          ? { ...n, data: { ...n.data, isActiveNode: active, isExecutingNode: executing } }
           : n;
       }),
     );
@@ -821,9 +823,13 @@ export default function GraphPanel({ entrypoint, runId, breakpointNode, breakpoi
         @keyframes edge-flow {
           to { stroke-dashoffset: -12; }
         }
-        @keyframes node-pulse {
+        @keyframes node-pulse-accent {
           0%, 100% { box-shadow: 0 0 4px var(--accent); }
           50% { box-shadow: 0 0 10px var(--accent); }
+        }
+        @keyframes node-pulse-green {
+          0%, 100% { box-shadow: 0 0 4px var(--success); }
+          50% { box-shadow: 0 0 10px var(--success); }
         }
       `}</style>
       <ReactFlow

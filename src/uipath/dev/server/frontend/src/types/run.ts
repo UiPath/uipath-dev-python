@@ -23,6 +23,7 @@ export interface StateEventData {
   run_id: string;
   node_name: string;
   qualified_node_name?: string | null;
+  phase?: string | null;
   timestamp: string;
   payload?: Record<string, unknown>;
 }

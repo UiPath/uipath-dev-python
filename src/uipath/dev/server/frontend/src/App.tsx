@@ -89,6 +89,7 @@ export default function App() {
           detail.states.map((s) => ({
             node_name: s.node_name,
             qualified_node_name: s.qualified_node_name,
+            phase: s.phase,
             timestamp: new Date(s.timestamp).getTime(),
             payload: s.payload,
           })),

@@ -45,9 +45,12 @@ export function useWebSocket() {
           const runId = msg.payload.run_id as string;
           const nodeName = msg.payload.node_name as string;
           const qualifiedNodeName = (msg.payload.qualified_node_name as string | undefined) ?? null;
+          const phase = (msg.payload.phase as string | undefined) ?? null;
           const payload = msg.payload.payload as Record<string, unknown> | undefined;
-          setActiveNode(runId, nodeName, qualifiedNodeName);
-          addStateEvent(runId, nodeName, payload, qualifiedNodeName);
+          if (phase === "started") {
+            setActiveNode(runId, nodeName, qualifiedNodeName);
+          }
+          addStateEvent(runId, nodeName, payload, qualifiedNodeName, phase);
           break;
         }
         case "reload":
