@@ -81,6 +81,7 @@ export interface RunError {
   code: string;
   title: string;
   detail: string;
+  category: string;
 }
 
 export interface InterruptEvent {
