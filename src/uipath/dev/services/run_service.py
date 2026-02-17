@@ -370,7 +370,6 @@ class RunService:
         run = self.runs.get(log_data.run_id)
         if run is not None:
             run.logs.append(log_data)
-            self._emit_run_updated(run)
 
         if self.on_log is not None:
             self.on_log(log_data)
@@ -386,8 +385,6 @@ class RunService:
                     break
             else:
                 run.traces.append(trace_data)
-
-            self._emit_run_updated(run)
 
         if self.on_trace is not None:
             self.on_trace(trace_data)

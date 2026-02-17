@@ -831,6 +831,10 @@ export default function GraphPanel({ entrypoint, runId, breakpointNode, breakpoi
           0%, 100% { box-shadow: 0 0 4px var(--success); }
           50% { box-shadow: 0 0 10px var(--success); }
         }
+        @keyframes node-pulse-red {
+          0%, 100% { box-shadow: 0 0 4px var(--error); }
+          50% { box-shadow: 0 0 10px var(--error); }
+        }
       `}</style>
       <ReactFlow
         nodes={nodes}

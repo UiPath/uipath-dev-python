@@ -28,6 +28,8 @@ from uipath.dev.server.ws.protocol import ServerEvent, server_message
 
 logger = logging.getLogger(__name__)
 
+_SENTINEL: dict[str, Any] = {}  # Unique object used to signal queue shutdown
+
 
 class ConnectionManager:
     """Manages WebSocket connections and run-level subscriptions."""
@@ -36,6 +38,8 @@ class ConnectionManager:
         """Initialize the connection manager."""
         self._connections: set[WebSocket] = set()
         self._subscriptions: dict[str, set[WebSocket]] = {}
+        self._queues: dict[int, asyncio.Queue[dict[str, Any]]] = {}
+        self._send_tasks: dict[int, asyncio.Task[None]] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
 
     def _get_loop(self) -> asyncio.AbstractEventLoop:
@@ -51,6 +55,30 @@ class ConnectionManager:
         """Accept a new WebSocket connection."""
         await websocket.accept()
         self._connections.add(websocket)
+        queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+        ws_id = id(websocket)
+        self._queues[ws_id] = queue
+        self._send_tasks[ws_id] = asyncio.create_task(self._sender(websocket, queue))
+
+    async def _sender(
+        self, ws: WebSocket, queue: asyncio.Queue[dict[str, Any]]
+    ) -> None:
+        """Consume messages from queue and send them serially."""
+        while True:
+            message = await queue.get()
+            if message is _SENTINEL:
+                break
+            try:
+                await ws.send_json(message)
+            except Exception:
+                self.disconnect(ws)
+                break
+
+    def _enqueue(self, ws: WebSocket, message: dict[str, Any]) -> None:
+        """Put a message on a WebSocket's send queue (non-blocking)."""
+        queue = self._queues.get(id(ws))
+        if queue is not None:
+            queue.put_nowait(message)
 
     def disconnect(self, websocket: WebSocket) -> None:
         """Remove a WebSocket connection and all its subscriptions."""
@@ -59,6 +87,17 @@ class ConnectionManager:
             self._subscriptions[run_id].discard(websocket)
             if not self._subscriptions[run_id]:
                 del self._subscriptions[run_id]
+
+        ws_id = id(websocket)
+        queue = self._queues.pop(ws_id, None)
+        if queue is not None:
+            try:
+                queue.put_nowait(_SENTINEL)
+            except Exception:
+                pass
+        task = self._send_tasks.pop(ws_id, None)
+        if task is not None and not task.done():
+            task.cancel()
 
     async def disconnect_all(self) -> None:
         """Close all WebSocket connections gracefully."""
@@ -119,41 +158,13 @@ class ConnectionManager:
     def broadcast_reload(self, changed_files: list[str]) -> None:
         """Broadcast a reload event to all connected clients."""
         msg = server_message(ServerEvent.RELOAD, {"files": changed_files})
-        if not self._connections:
-            return
-
-        try:
-            loop = self._get_loop()
-            asyncio.ensure_future(
-                self._send_to_all(self._connections.copy(), msg), loop=loop
-            )
-        except RuntimeError:
-            logger.debug("No event loop available for reload broadcast")
+        for ws in self._connections:
+            self._enqueue(ws, msg)
 
     def _schedule_broadcast(self, run_id: str, message: dict[str, Any]) -> None:
-        """Schedule an async broadcast from a potentially sync callback."""
-        subscribers = self._subscriptions.get(run_id, set())
+        """Enqueue a message for all subscribers of a run."""
+        subscribers = self._subscriptions.get(run_id)
         if not subscribers:
             return
-
-        try:
-            loop = self._get_loop()
-            asyncio.ensure_future(
-                self._send_to_all(subscribers.copy(), message), loop=loop
-            )
-        except RuntimeError:
-            logger.debug("No event loop available for broadcast")
-
-    async def _send_to_all(
-        self, subscribers: set[WebSocket], message: dict[str, Any]
-    ) -> None:
-        """Send a message to all subscribers, removing disconnected ones."""
-        disconnected: list[WebSocket] = []
         for ws in subscribers:
-            try:
-                await ws.send_json(message)
-            except Exception:
-                disconnected.append(ws)
-
-        for ws in disconnected:
-            self.disconnect(ws)
+            self._enqueue(ws, message)
