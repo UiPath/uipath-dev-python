@@ -20,5 +20,16 @@ export default defineConfig({
   build: {
     outDir: "../static",
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('/react-dom/') || id.includes('/react/')) return 'vendor-react';
+            if (id.includes('/reactflow/') || id.includes('/@reactflow/')) return 'vendor-reactflow';
+            if (id.includes('/elkjs/')) return 'vendor-elk';
+          }
+        },
+      },
+    },
   },
 });

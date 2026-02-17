@@ -171,7 +171,7 @@ class MockTemplateRuntime:
 
     async def dispose(self) -> None:
         """Cleanup resources."""
-        logger.info("MockTemplateRuntime: dispose() invoked")
+        pass
 
 
 def create_template_runtime(

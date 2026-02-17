@@ -22,7 +22,7 @@ export default function DebugControls({ runId, status, ws, breakpointNode }: Pro
 
   return (
     <div
-      className="flex items-center gap-1 px-4 py-2.5 border-b shrink-0"
+      className="flex items-center gap-1 px-4 h-10 border-b shrink-0"
       style={{ borderColor: "var(--border)", background: "var(--bg-secondary)" }}
     >
       <span className="text-[10px] uppercase tracking-wider font-semibold mr-1" style={{ color: "var(--text-muted)" }}>

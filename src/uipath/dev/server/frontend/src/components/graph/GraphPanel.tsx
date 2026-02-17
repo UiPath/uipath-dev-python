@@ -12,7 +12,8 @@ import ReactFlow, {
   type ReactFlowInstance,
 } from "reactflow";
 import "reactflow/dist/style.css";
-import ELK, { type ElkNode, type ElkExtendedEdge } from "elkjs/lib/elk.bundled.js";
+import type { ElkNode, ElkExtendedEdge } from "elkjs/lib/elk.bundled.js";
+import type ELKType from "elkjs/lib/elk.bundled.js";
 import type { TraceSpan } from "../../types/run";
 import type { GraphData } from "../../types/graph";
 import { getEntrypointGraph } from "../../api/client";
@@ -67,8 +68,15 @@ function computeNodeHeight(
   return h;
 }
 
-// ─── ELK layout engine ──────────────────────────────────────────────
-const elk = new ELK();
+// ─── ELK layout engine (lazy-loaded) ────────────────────────────────
+let elk: InstanceType<typeof ELKType> | null = null;
+async function getElk() {
+  if (!elk) {
+    const { default: ELK } = await import("elkjs/lib/elk.bundled.js");
+    elk = new ELK();
+  }
+  return elk;
+}
 
 const ELK_OPTIONS: Record<string, string> = {
   "elk.algorithm": "layered",
@@ -226,7 +234,8 @@ async function runElkLayout(
   graphData: GraphData,
 ): Promise<{ nodes: Node[]; edges: Edge[] }> {
   const elkGraph = buildElkGraph(graphData);
-  const layout = await elk.layout(elkGraph);
+  const elkInstance = await getElk();
+  const layout = await elkInstance.layout(elkGraph);
 
   // Build lookup: prefixed-id → { type, data } from original graph data
   const nodeInfo = new Map<
