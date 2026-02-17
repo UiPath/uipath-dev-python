@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "highlight.js/styles/github-dark.css";
 
 /* UiPath Dark Theme (default) */
 :root,
@@ -219,3 +220,49 @@ select option {
 .chat-markdown tr:nth-child(even) {
   background: var(--bg-primary);
 }
+
+/* Highlight.js: let our pre styles control background */
+.chat-markdown .hljs {
+  background: transparent;
+}
+
+/* Highlight.js: light theme token overrides (github light colors) */
+[data-theme="light"] .chat-markdown .hljs { color: #24292e }
+[data-theme="light"] .chat-markdown .hljs-doctag,
+[data-theme="light"] .chat-markdown .hljs-keyword,
+[data-theme="light"] .chat-markdown .hljs-meta .hljs-keyword,
+[data-theme="light"] .chat-markdown .hljs-template-tag,
+[data-theme="light"] .chat-markdown .hljs-template-variable,
+[data-theme="light"] .chat-markdown .hljs-type,
+[data-theme="light"] .chat-markdown .hljs-variable.language_ { color: #d73a49 }
+[data-theme="light"] .chat-markdown .hljs-title,
+[data-theme="light"] .chat-markdown .hljs-title.class_,
+[data-theme="light"] .chat-markdown .hljs-title.class_.inherited__,
+[data-theme="light"] .chat-markdown .hljs-title.function_ { color: #6f42c1 }
+[data-theme="light"] .chat-markdown .hljs-attr,
+[data-theme="light"] .chat-markdown .hljs-attribute,
+[data-theme="light"] .chat-markdown .hljs-literal,
+[data-theme="light"] .chat-markdown .hljs-meta,
+[data-theme="light"] .chat-markdown .hljs-number,
+[data-theme="light"] .chat-markdown .hljs-operator,
+[data-theme="light"] .chat-markdown .hljs-variable,
+[data-theme="light"] .chat-markdown .hljs-selector-attr,
+[data-theme="light"] .chat-markdown .hljs-selector-class,
+[data-theme="light"] .chat-markdown .hljs-selector-id { color: #005cc5 }
+[data-theme="light"] .chat-markdown .hljs-regexp,
+[data-theme="light"] .chat-markdown .hljs-string,
+[data-theme="light"] .chat-markdown .hljs-meta .hljs-string { color: #032f62 }
+[data-theme="light"] .chat-markdown .hljs-built_in,
+[data-theme="light"] .chat-markdown .hljs-symbol { color: #e36209 }
+[data-theme="light"] .chat-markdown .hljs-comment,
+[data-theme="light"] .chat-markdown .hljs-code,
+[data-theme="light"] .chat-markdown .hljs-formula { color: #6a737d }
+[data-theme="light"] .chat-markdown .hljs-name,
+[data-theme="light"] .chat-markdown .hljs-quote,
+[data-theme="light"] .chat-markdown .hljs-selector-tag,
+[data-theme="light"] .chat-markdown .hljs-selector-pseudo { color: #22863a }
+[data-theme="light"] .chat-markdown .hljs-subst { color: #24292e }
+[data-theme="light"] .chat-markdown .hljs-section { color: #005cc5 }
+[data-theme="light"] .chat-markdown .hljs-bullet { color: #735c0f }
+[data-theme="light"] .chat-markdown .hljs-addition { color: #22863a; background-color: #f0fff4 }
+[data-theme="light"] .chat-markdown .hljs-deletion { color: #b31d28; background-color: #ffeef0 }
