@@ -20,13 +20,13 @@ class TextualDebugBridge:
     def __init__(self, mode: ExecutionMode = ExecutionMode.DEBUG):
         """Initialize the debug bridge."""
         self._mode = mode
-        self._auto_resume = mode == ExecutionMode.RUN
+        self._auto_resume = mode != ExecutionMode.DEBUG
         self._connected = False
         self._resume_event = asyncio.Event()
         self._resume_data: dict[str, Any] | None = None
         self._terminate_event = asyncio.Event()
         self._breakpoints: list[str] | Literal["*"] = (
-            [] if mode == ExecutionMode.RUN else "*"
+            "*" if mode == ExecutionMode.DEBUG else []
         )
 
         # Callbacks to UI
