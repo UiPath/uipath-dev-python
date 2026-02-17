@@ -190,7 +190,7 @@ export default function RunDetailsPanel({ run, ws }: Props) {
       >
         {/* Sidebar tab bar */}
         <div
-          className="flex items-center gap-1 px-2 py-2.5 border-b shrink-0"
+          className="flex items-center gap-1 px-2 h-10 border-b shrink-0"
           style={{ borderColor: "var(--border)", background: "var(--bg-secondary)" }}
         >
           {sidebarTabs.map((tab) => (
