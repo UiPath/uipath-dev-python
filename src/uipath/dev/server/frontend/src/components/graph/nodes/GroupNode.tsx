@@ -1,4 +1,5 @@
 import { Handle, Position, type NodeProps } from "reactflow";
+import MarchingBorder from "./MarchingBorder";
 
 const invisibleHandle = {
   opacity: 0,
@@ -24,7 +25,7 @@ export default function GroupNode({ data }: NodeProps) {
     : isExecutingNode
       ? "var(--success)"
       : isActiveNode
-        ? "var(--accent)"
+        ? "transparent"
         : status === "completed"
           ? "var(--success)"
           : status === "running"
@@ -64,6 +65,7 @@ export default function GroupNode({ data }: NodeProps) {
           }}
         />
       )}
+      {isActiveNode && <MarchingBorder strokeWidth={3} />}
       <Handle type="target" position={Position.Top} style={invisibleHandle} />
       <div
         style={{
@@ -72,7 +74,7 @@ export default function GroupNode({ data }: NodeProps) {
           color: "var(--text-muted)",
           fontWeight: 600,
           textAlign: "center",
-          borderBottom: `1px solid ${borderColor}`,
+          borderBottom: `1px solid ${isActiveNode ? "var(--accent)" : borderColor}`,
           background: "var(--bg-tertiary)",
           borderRadius: "8px 8px 0 0",
         }}

@@ -1,4 +1,5 @@
 import { Handle, Position, type NodeProps } from "reactflow";
+import MarchingBorder from "./MarchingBorder";
 
 const hiddenHandle = {
   opacity: 0,
@@ -24,7 +25,7 @@ export default function StartNode({ data }: NodeProps) {
     : isExecutingNode
       ? "var(--success)"
       : isActiveNode
-        ? "var(--accent)"
+        ? "transparent"
         : status === "completed"
           ? "var(--success)"
           : status === "running"
@@ -61,6 +62,7 @@ export default function StartNode({ data }: NodeProps) {
           }}
         />
       )}
+      {isActiveNode && <MarchingBorder rx={999} />}
       {label}
       <Handle type="source" position={Position.Bottom} style={hiddenHandle} />
     </div>

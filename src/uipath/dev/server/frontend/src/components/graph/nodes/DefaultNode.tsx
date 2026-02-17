@@ -1,4 +1,5 @@
 import { Handle, Position, type NodeProps } from "reactflow";
+import MarchingBorder from "./MarchingBorder";
 
 export default function DefaultNode({ data }: NodeProps) {
   const status = data.status as string | undefined;
@@ -14,7 +15,7 @@ export default function DefaultNode({ data }: NodeProps) {
     : isExecutingNode
       ? "var(--success)"
       : isActiveNode
-        ? "var(--accent)"
+        ? "transparent"
         : status === "completed"
         ? "var(--success)"
         : status === "running"
@@ -53,6 +54,7 @@ export default function DefaultNode({ data }: NodeProps) {
           }}
         />
       )}
+      {isActiveNode && <MarchingBorder />}
       <Handle type="target" position={Position.Top} />
       <div className="overflow-hidden text-ellipsis whitespace-nowrap">
         {label}
