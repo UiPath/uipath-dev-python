@@ -458,15 +458,18 @@ class MockSupportChatRuntime:
 
         # --- Model (streaming final response) ---
         yield self._node_state("model", S)
-        with self.tracer.start_as_current_span(
+        model_span = self.tracer.start_span(
             "model.2",
             attributes={
                 "uipath.step.kind": "model",
                 "uipath.output.reply.length": len(reply),
             },
-        ):
+        )
+        try:
             async for evt in self._emit_streaming_response(reply):
                 yield evt
+        finally:
+            model_span.end()
         yield self._node_state("model", C)
 
         # --- Middleware: TodoList (routes to __end__) ---
@@ -500,15 +503,18 @@ class MockSupportChatRuntime:
             self._suspended_turn = None
             self._suspended_message_id = None
 
-            with self.tracer.start_as_current_span(
+            resume_span = self.tracer.start_span(
                 "support_chat.resume",
                 attributes={
                     "uipath.runtime.name": "SupportChatRuntime",
                     "uipath.step.kind": "resume",
                 },
-            ):
+            )
+            try:
                 async for evt in self._stream_phase2(turn):
                     yield evt
+            finally:
+                resume_span.end()
             return
 
         # --- Normal flow ---
@@ -531,7 +537,7 @@ class MockSupportChatRuntime:
         # Shared message_id for the assistant turn (tool calls + response)
         message_id = str(uuid4())
 
-        with self.tracer.start_as_current_span(
+        root_span = self.tracer.start_span(
             "support_chat.execute",
             attributes={
                 "uipath.runtime.name": "SupportChatRuntime",
@@ -540,7 +546,8 @@ class MockSupportChatRuntime:
                 "uipath.input.message.length": len(message),
                 "uipath.input.turn_keywords": ",".join(turn.get("keywords", [])),
             },
-        ):
+        )
+        try:
             # --- Middleware: PatchToolCalls ---
             yield self._node_state("PatchToolCallsMiddleware.before_agent", S)
             with self.tracer.start_as_current_span(
@@ -567,14 +574,15 @@ class MockSupportChatRuntime:
 
             # --- Model (first call — decides to use tools) ---
             yield self._node_state("model", S)
-            with self.tracer.start_as_current_span(
+            model_span = self.tracer.start_span(
                 "model",
                 attributes={
                     "uipath.step.kind": "model",
                     "uipath.output.tool_calls_count": len(tool_defs),
                     "uipath.output.tool_names": ",".join(t["name"] for t in tool_defs),
                 },
-            ):
+            )
+            try:
                 # message_start for tool-call message
                 yield UiPathRuntimeMessageEvent(
                     payload=UiPathConversationMessageEvent(
@@ -588,6 +596,8 @@ class MockSupportChatRuntime:
                 # Emit tool call events from the model
                 async for evt in self._emit_tool_calls(message_id, tool_defs):
                     yield evt
+            finally:
+                model_span.end()
             yield self._node_state("model", C)
 
             # --- Middleware: TodoList (routes to tools) ---
@@ -658,15 +668,18 @@ class MockSupportChatRuntime:
 
             # --- Model (second call — streaming final response with tool results) ---
             yield self._node_state("model", S)
-            with self.tracer.start_as_current_span(
+            model2_span = self.tracer.start_span(
                 "model.2",
                 attributes={
                     "uipath.step.kind": "model",
                     "uipath.output.reply.length": len(reply),
                 },
-            ):
+            )
+            try:
                 async for evt in self._emit_streaming_response(reply):
                     yield evt
+            finally:
+                model2_span.end()
             yield self._node_state("model", C)
 
             # --- Middleware: TodoList (routes to __end__) ---
@@ -680,6 +693,8 @@ class MockSupportChatRuntime:
             ):
                 await asyncio.sleep(0.1)
             yield self._node_state("TodoListMiddleware.after_model", C)
+        finally:
+            root_span.end()
 
         yield UiPathRuntimeResult(
             output={"reply": reply},

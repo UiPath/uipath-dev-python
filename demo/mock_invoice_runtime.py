@@ -174,7 +174,7 @@ class MockInvoiceRuntime:
         invoice_id = str(payload.get("invoice_id", "INV-2024-08731"))
         currency = str(payload.get("currency", "USD"))
 
-        with self.tracer.start_as_current_span(
+        root_span = self.tracer.start_span(
             "invoice_processing.execute",
             attributes={
                 "uipath.runtime.name": "InvoiceProcessingRuntime",
@@ -183,7 +183,8 @@ class MockInvoiceRuntime:
                 "uipath.input.invoice_id": invoice_id,
                 "uipath.input.currency": currency,
             },
-        ):
+        )
+        try:
             # 1. Ingest document — parse the invoice PDF
             yield _state("ingest_document", S)
             with self.tracer.start_as_current_span(
@@ -391,6 +392,8 @@ class MockInvoiceRuntime:
                 C,
                 {"payment_reference": payment_ref},
             )
+        finally:
+            root_span.end()
 
         yield UiPathRuntimeResult(
             output={

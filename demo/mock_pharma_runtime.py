@@ -186,7 +186,7 @@ class MockPharmaRuntime:
         doc_id = str(payload.get("document_id", "SOP-2024-0142"))
         review_type = str(payload.get("review_type", "initial"))
 
-        with self.tracer.start_as_current_span(
+        root_span = self.tracer.start_span(
             "pharma_compliance.execute",
             attributes={
                 "uipath.runtime.name": "PharmaComplianceReview",
@@ -195,7 +195,8 @@ class MockPharmaRuntime:
                 "uipath.input.document_id": doc_id,
                 "uipath.input.review_type": review_type,
             },
-        ):
+        )
+        try:
             # 1. Extract metadata
             yield _state("extract_metadata", S)
             with self.tracer.start_as_current_span(
@@ -351,6 +352,8 @@ class MockPharmaRuntime:
                 )
                 span.set_attribute("uipath.output.recommendation", recommendation)
             yield _state("generate_report", C)
+        finally:
+            root_span.end()
 
         yield UiPathRuntimeResult(
             output={
