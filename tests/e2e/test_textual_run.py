@@ -6,7 +6,7 @@ Uses Textual's built-in ``app.run_test()`` / ``Pilot`` API — no browser needed
 import asyncio
 import json
 
-from textual.widgets import Footer, Select
+from textual.widgets import Footer, Input, Select
 
 from tests.conftest import ENTRYPOINT_NUMBERS
 from uipath.dev.ui.panels import NewRunPanel, RunDetailsPanel, RunHistoryPanel
@@ -171,3 +171,33 @@ async def test_new_run_button(app):
 
         assert "hidden" not in new_panel.classes
         assert "hidden" in details.classes
+
+
+async def test_chat_mode_greeting(app):
+    """Start a chat run, send a message, verify it completes without timeout."""
+    async with app.run_test() as pilot:
+        await _wait_for_entrypoint(app)
+        await pilot.pause()
+
+        # Set valid JSON input (required for run creation)
+        json_input = app.query_one("#json-input", JsonInput)
+        json_input.text = json.dumps({"name": "Tester"})
+        await pilot.pause()
+
+        # Click the Chat button to start a chat-mode run
+        await pilot.click("#chat-btn")
+        await pilot.pause()
+
+        # Details panel should be visible with chat input focused
+        details_panel = app.query_one("#details-panel", RunDetailsPanel)
+        chat_input = details_panel.query_one("#chat-input", Input)
+
+        # Type a message and submit
+        chat_input.value = "Hello there"
+        await pilot.press("enter")
+
+        # Wait for the run to complete (would timeout at 60s if auto-resume is broken)
+        run = await _wait_for_status(app, "completed")
+
+        assert run.output_data is not None
+        assert "greeting" in run.output_data
