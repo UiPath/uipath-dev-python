@@ -1,4 +1,5 @@
 import Markdown from "react-markdown";
+import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 
 interface ChatMsg {
@@ -56,7 +57,7 @@ export default function ChatMessage({ message, onToolCallClick, toolCallIndices 
             className="text-sm leading-relaxed pl-2.5 max-w-prose chat-markdown"
             style={{ color: "var(--text-secondary)" }}
           >
-            <Markdown remarkPlugins={[remarkGfm]}>{message.content}</Markdown>
+            <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>{message.content}</Markdown>
           </div>
         )
       )}
