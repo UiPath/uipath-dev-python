@@ -279,7 +279,7 @@ class MockTelemetryRuntime:
         if is_resuming:
             self.current_step_index += 1
 
-        with self.tracer.start_as_current_span(
+        root_span = self.tracer.start_span(
             "mock-runtime.execute",
             attributes={
                 "uipath.runtime.name": "MockRuntime",
@@ -287,7 +287,8 @@ class MockTelemetryRuntime:
                 "uipath.runtime.entrypoint": self.entrypoint,
                 "uipath.input.message.length": len(message),
             },
-        ):
+        )
+        try:
             while self.current_step_index < len(steps):
                 step = steps[self.current_step_index]
 
@@ -327,34 +328,42 @@ class MockTelemetryRuntime:
 
                 elif step == "researcher":
                     yield _state("researcher", S)
-                    with self.tracer.start_as_current_span(
+                    researcher_span = self.tracer.start_span(
                         "researcher",
                         attributes={
                             "uipath.step.kind": "subgraph",
                             "uipath.input.task": "web_research",
                             "uipath.input.query": message[:100],
                         },
-                    ) as span:
+                    )
+                    try:
                         async for evt in self._run_subgraph("researcher", "researcher"):
                             yield evt
-                        span.set_attribute("uipath.output.sources_found", 3)
-                        span.set_attribute("uipath.output.summary.length", 450)
+                        researcher_span.set_attribute("uipath.output.sources_found", 3)
+                        researcher_span.set_attribute(
+                            "uipath.output.summary.length", 450
+                        )
+                    finally:
+                        researcher_span.end()
                     yield _state("researcher", C)
 
                 elif step == "coder":
                     yield _state("coder", S)
-                    with self.tracer.start_as_current_span(
+                    coder_span = self.tracer.start_span(
                         "coder",
                         attributes={
                             "uipath.step.kind": "subgraph",
                             "uipath.input.task": "code_generation",
                             "uipath.input.language": "python",
                         },
-                    ) as span:
+                    )
+                    try:
                         async for evt in self._run_subgraph("coder", "coder"):
                             yield evt
-                        span.set_attribute("uipath.output.lines_generated", 47)
-                        span.set_attribute("uipath.output.tests_passed", True)
+                        coder_span.set_attribute("uipath.output.lines_generated", 47)
+                        coder_span.set_attribute("uipath.output.tests_passed", True)
+                    finally:
+                        coder_span.end()
                     yield _state("coder", C)
 
                 elif step == "output":
@@ -399,6 +408,8 @@ class MockTelemetryRuntime:
 
             # All steps completed — reset
             self.current_step_index = 0
+        finally:
+            root_span.end()
 
         yield UiPathRuntimeResult(
             output={

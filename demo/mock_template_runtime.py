@@ -114,13 +114,14 @@ class MockTemplateRuntime:
         """Stream events from the JSON file."""
         logger.info(f"MockTemplateRuntime: streaming {len(self._events)} events")
 
-        with self.tracer.start_as_current_span(
+        root_span = self.tracer.start_span(
             "template.stream",
             attributes={
                 "uipath.runtime.name": "MockTemplateRuntime",
                 "uipath.event.count": len(self._events),
             },
-        ):
+        )
+        try:
             for i, event_data in enumerate(self._events):
                 event_type = event_data.get("event_type")
 
@@ -166,6 +167,8 @@ class MockTemplateRuntime:
                 except Exception as e:
                     logger.error(f"Error processing event {i}: {e}", exc_info=True)
                     continue
+        finally:
+            root_span.end()
 
         logger.info("MockTemplateRuntime: streaming completed")
 

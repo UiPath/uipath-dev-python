@@ -419,7 +419,7 @@ class MockMoviesRuntime:
 
         message_id = str(uuid4())
 
-        with self.tracer.start_as_current_span(
+        root_span = self.tracer.start_span(
             "movies.execute",
             attributes={
                 "uipath.runtime.name": "MoviesRuntime",
@@ -428,10 +428,11 @@ class MockMoviesRuntime:
                 "uipath.input.message.length": len(message),
                 "uipath.input.turn_keywords": ",".join(turn.get("keywords", [])),
             },
-        ):
+        )
+        try:
             # --- Model (first call — decides to search) ---
             yield self._node_state("model", S)
-            with self.tracer.start_as_current_span(
+            model_span = self.tracer.start_span(
                 "model",
                 attributes={
                     "uipath.step.kind": "model",
@@ -439,7 +440,8 @@ class MockMoviesRuntime:
                     "uipath.output.tool_calls_count": len(tool_defs),
                     "uipath.output.tool_names": ",".join(t["name"] for t in tool_defs),
                 },
-            ):
+            )
+            try:
                 # message_start for tool-call message
                 yield UiPathRuntimeMessageEvent(
                     payload=UiPathConversationMessageEvent(
@@ -453,6 +455,8 @@ class MockMoviesRuntime:
                 # Emit tool call events
                 async for evt in self._emit_tool_calls(message_id, tool_defs):
                     yield evt
+            finally:
+                model_span.end()
             yield self._node_state("model", C)
 
             # --- Tools (execute search) ---
@@ -473,7 +477,7 @@ class MockMoviesRuntime:
 
             # --- Model (second call — streaming response with search results) ---
             yield self._node_state("model", S)
-            with self.tracer.start_as_current_span(
+            model_final_span = self.tracer.start_span(
                 "model.final",
                 attributes={
                     "uipath.step.kind": "model",
@@ -481,10 +485,15 @@ class MockMoviesRuntime:
                     "uipath.output.reply.length": len(reply),
                     "uipath.output.finish_reason": "end_turn",
                 },
-            ):
+            )
+            try:
                 async for evt in self._emit_streaming_response(reply):
                     yield evt
+            finally:
+                model_final_span.end()
             yield self._node_state("model", C)
+        finally:
+            root_span.end()
 
         yield UiPathRuntimeResult(
             output={"reply": reply},
