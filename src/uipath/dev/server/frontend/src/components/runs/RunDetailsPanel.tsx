@@ -11,10 +11,12 @@ import JsonHighlight from "../shared/JsonHighlight";
 import DebugControls from "../debug/DebugControls";
 
 type SidebarTab = "primary" | "io" | "logs";
+type MobileTab = "traces" | "primary" | "io" | "logs";
 
 interface Props {
   run: RunSummary;
   ws: WsClient;
+  isMobile?: boolean;
 }
 
 // Stable empty arrays to avoid infinite re-renders
@@ -23,7 +25,7 @@ const EMPTY_LOGS: never[] = [];
 const EMPTY_CHAT: never[] = [];
 const EMPTY_STATE_EVENTS: never[] = [];
 
-export default function RunDetailsPanel({ run, ws }: Props) {
+export default function RunDetailsPanel({ run, ws, isMobile }: Props) {
   const isChatMode = run.mode === "chat";
   const [graphHeight, setGraphHeight] = useState(280);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
@@ -31,6 +33,7 @@ export default function RunDetailsPanel({ run, ws }: Props) {
     return saved ? parseInt(saved, 10) : 380;
   });
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("primary");
+  const [mobileTab, setMobileTab] = useState<MobileTab>(isChatMode ? "primary" : "traces");
   const [fitViewTrigger, setFitViewTrigger] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const outerRef = useRef<HTMLDivElement>(null);
@@ -55,19 +58,20 @@ export default function RunDetailsPanel({ run, ws }: Props) {
     [run.id, ws],
   );
 
-  const onResizeStart = useCallback((e: React.MouseEvent) => {
+  const onResizeStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
     dragging.current = true;
 
-    const startY = e.clientY;
+    const startY = "touches" in e ? e.touches[0].clientY : e.clientY;
     const startH = graphHeight;
 
-    const onMove = (ev: MouseEvent) => {
+    const onMove = (ev: MouseEvent | TouchEvent) => {
       if (!dragging.current) return;
       const container = containerRef.current;
       if (!container) return;
+      const clientY = "touches" in ev ? ev.touches[0].clientY : ev.clientY;
       const maxH = container.clientHeight - 100;
-      const newH = Math.max(80, Math.min(maxH, startH + (ev.clientY - startY)));
+      const newH = Math.max(80, Math.min(maxH, startH + (clientY - startY)));
       setGraphHeight(newH);
     };
 
@@ -75,6 +79,8 @@ export default function RunDetailsPanel({ run, ws }: Props) {
       dragging.current = false;
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
+      document.removeEventListener("touchmove", onMove);
+      document.removeEventListener("touchend", onUp);
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
       setFitViewTrigger((n) => n + 1);
@@ -84,25 +90,30 @@ export default function RunDetailsPanel({ run, ws }: Props) {
     document.body.style.userSelect = "none";
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("touchend", onUp);
   }, [graphHeight]);
 
-  const onSidebarResizeStart = useCallback((e: React.MouseEvent) => {
+  const onSidebarResizeStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
 
-    const startX = e.clientX;
+    const startX = "touches" in e ? e.touches[0].clientX : e.clientX;
     const startW = sidebarWidth;
 
-    const onMove = (ev: MouseEvent) => {
+    const onMove = (ev: MouseEvent | TouchEvent) => {
       const container = outerRef.current;
       if (!container) return;
+      const clientX = "touches" in ev ? ev.touches[0].clientX : ev.clientX;
       const maxW = container.clientWidth - 300;
-      const newW = Math.max(280, Math.min(maxW, startW + (startX - ev.clientX)));
+      const newW = Math.max(280, Math.min(maxW, startW + (startX - clientX)));
       setSidebarWidth(newW);
     };
 
     const onUp = () => {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
+      document.removeEventListener("touchmove", onMove);
+      document.removeEventListener("touchend", onUp);
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
       localStorage.setItem("chatPanelWidth", String(sidebarWidth));
@@ -113,16 +124,12 @@ export default function RunDetailsPanel({ run, ws }: Props) {
     document.body.style.userSelect = "none";
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("touchend", onUp);
   }, [sidebarWidth]);
 
   const primaryLabel = isChatMode ? "Chat" : "Events";
   const primaryColor = isChatMode ? "var(--accent)" : "var(--success)";
-
-  const sidebarTabs: { id: SidebarTab; label: string; count?: number }[] = [
-    { id: "primary", label: primaryLabel },
-    { id: "io", label: "I/O" },
-    { id: "logs", label: "Logs", count: logs.length },
-  ];
 
   const interrupt = useRunStore((s) => s.activeInterrupt[run.id] ?? null);
 
@@ -150,6 +157,95 @@ export default function RunDetailsPanel({ run, ws }: Props) {
       </span>
     ) : null;
 
+  // Mobile layout
+  if (isMobile) {
+    const mobileTabs: { id: MobileTab; label: string; count?: number }[] = [
+      { id: "traces", label: "Traces", count: traces.length },
+      { id: "primary", label: primaryLabel },
+      { id: "io", label: "I/O" },
+      { id: "logs", label: "Logs", count: logs.length },
+    ];
+
+    return (
+      <div className="flex flex-col h-full">
+        {/* Debug controls */}
+        {(run.mode === "debug" || (run.status === "suspended" && !interrupt) || (bpMap && Object.keys(bpMap).length > 0)) && (
+          <DebugControls runId={run.id} status={run.status} ws={ws} breakpointNode={run.breakpoint_node} />
+        )}
+        {/* Graph panel — fixed height */}
+        <div className="shrink-0" style={{ height: "40vh" }}>
+          <GraphPanel entrypoint={run.entrypoint} traces={traces} runId={run.id} breakpointNode={run.breakpoint_node} breakpointNextNodes={run.breakpoint_next_nodes} onBreakpointChange={handleBreakpointChange} fitViewTrigger={fitViewTrigger} />
+        </div>
+        {/* Tab bar */}
+        <div
+          className="flex items-center gap-1 px-2 h-10 border-y shrink-0"
+          style={{ borderColor: "var(--border)", background: "var(--bg-secondary)" }}
+        >
+          {mobileTabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setMobileTab(tab.id)}
+              className="px-2 py-0.5 h-5 text-[11px] uppercase tracking-wider font-semibold rounded transition-colors cursor-pointer"
+              style={{
+                color:
+                  mobileTab === tab.id
+                    ? tab.id === "primary"
+                      ? primaryColor
+                      : "var(--accent)"
+                    : "var(--text-muted)",
+                background:
+                  mobileTab === tab.id
+                    ? `color-mix(in srgb, ${tab.id === "primary" ? primaryColor : "var(--accent)"} 10%, transparent)`
+                    : "transparent",
+              }}
+            >
+              {tab.label}
+              {tab.count !== undefined && tab.count > 0 && (
+                <span className="ml-1 font-normal" style={{ color: "var(--text-muted)" }}>
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          ))}
+          {statusIndicator}
+        </div>
+        {/* Tab content */}
+        <div className="flex-1 overflow-hidden">
+          {mobileTab === "traces" && (
+            <TraceTree traces={traces} />
+          )}
+          {mobileTab === "primary" && (
+            isChatMode ? (
+              <Suspense fallback={<div className="flex items-center justify-center h-full" style={{ color: "var(--text-muted)" }}><span className="text-xs">Loading chat...</span></div>}>
+                <ChatPanel
+                  messages={chatMessages}
+                  runId={run.id}
+                  runStatus={run.status}
+                  ws={ws}
+                />
+              </Suspense>
+            ) : (
+              <RunEventsPanel events={stateEvents} runStatus={run.status} />
+            )
+          )}
+          {mobileTab === "io" && (
+            <IOView run={run} />
+          )}
+          {mobileTab === "logs" && (
+            <LogPanel logs={logs} />
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop layout (unchanged)
+  const sidebarTabs: { id: SidebarTab; label: string; count?: number }[] = [
+    { id: "primary", label: primaryLabel },
+    { id: "io", label: "I/O" },
+    { id: "logs", label: "Logs", count: logs.length },
+  ];
+
   return (
     <div ref={outerRef} className="flex h-full">
       {/* Main content: graph + trace tree */}
@@ -165,6 +261,7 @@ export default function RunDetailsPanel({ run, ws }: Props) {
         {/* Drag handle */}
         <div
           onMouseDown={onResizeStart}
+          onTouchStart={onResizeStart}
           className="shrink-0 h-1.5 cursor-row-resize bg-[var(--border)] hover:bg-[var(--accent)] transition-colors relative"
         >
           <div className="absolute inset-0 -top-1 -bottom-1" />
@@ -178,6 +275,7 @@ export default function RunDetailsPanel({ run, ws }: Props) {
       {/* Sidebar drag handle */}
       <div
         onMouseDown={onSidebarResizeStart}
+        onTouchStart={onSidebarResizeStart}
         className="shrink-0 w-1.5 cursor-col-resize bg-[var(--border)] hover:bg-[var(--accent)] transition-colors relative"
       >
         <div className="absolute inset-0 -left-1 -right-1" />
