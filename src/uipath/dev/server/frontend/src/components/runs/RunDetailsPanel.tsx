@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { RunSummary } from "../../types/run";
 import type { WsClient } from "../../api/websocket";
 import { useRunStore } from "../../store/useRunStore";
 import GraphPanel from "../graph/GraphPanel";
 import TraceTree from "../traces/TraceTree";
 import LogPanel from "../logs/LogPanel";
-import ChatPanel from "../chat/ChatPanel";
+const ChatPanel = lazy(() => import("../chat/ChatPanel"));
 import RunEventsPanel from "./RunEventsPanel";
 import JsonHighlight from "../shared/JsonHighlight";
 import DebugControls from "../debug/DebugControls";
@@ -232,12 +232,14 @@ export default function RunDetailsPanel({ run, ws }: Props) {
         <div className="flex-1 overflow-hidden">
           {sidebarTab === "primary" && (
             isChatMode ? (
-              <ChatPanel
-                messages={chatMessages}
-                runId={run.id}
-                runStatus={run.status}
-                ws={ws}
-              />
+              <Suspense fallback={<div className="flex items-center justify-center h-full" style={{ color: "var(--text-muted)" }}><span className="text-xs">Loading chat...</span></div>}>
+                <ChatPanel
+                  messages={chatMessages}
+                  runId={run.id}
+                  runStatus={run.status}
+                  ws={ws}
+                />
+              </Suspense>
             ) : (
               <RunEventsPanel events={stateEvents} runStatus={run.status} />
             )
