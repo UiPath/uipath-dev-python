@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useRunStore } from "./store/useRunStore";
 import { useWebSocket } from "./store/useWebSocket";
 import { listRuns, listEntrypoints, getRun } from "./api/client";
+import type { RunDetail } from "./types/run";
 import { useHashRoute } from "./hooks/useHashRoute";
 import Sidebar from "./components/layout/Sidebar";
 import NewRunPanel from "./components/runs/NewRunPanel";
@@ -41,71 +42,74 @@ export default function App() {
       .catch(console.error);
   }, [setRuns, setEntrypoints]);
 
+  const selectedRun = selectedRunId ? runs[selectedRunId] : null;
+
+  // Shared helper: apply a full run detail response to the store
+  const applyRunDetail = useCallback((runId: string, detail: RunDetail) => {
+    upsertRun(detail);
+    setTraces(runId, detail.traces);
+    setLogs(runId, detail.logs);
+    // Convert messages to chat format (server uses camelCase aliases)
+    const chatMsgs = (detail.messages as unknown as Record<string, unknown>[]).map((m: Record<string, unknown>) => {
+      const parts = ((m.contentParts ?? m.content_parts) as Array<Record<string, unknown>>) ?? [];
+      const toolCalls = ((m.toolCalls ?? m.tool_calls) as Array<Record<string, unknown>>) ?? [];
+      return {
+        message_id: ((m.messageId ?? m.message_id) as string),
+        role: (m.role as string) ?? "assistant",
+        content:
+          parts
+            .filter((p) => {
+              const mime = ((p.mimeType ?? p.mime_type) as string) ?? "";
+              return mime.startsWith("text/") || mime === "application/json";
+            })
+            .map((p) => {
+              const data = p.data as Record<string, unknown>;
+              return (data?.inline as string) ?? "";
+            })
+            .join("\n")
+            .trim() ?? "",
+        tool_calls: toolCalls.length > 0
+          ? toolCalls.map((tc) => ({
+              name: (tc.name as string) ?? "",
+              has_result: !!tc.result,
+            }))
+          : undefined,
+      };
+    });
+    setChatMessages(runId, chatMsgs);
+    // Cache graph data per run (persists across reloads)
+    if (detail.graph && detail.graph.nodes.length > 0) {
+      setGraphCache(runId, detail.graph);
+    }
+    // Load persisted state events
+    if (detail.states && detail.states.length > 0) {
+      setStateEvents(
+        runId,
+        detail.states.map((s) => ({
+          node_name: s.node_name,
+          qualified_node_name: s.qualified_node_name,
+          phase: s.phase,
+          timestamp: new Date(s.timestamp).getTime(),
+          payload: s.payload,
+        })),
+      );
+    }
+  }, [upsertRun, setTraces, setLogs, setChatMessages, setStateEvents, setGraphCache]);
+
   // Subscribe to selected run
   useEffect(() => {
     if (!selectedRunId) return;
     ws.subscribe(selectedRunId);
 
-    const applyRunDetail = (detail: Awaited<ReturnType<typeof getRun>>) => {
-      upsertRun(detail);
-      setTraces(selectedRunId, detail.traces);
-      setLogs(selectedRunId, detail.logs);
-      // Convert messages to chat format (server uses camelCase aliases)
-      const chatMsgs = (detail.messages as unknown as Record<string, unknown>[]).map((m: Record<string, unknown>) => {
-        const parts = ((m.contentParts ?? m.content_parts) as Array<Record<string, unknown>>) ?? [];
-        const toolCalls = ((m.toolCalls ?? m.tool_calls) as Array<Record<string, unknown>>) ?? [];
-        return {
-          message_id: ((m.messageId ?? m.message_id) as string),
-          role: (m.role as string) ?? "assistant",
-          content:
-            parts
-              .filter((p) => {
-                const mime = ((p.mimeType ?? p.mime_type) as string) ?? "";
-                return mime.startsWith("text/") || mime === "application/json";
-              })
-              .map((p) => {
-                const data = p.data as Record<string, unknown>;
-                return (data?.inline as string) ?? "";
-              })
-              .join("\n")
-              .trim() ?? "",
-          tool_calls: toolCalls.length > 0
-            ? toolCalls.map((tc) => ({
-                name: (tc.name as string) ?? "",
-                has_result: !!tc.result,
-              }))
-            : undefined,
-        };
-      });
-      setChatMessages(selectedRunId, chatMsgs);
-      // Cache graph data per run (persists across reloads)
-      if (detail.graph && detail.graph.nodes.length > 0) {
-        setGraphCache(selectedRunId, detail.graph);
-      }
-      // Load persisted state events
-      if (detail.states && detail.states.length > 0) {
-        setStateEvents(
-          selectedRunId,
-          detail.states.map((s) => ({
-            node_name: s.node_name,
-            qualified_node_name: s.qualified_node_name,
-            phase: s.phase,
-            timestamp: new Date(s.timestamp).getTime(),
-            payload: s.payload,
-          })),
-        );
-      }
-    };
-
     // Fetch full run details (includes fresh status in case we missed run.updated events)
-    getRun(selectedRunId).then(applyRunDetail).catch(console.error);
+    getRun(selectedRunId).then((d) => applyRunDetail(selectedRunId, d)).catch(console.error);
 
     // Safety net: re-fetch if run is still in progress after WS subscribe + initial fetch.
     // Covers the race where the run completes before WS subscription is processed.
     const retryTimer = setTimeout(() => {
       const run = useRunStore.getState().runs[selectedRunId];
       if (run && (run.status === "pending" || run.status === "running")) {
-        getRun(selectedRunId).then(applyRunDetail).catch(console.error);
+        getRun(selectedRunId).then((d) => applyRunDetail(selectedRunId, d)).catch(console.error);
       }
     }, 2000);
 
@@ -113,7 +117,34 @@ export default function App() {
       clearTimeout(retryTimer);
       ws.unsubscribe(selectedRunId);
     };
-  }, [selectedRunId, ws, upsertRun, setTraces, setLogs, setChatMessages, setStateEvents, setGraphCache]);
+  }, [selectedRunId, ws, applyRunDetail]);
+
+  // Refetch full details when run reaches terminal status, but only if WS events were missed
+  const prevStatusRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedRunId) return;
+    const status = selectedRun?.status;
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = status ?? null;
+
+    if (
+      status &&
+      (status === "completed" || status === "failed") &&
+      prev !== status
+    ) {
+      // Compare what we received via WS against the counts in the run summary.
+      // Only refetch if something was missed — avoids unnecessary re-renders / flicker.
+      const state = useRunStore.getState();
+      const haveTraces = state.traces[selectedRunId]?.length ?? 0;
+      const haveLogs = state.logs[selectedRunId]?.length ?? 0;
+      const expectedTraces = selectedRun?.trace_count ?? 0;
+      const expectedLogs = selectedRun?.log_count ?? 0;
+
+      if (haveTraces < expectedTraces || haveLogs < expectedLogs) {
+        getRun(selectedRunId).then((d) => applyRunDetail(selectedRunId, d)).catch(console.error);
+      }
+    }
+  }, [selectedRunId, selectedRun?.status, applyRunDetail]);
 
   const handleRunCreated = (runId: string) => {
     navigate(`#/runs/${runId}/traces`);
@@ -128,8 +159,6 @@ export default function App() {
   const handleNewRun = () => {
     navigate("#/new");
   };
-
-  const selectedRun = selectedRunId ? runs[selectedRunId] : null;
 
   return (
     <div className="flex h-screen w-screen">

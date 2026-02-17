@@ -35,12 +35,20 @@ export class WsClient {
     };
 
     this.ws.onmessage = (event) => {
+      let msg: ServerMessage;
       try {
-        const msg: ServerMessage = JSON.parse(event.data);
-        this.handlers.forEach((h) => h(msg));
+        msg = JSON.parse(event.data);
       } catch {
         console.warn("[ws] failed to parse message", event.data);
+        return;
       }
+      this.handlers.forEach((h) => {
+        try {
+          h(msg);
+        } catch (e) {
+          console.error("[ws] handler error", e);
+        }
+      });
     };
 
     this.ws.onclose = () => {
