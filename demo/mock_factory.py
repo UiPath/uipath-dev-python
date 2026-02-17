@@ -9,13 +9,17 @@ from uipath.runtime import (
     UiPathRuntimeStorageProtocol,
 )
 
-from demo.mock_greeting_runtime import (
-    ENTRYPOINT_GREETING,
-    MockGreetingRuntime,
+from demo.mock_invoice_runtime import (
+    ENTRYPOINT_INVOICE,
+    MockInvoiceRuntime,
 )
-from demo.mock_numbers_runtime import (
-    ENTRYPOINT_ANALYZE_NUMBERS,
-    MockNumberAnalyticsRuntime,
+from demo.mock_movies_runtime import (
+    ENTRYPOINT_MOVIES,
+    MockMoviesRuntime,
+)
+from demo.mock_pharma_runtime import (
+    ENTRYPOINT_PHARMA,
+    MockPharmaRuntime,
 )
 from demo.mock_support_runtime import (
     ENTRYPOINT_SUPPORT_CHAT,
@@ -32,12 +36,7 @@ from demo.mock_template_runtime import (
 logger = logging.getLogger(__name__)
 
 # Template mappings: entrypoint -> (events_file, schema_file)
-TEMPLATE_RUNTIMES = {
-    "chat/movies.py:graph": (
-        "chat_agent/events.json",
-        "chat_agent/entry-points.json",
-    ),
-}
+TEMPLATE_RUNTIMES: dict[str, tuple[str, str]] = {}
 
 
 class MockRuntimeFactory:
@@ -51,14 +50,16 @@ class MockRuntimeFactory:
         self, entrypoint: str, runtime_id: str, **kwargs
     ) -> UiPathRuntimeProtocol:
         """Create a new runtime instance for the given entrypoint."""
-        if entrypoint == ENTRYPOINT_GREETING:
-            return MockGreetingRuntime(entrypoint=entrypoint)
-        if entrypoint == ENTRYPOINT_ANALYZE_NUMBERS:
-            return MockNumberAnalyticsRuntime(entrypoint=entrypoint)
+        if entrypoint == ENTRYPOINT_PHARMA:
+            return MockPharmaRuntime(entrypoint=entrypoint)
+        if entrypoint == ENTRYPOINT_INVOICE:
+            return MockInvoiceRuntime(entrypoint=entrypoint)
         if entrypoint == ENTRYPOINT_SUPPORT_CHAT:
             return MockSupportChatRuntime(entrypoint=entrypoint)
         if entrypoint == ENTRYPOINT_TELEMETRY:
             return MockTelemetryRuntime(entrypoint=entrypoint)
+        if entrypoint == ENTRYPOINT_MOVIES:
+            return MockMoviesRuntime(entrypoint=entrypoint)
 
         if entrypoint in TEMPLATE_RUNTIMES:
             events_file, schema_file = TEMPLATE_RUNTIMES[entrypoint]
@@ -73,9 +74,9 @@ class MockRuntimeFactory:
 
         # Fallback: still return something so the demo doesn't explode
         logger.warning(
-            "Unknown entrypoint %r, falling back to GreetingRuntime", entrypoint
+            "Unknown entrypoint %r, falling back to PharmaRuntime", entrypoint
         )
-        return MockGreetingRuntime(entrypoint=entrypoint)
+        return MockPharmaRuntime(entrypoint=entrypoint)
 
     async def get_settings(self) -> UiPathRuntimeFactorySettings | None:
         """Return factory settings (no-op for mock)."""
@@ -89,9 +90,10 @@ class MockRuntimeFactory:
         """Return all available entrypoints."""
         return [
             ENTRYPOINT_TELEMETRY,
-            ENTRYPOINT_GREETING,
-            ENTRYPOINT_ANALYZE_NUMBERS,
+            ENTRYPOINT_PHARMA,
+            ENTRYPOINT_INVOICE,
             ENTRYPOINT_SUPPORT_CHAT,
+            ENTRYPOINT_MOVIES,
             *TEMPLATE_RUNTIMES.keys(),
         ]
 
