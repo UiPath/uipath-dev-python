@@ -521,12 +521,6 @@ export default function GraphPanel({ entrypoint, runId, breakpointNode, breakpoi
           matchIds = labelToIds.get(activeNode.current) ?? new Set<string>();
         }
 
-        // __start__: include top-level on first event so its outgoing edges highlight
-        if (activeNode.prev === null) {
-          for (const n of nds) {
-            if (n.type === "startNode" && !n.parentNode) matchIds.add(n.id);
-          }
-        }
       }
 
       return nds;
