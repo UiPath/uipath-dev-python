@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, AsyncGenerator
 from uuid import uuid4
 
+from opentelemetry import context as otel_context
 from opentelemetry import trace
 from uipath.core.chat import UiPathConversationMessageEvent
 from uipath.core.chat.content import (
@@ -428,7 +429,7 @@ class MockSupportChatRuntime:
         return UiPathRuntimeStateEvent(node_name=node, phase=phase, payload={})
 
     async def _stream_phase2(
-        self, turn: dict[str, Any]
+        self, turn: dict[str, Any], parent_ctx: otel_context.Context
     ) -> AsyncGenerator[UiPathRuntimeEvent, None]:
         """Phase 2: after tool approval — tools → Summarization → model response → TodoList."""
         reply = turn["response"]
@@ -438,6 +439,7 @@ class MockSupportChatRuntime:
         yield self._node_state("tools", S)
         with self.tracer.start_as_current_span(
             "tools",
+            context=parent_ctx,
             attributes={
                 "uipath.step.kind": "tool",
                 "uipath.input.tool_name": approval_tool.get("name", ""),
@@ -451,6 +453,7 @@ class MockSupportChatRuntime:
         yield self._node_state("SummarizationMiddleware.before_model", S)
         with self.tracer.start_as_current_span(
             "SummarizationMiddleware.before_model.2",
+            context=parent_ctx,
             attributes={"uipath.step.kind": "middleware"},
         ):
             await asyncio.sleep(0.15)
@@ -460,6 +463,7 @@ class MockSupportChatRuntime:
         yield self._node_state("model", S)
         model_span = self.tracer.start_span(
             "model.2",
+            context=parent_ctx,
             attributes={
                 "uipath.step.kind": "model",
                 "uipath.output.reply.length": len(reply),
@@ -476,6 +480,7 @@ class MockSupportChatRuntime:
         yield self._node_state("TodoListMiddleware.after_model", S)
         with self.tracer.start_as_current_span(
             "TodoListMiddleware.after_model.2",
+            context=parent_ctx,
             attributes={
                 "uipath.step.kind": "middleware",
                 "uipath.output.route": "__end__",
@@ -510,8 +515,9 @@ class MockSupportChatRuntime:
                     "uipath.step.kind": "resume",
                 },
             )
+            resume_ctx = trace.set_span_in_context(resume_span)
             try:
-                async for evt in self._stream_phase2(turn):
+                async for evt in self._stream_phase2(turn, resume_ctx):
                     yield evt
             finally:
                 resume_span.end()
@@ -547,11 +553,13 @@ class MockSupportChatRuntime:
                 "uipath.input.turn_keywords": ",".join(turn.get("keywords", [])),
             },
         )
+        root_ctx = trace.set_span_in_context(root_span)
         try:
             # --- Middleware: PatchToolCalls ---
             yield self._node_state("PatchToolCallsMiddleware.before_agent", S)
             with self.tracer.start_as_current_span(
                 "PatchToolCallsMiddleware.before_agent",
+                context=root_ctx,
                 attributes={
                     "uipath.step.kind": "middleware",
                     "uipath.output.tools_patched": len(tool_defs),
@@ -564,6 +572,7 @@ class MockSupportChatRuntime:
             yield self._node_state("SummarizationMiddleware.before_model", S)
             with self.tracer.start_as_current_span(
                 "SummarizationMiddleware.before_model",
+                context=root_ctx,
                 attributes={
                     "uipath.step.kind": "middleware",
                     "uipath.input.message_count": len(messages) + 1,
@@ -576,6 +585,7 @@ class MockSupportChatRuntime:
             yield self._node_state("model", S)
             model_span = self.tracer.start_span(
                 "model",
+                context=root_ctx,
                 attributes={
                     "uipath.step.kind": "model",
                     "uipath.output.tool_calls_count": len(tool_defs),
@@ -604,6 +614,7 @@ class MockSupportChatRuntime:
             yield self._node_state("TodoListMiddleware.after_model", S)
             with self.tracer.start_as_current_span(
                 "TodoListMiddleware.after_model",
+                context=root_ctx,
                 attributes={
                     "uipath.step.kind": "middleware",
                     "uipath.output.route": "tools",
@@ -616,6 +627,7 @@ class MockSupportChatRuntime:
             yield self._node_state("tools", S)
             with self.tracer.start_as_current_span(
                 "tools",
+                context=root_ctx,
                 attributes={
                     "uipath.step.kind": "tool",
                     "uipath.input.tool_count": len(tool_defs),
@@ -661,6 +673,7 @@ class MockSupportChatRuntime:
             yield self._node_state("SummarizationMiddleware.before_model", S)
             with self.tracer.start_as_current_span(
                 "SummarizationMiddleware.before_model.2",
+                context=root_ctx,
                 attributes={"uipath.step.kind": "middleware"},
             ):
                 await asyncio.sleep(0.15)
@@ -670,6 +683,7 @@ class MockSupportChatRuntime:
             yield self._node_state("model", S)
             model2_span = self.tracer.start_span(
                 "model.2",
+                context=root_ctx,
                 attributes={
                     "uipath.step.kind": "model",
                     "uipath.output.reply.length": len(reply),
@@ -686,6 +700,7 @@ class MockSupportChatRuntime:
             yield self._node_state("TodoListMiddleware.after_model", S)
             with self.tracer.start_as_current_span(
                 "TodoListMiddleware.after_model.2",
+                context=root_ctx,
                 attributes={
                     "uipath.step.kind": "middleware",
                     "uipath.output.route": "__end__",

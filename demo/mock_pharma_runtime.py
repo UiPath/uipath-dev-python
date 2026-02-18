@@ -196,11 +196,13 @@ class MockPharmaRuntime:
                 "uipath.input.review_type": review_type,
             },
         )
+        root_ctx = trace.set_span_in_context(root_span)
         try:
             # 1. Extract metadata
             yield _state("extract_metadata", S)
             with self.tracer.start_as_current_span(
                 "extract_metadata",
+                context=root_ctx,
                 attributes={
                     "uipath.step.kind": "preprocess",
                     "uipath.input.document_id": doc_id,
@@ -224,6 +226,7 @@ class MockPharmaRuntime:
             yield _state("classify_document", S)
             with self.tracer.start_as_current_span(
                 "classify_document",
+                context=root_ctx,
                 attributes={
                     "uipath.step.kind": "model",
                     "uipath.input.title": title,
@@ -249,6 +252,7 @@ class MockPharmaRuntime:
             yield _state("check_references", S)
             with self.tracer.start_as_current_span(
                 "check_references",
+                context=root_ctx,
                 attributes={
                     "uipath.step.kind": "tool",
                     "uipath.input.regulation": regulation,
@@ -269,6 +273,7 @@ class MockPharmaRuntime:
             yield _state("compliance_review", S)
             with self.tracer.start_as_current_span(
                 "compliance_review",
+                context=root_ctx,
                 attributes={
                     "uipath.step.kind": "model",
                     "uipath.input.category": category,
@@ -291,6 +296,7 @@ class MockPharmaRuntime:
             yield _state("check_references", S)
             with self.tracer.start_as_current_span(
                 "check_references",
+                context=root_ctx,
                 attributes={
                     "uipath.step.kind": "tool",
                     "uipath.input.query": "ICH Q7 sampling requirements",
@@ -305,6 +311,7 @@ class MockPharmaRuntime:
             yield _state("compliance_review", S)
             with self.tracer.start_as_current_span(
                 "compliance_review",
+                context=root_ctx,
                 attributes={
                     "uipath.step.kind": "model",
                     "uipath.input.pass": 2,
@@ -323,6 +330,7 @@ class MockPharmaRuntime:
             yield _state("risk_assessment", S)
             with self.tracer.start_as_current_span(
                 "risk_assessment",
+                context=root_ctx,
                 attributes={
                     "uipath.step.kind": "compute",
                     "uipath.input.findings_count": len(findings),
@@ -339,6 +347,7 @@ class MockPharmaRuntime:
             yield _state("generate_report", S)
             with self.tracer.start_as_current_span(
                 "generate_report",
+                context=root_ctx,
                 attributes={
                     "uipath.step.kind": "postprocess",
                     "uipath.input.risk_level": risk_level,

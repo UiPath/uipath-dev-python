@@ -429,11 +429,13 @@ class MockMoviesRuntime:
                 "uipath.input.turn_keywords": ",".join(turn.get("keywords", [])),
             },
         )
+        root_ctx = trace.set_span_in_context(root_span)
         try:
             # --- Model (first call — decides to search) ---
             yield self._node_state("model", S)
             model_span = self.tracer.start_span(
                 "model",
+                context=root_ctx,
                 attributes={
                     "uipath.step.kind": "model",
                     "uipath.input.model": "claude-3-7-sonnet-latest",
@@ -463,6 +465,7 @@ class MockMoviesRuntime:
             yield self._node_state("tools", S)
             with self.tracer.start_as_current_span(
                 "tools",
+                context=root_ctx,
                 attributes={
                     "uipath.step.kind": "tool",
                     "uipath.input.tool_count": len(tool_defs),
@@ -479,6 +482,7 @@ class MockMoviesRuntime:
             yield self._node_state("model", S)
             model_final_span = self.tracer.start_span(
                 "model.final",
+                context=root_ctx,
                 attributes={
                     "uipath.step.kind": "model",
                     "uipath.input.has_tool_results": True,

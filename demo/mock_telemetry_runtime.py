@@ -4,6 +4,7 @@ import asyncio
 import logging
 from typing import Any, AsyncGenerator, cast
 
+from opentelemetry import context as otel_context
 from opentelemetry import trace
 from uipath.runtime import (
     UiPathExecuteOptions,
@@ -200,7 +201,7 @@ class MockTelemetryRuntime:
         )
 
     async def _run_subgraph(
-        self, parent: str, span_prefix: str
+        self, parent: str, span_prefix: str, parent_ctx: otel_context.Context
     ) -> AsyncGenerator[UiPathRuntimeEvent, None]:
         """Simulate a subgraph execution: model → tools → model."""
         tool_name = "tavily_search" if parent == "researcher" else "python_repl_tool"
@@ -209,6 +210,7 @@ class MockTelemetryRuntime:
         yield _state("model", S, qualified=f"{parent}/model")
         with self.tracer.start_as_current_span(
             f"{span_prefix}.model",
+            context=parent_ctx,
             attributes={
                 "uipath.step.kind": "model",
                 "uipath.input.model": "claude-3-7-sonnet-latest",
@@ -224,6 +226,7 @@ class MockTelemetryRuntime:
         yield _state("tools", S, qualified=f"{parent}/tools")
         with self.tracer.start_as_current_span(
             f"{span_prefix}.tools",
+            context=parent_ctx,
             attributes={
                 "uipath.step.kind": "tool",
                 "uipath.input.tool_name": tool_name,
@@ -241,6 +244,7 @@ class MockTelemetryRuntime:
         yield _state("model", S, qualified=f"{parent}/model")
         with self.tracer.start_as_current_span(
             f"{span_prefix}.model_final",
+            context=parent_ctx,
             attributes={
                 "uipath.step.kind": "model",
                 "uipath.input.has_tool_results": True,
@@ -288,6 +292,7 @@ class MockTelemetryRuntime:
                 "uipath.input.message.length": len(message),
             },
         )
+        root_ctx = trace.set_span_in_context(root_span)
         try:
             while self.current_step_index < len(steps):
                 step = steps[self.current_step_index]
@@ -296,6 +301,7 @@ class MockTelemetryRuntime:
                     yield _state("input", S)
                     with self.tracer.start_as_current_span(
                         "input",
+                        context=root_ctx,
                         attributes={
                             "uipath.step.kind": "input",
                             "uipath.input.message": message[:200],
@@ -315,6 +321,7 @@ class MockTelemetryRuntime:
                     next_step = steps[next_idx] if next_idx < len(steps) else "output"
                     with self.tracer.start_as_current_span(
                         "supervisor",
+                        context=root_ctx,
                         attributes={
                             "uipath.step.kind": "model",
                             "uipath.input.step_index": self.current_step_index,
@@ -330,14 +337,18 @@ class MockTelemetryRuntime:
                     yield _state("researcher", S)
                     researcher_span = self.tracer.start_span(
                         "researcher",
+                        context=root_ctx,
                         attributes={
                             "uipath.step.kind": "subgraph",
                             "uipath.input.task": "web_research",
                             "uipath.input.query": message[:100],
                         },
                     )
+                    researcher_ctx = trace.set_span_in_context(researcher_span)
                     try:
-                        async for evt in self._run_subgraph("researcher", "researcher"):
+                        async for evt in self._run_subgraph(
+                            "researcher", "researcher", researcher_ctx
+                        ):
                             yield evt
                         researcher_span.set_attribute("uipath.output.sources_found", 3)
                         researcher_span.set_attribute(
@@ -351,14 +362,18 @@ class MockTelemetryRuntime:
                     yield _state("coder", S)
                     coder_span = self.tracer.start_span(
                         "coder",
+                        context=root_ctx,
                         attributes={
                             "uipath.step.kind": "subgraph",
                             "uipath.input.task": "code_generation",
                             "uipath.input.language": "python",
                         },
                     )
+                    coder_ctx = trace.set_span_in_context(coder_span)
                     try:
-                        async for evt in self._run_subgraph("coder", "coder"):
+                        async for evt in self._run_subgraph(
+                            "coder", "coder", coder_ctx
+                        ):
                             yield evt
                         coder_span.set_attribute("uipath.output.lines_generated", 47)
                         coder_span.set_attribute("uipath.output.tests_passed", True)
@@ -370,6 +385,7 @@ class MockTelemetryRuntime:
                     yield _state("output", S)
                     with self.tracer.start_as_current_span(
                         "output",
+                        context=root_ctx,
                         attributes={
                             "uipath.step.kind": "output",
                             "uipath.input.message": message[:100],
