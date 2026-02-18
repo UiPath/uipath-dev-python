@@ -184,11 +184,13 @@ class MockInvoiceRuntime:
                 "uipath.input.currency": currency,
             },
         )
+        root_ctx = trace.set_span_in_context(root_span)
         try:
             # 1. Ingest document — parse the invoice PDF
             yield _state("ingest_document", S)
             with self.tracer.start_as_current_span(
                 "ingest_document",
+                context=root_ctx,
                 attributes={
                     "uipath.step.kind": "preprocess",
                     "uipath.input.invoice_id": invoice_id,
@@ -215,6 +217,7 @@ class MockInvoiceRuntime:
             yield _state("extract_line_items", S)
             with self.tracer.start_as_current_span(
                 "extract_line_items",
+                context=root_ctx,
                 attributes={
                     "uipath.step.kind": "model",
                     "uipath.input.vendor": vendor,
@@ -264,6 +267,7 @@ class MockInvoiceRuntime:
             yield _state("validate_amounts", S)
             with self.tracer.start_as_current_span(
                 "validate_amounts",
+                context=root_ctx,
                 attributes={
                     "uipath.step.kind": "validation",
                     "uipath.input.extracted_total": extracted_total,
@@ -287,6 +291,7 @@ class MockInvoiceRuntime:
             yield _state("extract_line_items", S)
             with self.tracer.start_as_current_span(
                 "extract_line_items",
+                context=root_ctx,
                 attributes={
                     "uipath.step.kind": "model",
                     "uipath.input.reason": "tax_mismatch_correction",
@@ -308,6 +313,7 @@ class MockInvoiceRuntime:
             yield _state("validate_amounts", S)
             with self.tracer.start_as_current_span(
                 "validate_amounts",
+                context=root_ctx,
                 attributes={
                     "uipath.step.kind": "validation",
                     "uipath.input.corrected_total": corrected_total,
@@ -323,6 +329,7 @@ class MockInvoiceRuntime:
             yield _state("fraud_check", S)
             with self.tracer.start_as_current_span(
                 "fraud_check",
+                context=root_ctx,
                 attributes={
                     "uipath.step.kind": "model",
                     "uipath.input.vendor_id": vendor_id,
@@ -347,6 +354,7 @@ class MockInvoiceRuntime:
             yield _state("approval_routing", S)
             with self.tracer.start_as_current_span(
                 "approval_routing",
+                context=root_ctx,
                 attributes={
                     "uipath.step.kind": "routing",
                     "uipath.input.total_amount": corrected_total,
@@ -375,6 +383,7 @@ class MockInvoiceRuntime:
             yield _state("generate_payment", S)
             with self.tracer.start_as_current_span(
                 "generate_payment",
+                context=root_ctx,
                 attributes={
                     "uipath.step.kind": "postprocess",
                     "uipath.input.approval_level": approval_level,
