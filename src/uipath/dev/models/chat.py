@@ -74,6 +74,9 @@ class ChatEvents:
                 )
                 if msg.content_parts is None:
                     msg.content_parts = []
+                else:
+                    # Sequence is immutable, so re-initialize as a list to append
+                    msg.content_parts = list(msg.content_parts)
                 msg.content_parts.append(new_cp)
                 existing = new_cp
 
@@ -93,6 +96,8 @@ class ChatEvents:
                     )
                     if msg.content_parts is None:
                         msg.content_parts = []
+                    else:
+                        msg.content_parts = list(msg.content_parts)
                     msg.content_parts.append(new_cp)
                     existing = new_cp
 
@@ -129,6 +134,8 @@ class ChatEvents:
                     )
                     if msg.tool_calls is None:
                         msg.tool_calls = []
+                    else:
+                        msg.tool_calls = list(msg.tool_calls)
                     msg.tool_calls.append(new_tc)
                     existing_tool_call = new_tc
                 else:
@@ -152,6 +159,8 @@ class ChatEvents:
                     )
                     if msg.tool_calls is None:
                         msg.tool_calls = []
+                    else:
+                        msg.tool_calls = list(msg.tool_calls)
                     msg.tool_calls.append(existing_tool_call)
 
                 existing_tool_call.result = UiPathConversationToolCallResult(
@@ -190,6 +199,7 @@ def get_user_message(user_text: str) -> UiPathConversationMessage:
                 content_part_id=str(uuid4()),
                 mime_type="text/plain",
                 data=UiPathInlineValue(inline=user_text),
+                citations=[],
                 created_at=timestamp,
                 updated_at=timestamp,
             )
