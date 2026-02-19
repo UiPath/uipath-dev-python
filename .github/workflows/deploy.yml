@@ -1,0 +1,31 @@
+name: Deploy
+
+on:
+  push:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    environment: website-prod
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Install Azure CLI
+        uses: pietrobolcato/install-azure-cli-action@main
+
+      - name: Run Deploy.ps1
+        shell: pwsh
+        run: ./Deploy.ps1 `
+          -resourceGroupName ${{ secrets.AZURE_RESOURCE_GROUP }} `
+          -appName ${{ secrets.AZURE_APP_NAME }} `
+          -acrName ${{ secrets.AZURE_ACR_NAME }}

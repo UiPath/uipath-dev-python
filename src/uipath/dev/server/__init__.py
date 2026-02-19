@@ -52,8 +52,8 @@ class UiPathDeveloperServer:
         self,
         runtime_factory: UiPathRuntimeFactoryProtocol,
         trace_manager: UiPathTraceManager,
-        host: str = "localhost",
-        port: int = 8000,
+        host: str = os.environ.get("UIPATH_DEV_SERVER_HOST", "localhost"),
+        port: int = int(os.environ.get("UIPATH_DEV_SERVER_PORT", "8080")),
         open_browser: bool = True,
         factory_creator: Callable[[], UiPathRuntimeFactoryProtocol] | None = None,
     ) -> None:

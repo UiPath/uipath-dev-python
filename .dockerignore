@@ -1,0 +1,10 @@
+.venv
+Dockerfile
+.git
+.vscode
+.github
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+dist
