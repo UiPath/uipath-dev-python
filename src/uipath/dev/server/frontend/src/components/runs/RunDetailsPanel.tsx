@@ -10,8 +10,8 @@ import RunEventsPanel from "./RunEventsPanel";
 import JsonHighlight from "../shared/JsonHighlight";
 import DebugControls from "../debug/DebugControls";
 
-type SidebarTab = "primary" | "io" | "logs";
-type MobileTab = "traces" | "primary" | "io" | "logs";
+type SidebarTab = "primary" | "events" | "io" | "logs";
+type MobileTab = "traces" | "primary" | "events" | "io" | "logs";
 
 interface Props {
   run: RunSummary;
@@ -131,6 +131,9 @@ export default function RunDetailsPanel({ run, ws, isMobile }: Props) {
   const primaryLabel = isChatMode ? "Chat" : "Events";
   const primaryColor = isChatMode ? "var(--accent)" : "var(--success)";
 
+  const tabColor = (id: string) =>
+    id === "primary" ? primaryColor : id === "events" ? "var(--success)" : "var(--accent)";
+
   const interrupt = useRunStore((s) => s.activeInterrupt[run.id] ?? null);
 
   // Status indicator for the tab bar
@@ -162,6 +165,7 @@ export default function RunDetailsPanel({ run, ws, isMobile }: Props) {
     const mobileTabs: { id: MobileTab; label: string; count?: number }[] = [
       { id: "traces", label: "Traces", count: traces.length },
       { id: "primary", label: primaryLabel },
+      ...(isChatMode ? [{ id: "events" as const, label: "Events", count: stateEvents.length }] : []),
       { id: "io", label: "I/O" },
       { id: "logs", label: "Logs", count: logs.length },
     ];
@@ -189,13 +193,11 @@ export default function RunDetailsPanel({ run, ws, isMobile }: Props) {
               style={{
                 color:
                   mobileTab === tab.id
-                    ? tab.id === "primary"
-                      ? primaryColor
-                      : "var(--accent)"
+                    ? tabColor(tab.id)
                     : "var(--text-muted)",
                 background:
                   mobileTab === tab.id
-                    ? `color-mix(in srgb, ${tab.id === "primary" ? primaryColor : "var(--accent)"} 10%, transparent)`
+                    ? `color-mix(in srgb, ${tabColor(tab.id)} 10%, transparent)`
                     : "transparent",
               }}
             >
@@ -228,6 +230,9 @@ export default function RunDetailsPanel({ run, ws, isMobile }: Props) {
               <RunEventsPanel events={stateEvents} runStatus={run.status} />
             )
           )}
+          {mobileTab === "events" && (
+            <RunEventsPanel events={stateEvents} runStatus={run.status} />
+          )}
           {mobileTab === "io" && (
             <IOView run={run} />
           )}
@@ -242,6 +247,7 @@ export default function RunDetailsPanel({ run, ws, isMobile }: Props) {
   // Desktop layout (unchanged)
   const sidebarTabs: { id: SidebarTab; label: string; count?: number }[] = [
     { id: "primary", label: primaryLabel },
+    ...(isChatMode ? [{ id: "events" as const, label: "Events", count: stateEvents.length }] : []),
     { id: "io", label: "I/O" },
     { id: "logs", label: "Logs", count: logs.length },
   ];
@@ -299,13 +305,11 @@ export default function RunDetailsPanel({ run, ws, isMobile }: Props) {
               style={{
                 color:
                   sidebarTab === tab.id
-                    ? tab.id === "primary"
-                      ? primaryColor
-                      : "var(--accent)"
+                    ? tabColor(tab.id)
                     : "var(--text-muted)",
                 background:
                   sidebarTab === tab.id
-                    ? `color-mix(in srgb, ${tab.id === "primary" ? primaryColor : "var(--accent)"} 10%, transparent)`
+                    ? `color-mix(in srgb, ${tabColor(tab.id)} 10%, transparent)`
                     : "transparent",
               }}
               onMouseEnter={(e) => {
@@ -341,6 +345,9 @@ export default function RunDetailsPanel({ run, ws, isMobile }: Props) {
             ) : (
               <RunEventsPanel events={stateEvents} runStatus={run.status} />
             )
+          )}
+          {sidebarTab === "events" && (
+            <RunEventsPanel events={stateEvents} runStatus={run.status} />
           )}
           {sidebarTab === "io" && (
             <IOView run={run} />
