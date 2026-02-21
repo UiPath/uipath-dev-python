@@ -37,8 +37,10 @@ interface RunStore {
   toggleBreakpoint: (runId: string, nodeId: string) => void;
   clearBreakpoints: (runId: string) => void;
 
-  activeNodes: Record<string, { prev: string | null; current: string; qualifiedNodeName?: string | null }>;
+  activeNodes: Record<string, { executing: Record<string, string | null>; prev: string | null }>;
   setActiveNode: (runId: string, nodeName: string, qualifiedNodeName?: string | null) => void;
+  removeActiveNode: (runId: string, nodeName: string) => void;
+  resetRunGraphState: (runId: string) => void;
 
   stateEvents: Record<string, { node_name: string; qualified_node_name?: string | null; phase?: string | null; timestamp: number; payload?: Record<string, unknown> }[]>;
   addStateEvent: (runId: string, nodeName: string, payload?: Record<string, unknown>, qualifiedNodeName?: string | null, phase?: string | null) => void;
@@ -221,14 +223,34 @@ export const useRunStore = create<RunStore>((set) => ({
   activeNodes: {},
   setActiveNode: (runId, nodeName, qualifiedNodeName) =>
     set((state) => {
-      const existing = state.activeNodes[runId];
+      const existing = state.activeNodes[runId] ?? { executing: {}, prev: null };
       return {
         activeNodes: {
           ...state.activeNodes,
-          [runId]: { prev: existing?.current ?? null, current: nodeName, qualifiedNodeName },
+          [runId]: {
+            executing: { ...existing.executing, [nodeName]: qualifiedNodeName ?? null },
+            prev: existing.prev,
+          },
         },
       };
     }),
+  removeActiveNode: (runId, nodeName) =>
+    set((state) => {
+      const existing = state.activeNodes[runId];
+      if (!existing) return state;
+      const { [nodeName]: _, ...rest } = existing.executing;
+      return {
+        activeNodes: {
+          ...state.activeNodes,
+          [runId]: { executing: rest, prev: nodeName },
+        },
+      };
+    }),
+  resetRunGraphState: (runId) =>
+    set((state) => ({
+      stateEvents: { ...state.stateEvents, [runId]: [] },
+      activeNodes: { ...state.activeNodes, [runId]: { executing: {}, prev: null } },
+    })),
 
   stateEvents: {},
   addStateEvent: (runId, nodeName, payload, qualifiedNodeName, phase) =>

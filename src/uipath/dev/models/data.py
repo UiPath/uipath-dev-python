@@ -1,7 +1,7 @@
 """Plain data classes for inter-component communication (no Textual dependency)."""
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from uipath.core.chat import UiPathConversationMessage, UiPathConversationMessageEvent
@@ -28,7 +28,7 @@ class TraceData:
     trace_id: str | None = None
     status: str = "running"
     duration_ms: float | None = None
-    timestamp: datetime = field(default_factory=datetime.now)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     attributes: dict[str, Any] = field(default_factory=dict)
 
 
@@ -41,7 +41,7 @@ class StateData:
     qualified_node_name: str | None = None
     phase: str | None = None
     payload: dict[str, Any] | None = None
-    timestamp: datetime = field(default_factory=datetime.now)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 @dataclass

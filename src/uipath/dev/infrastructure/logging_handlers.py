@@ -6,7 +6,7 @@ import logging
 import os
 import re
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable, Pattern
 
 from uipath.runtime.logging import UiPathRuntimeExecutionLogHandler
@@ -35,7 +35,7 @@ class RunContextLogHandler(UiPathRuntimeExecutionLogHandler):
                 run_id=self.run_id,
                 level=record.levelname,
                 message=self.format(record),
-                timestamp=datetime.fromtimestamp(record.created),
+                timestamp=datetime.fromtimestamp(record.created, tz=timezone.utc),
             )
             self.callback(log_data)
         except Exception:

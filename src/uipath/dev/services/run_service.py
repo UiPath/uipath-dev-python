@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Literal, Protocol, cast
 
 from pydantic import BaseModel
@@ -154,7 +154,7 @@ class RunService:
                 self._add_info_log(run, f"Starting execution: {run.entrypoint}")
 
             run.status = "running"
-            run.start_time = datetime.now()
+            run.start_time = datetime.now(timezone.utc)
             self._emit_run_updated(run)
 
             log_handler = RunContextLogHandler(
@@ -289,18 +289,18 @@ class RunService:
                 self._add_error_log(run, detail)
             else:
                 self._add_info_log(run, "✅ Execution completed successfully")
-            run.end_time = datetime.now()
+            run.end_time = datetime.now(timezone.utc)
 
         except UiPathBaseRuntimeError as e:
             self._add_error_log(run)
             run.status = "failed"
-            run.end_time = datetime.now()
+            run.end_time = datetime.now(timezone.utc)
             run.error = e.error_info
 
         except Exception as e:
             self._add_error_log(run)
             run.status = "failed"
-            run.end_time = datetime.now()
+            run.end_time = datetime.now(timezone.utc)
             run.error = UiPathErrorContract(
                 code="Unknown",
                 title=str(e),
@@ -509,7 +509,7 @@ class RunService:
             run_id=run.id,
             level="INFO",
             message=message,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(timezone.utc),
         )
         self.handle_log(log_data)
 
@@ -531,13 +531,13 @@ class RunService:
                 run_id=run.id,
                 level="ERROR",
                 message=error_text,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(timezone.utc),
             )
         else:
             log_data = LogData(
                 run_id=run.id,
                 level="ERROR",
                 message=error,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(timezone.utc),
             )
         self.handle_log(log_data)

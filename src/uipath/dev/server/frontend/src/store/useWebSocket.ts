@@ -15,7 +15,7 @@ function getWs(): WsClient {
 
 export function useWebSocket() {
   const ws = useRef(getWs());
-  const { upsertRun, addTrace, addLog, addChatEvent, setActiveInterrupt, setActiveNode, addStateEvent, setReloadPending } = useRunStore();
+  const { upsertRun, addTrace, addLog, addChatEvent, setActiveInterrupt, setActiveNode, removeActiveNode, resetRunGraphState, addStateEvent, setReloadPending } = useRunStore();
 
   useEffect(() => {
     const client = ws.current;
@@ -47,8 +47,13 @@ export function useWebSocket() {
           const qualifiedNodeName = (msg.payload.qualified_node_name as string | undefined) ?? null;
           const phase = (msg.payload.phase as string | undefined) ?? null;
           const payload = msg.payload.payload as Record<string, unknown> | undefined;
+          if (nodeName === "__start__" && phase === "started") {
+            resetRunGraphState(runId);
+          }
           if (phase === "started") {
             setActiveNode(runId, nodeName, qualifiedNodeName);
+          } else if (phase === "completed") {
+            removeActiveNode(runId, nodeName);
           }
           addStateEvent(runId, nodeName, payload, qualifiedNodeName, phase);
           break;
@@ -60,7 +65,7 @@ export function useWebSocket() {
     });
 
     return unsub;
-  }, [upsertRun, addTrace, addLog, addChatEvent, setActiveInterrupt, setActiveNode, addStateEvent, setReloadPending]);
+  }, [upsertRun, addTrace, addLog, addChatEvent, setActiveInterrupt, setActiveNode, removeActiveNode, resetRunGraphState, addStateEvent, setReloadPending]);
 
   return ws.current;
 }

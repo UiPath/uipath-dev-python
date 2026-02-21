@@ -1,6 +1,6 @@
 """Messages used for inter-component communication in the UiPath Developer Console."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from rich.console import RenderableType
@@ -24,7 +24,7 @@ class LogMessage(Message):
         self.run_id = run_id
         self.level = level
         self.message = message
-        self.timestamp = timestamp or datetime.now()
+        self.timestamp = timestamp or datetime.now(timezone.utc)
         super().__init__()
 
     @classmethod
@@ -61,7 +61,7 @@ class TraceMessage(Message):
         self.trace_id = trace_id
         self.status = status
         self.duration_ms = duration_ms
-        self.timestamp = timestamp or datetime.now()
+        self.timestamp = timestamp or datetime.now(timezone.utc)
         self.attributes = attributes or {}
         super().__init__()
 

@@ -28,6 +28,7 @@ export default function App() {
     setStateEvents,
     setGraphCache,
     setActiveNode,
+    removeActiveNode,
   } = useRunStore();
   const { view, runId: routeRunId, setupEntrypoint, setupMode, navigate } = useHashRoute();
 
@@ -97,15 +98,18 @@ export default function App() {
           payload: s.payload,
         })),
       );
-      // Seed activeNodes from historical events so the next WS event has proper prev context
+      // Seed activeNodes from historical events (replay all to get correct prev + executing)
       if (detail.status !== "completed" && detail.status !== "failed") {
-        const lastStarted = [...detail.states].reverse().find((s) => s.phase === "started");
-        if (lastStarted) {
-          setActiveNode(runId, lastStarted.node_name, lastStarted.qualified_node_name);
+        for (const s of detail.states) {
+          if (s.phase === "started") {
+            setActiveNode(runId, s.node_name, s.qualified_node_name);
+          } else if (s.phase === "completed") {
+            removeActiveNode(runId, s.node_name);
+          }
         }
       }
     }
-  }, [upsertRun, setTraces, setLogs, setChatMessages, setStateEvents, setGraphCache, setActiveNode]);
+  }, [upsertRun, setTraces, setLogs, setChatMessages, setStateEvents, setGraphCache, setActiveNode, removeActiveNode]);
 
   // Subscribe to selected run
   useEffect(() => {

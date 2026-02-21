@@ -1,7 +1,7 @@
 """Custom OpenTelemetry trace exporter for CLI UI integration."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable, Sequence
 
 from opentelemetry import trace
@@ -82,7 +82,7 @@ class RunContextExporter(SpanExporter):
             trace_id=trace_id,
             status=status,
             duration_ms=duration_ms,
-            timestamp=datetime.fromtimestamp(start_time),
+            timestamp=datetime.fromtimestamp(start_time, tz=timezone.utc),
             attributes=dict(span.attributes) if span.attributes else {},
         )
 
@@ -97,7 +97,9 @@ class RunContextExporter(SpanExporter):
                     run_id=run_id_val,
                     level=log_level,
                     message=event.name,
-                    timestamp=datetime.fromtimestamp(event.timestamp / 1_000_000_000),
+                    timestamp=datetime.fromtimestamp(
+                        event.timestamp / 1_000_000_000, tz=timezone.utc
+                    ),
                 )
                 self.on_log(log_data)
 
