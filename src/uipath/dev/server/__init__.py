@@ -83,6 +83,7 @@ class UiPathDeveloperServer:
             on_state=self._on_state,
             on_interrupt=self._on_interrupt,
             debug_bridge_factory=lambda mode: WebDebugBridge(mode=mode),
+            on_run_removed=self.connection_manager.remove_run_subscriptions,
         )
 
     def create_app(self) -> Any:

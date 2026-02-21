@@ -1,6 +1,6 @@
 """Aggregates conversation messages from conversation events."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from uipath.core.chat import (
@@ -178,7 +178,7 @@ class ChatEvents:
         """Choose timestamp from event if available, else fallback."""
         if ev.start and ev.start.timestamp:
             return ev.start.timestamp
-        return datetime.now().isoformat()
+        return datetime.now(timezone.utc).isoformat()
 
     def get_role(self, ev: UiPathConversationMessageEvent) -> str:
         """Infer the role of the message from the event."""
@@ -189,7 +189,7 @@ class ChatEvents:
 
 def get_user_message(user_text: str) -> UiPathConversationMessage:
     """Build a user message from text input."""
-    timestamp = datetime.now().isoformat()
+    timestamp = datetime.now(timezone.utc).isoformat()
     return UiPathConversationMessage(
         message_id=str(uuid4()),
         created_at=timestamp,
@@ -216,7 +216,7 @@ def get_user_message_event(
     """Build a conversation event representing a user message from text input."""
     message_id = str(uuid4())
     content_part_id = str(uuid4())
-    timestamp = datetime.now().isoformat()
+    timestamp = datetime.now(timezone.utc).isoformat()
 
     msg_start = UiPathConversationMessageStartEvent(
         role=role,

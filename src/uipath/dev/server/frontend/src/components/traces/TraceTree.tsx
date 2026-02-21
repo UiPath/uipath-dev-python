@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import type { TraceSpan } from "../../types/run";
 import { useRunStore } from "../../store/useRunStore";
 import SpanDetails from "./SpanDetails";
@@ -129,6 +129,16 @@ function formatDuration(ms: number | null | undefined): string {
   return `${(ms / 1000).toFixed(2)}s`;
 }
 
+function treeToJson(nodes: TreeNode[]): unknown[] {
+  return nodes.map((node) => {
+    const { span } = node;
+    if (node.children.length > 0) {
+      return { name: span.span_name, children: treeToJson(node.children) };
+    }
+    return { name: span.span_name };
+  });
+}
+
 export default function TraceTree({ traces }: Props) {
   const [selectedSpan, setSelectedSpan] = useState<TraceSpan | null>(null);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
@@ -137,7 +147,17 @@ export default function TraceTree({ traces }: Props) {
     return saved ? parseFloat(saved) : 50;
   });
   const [isDragging, setIsDragging] = useState(false);
+  const [copied, setCopied] = useState(false);
   const tree = buildTree(traces);
+
+  const treeJson = useMemo(() => JSON.stringify(treeToJson(tree), null, 2), [traces]);
+
+  const copyTree = useCallback(() => {
+    navigator.clipboard.writeText(treeJson).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }, [treeJson]);
 
   const focusedSpan = useRunStore((s) => s.focusedSpan);
   const setFocusedSpan = useRunStore((s) => s.setFocusedSpan);
@@ -244,7 +264,23 @@ export default function TraceTree({ traces }: Props) {
   return (
     <div className="flex h-full trace-tree-container" style={{ cursor: isDragging ? "col-resize" : undefined }}>
       {/* Left: tree view */}
-      <div className="pr-0.5 pt-0.5" style={{ width: `${leftWidth}%` }}>
+      <div className="pr-0.5 pt-0.5 relative" style={{ width: `${leftWidth}%` }}>
+        {traces.length > 0 && (
+          <button
+            onClick={copyTree}
+            className="absolute top-2 left-2 z-20 text-[10px] cursor-pointer px-1.5 py-0.5 rounded transition-opacity"
+            style={{
+              opacity: copied ? 1 : 0.3,
+              color: copied ? "var(--success)" : "var(--text-muted)",
+              background: "var(--bg-secondary)",
+              border: "1px solid var(--border)",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.opacity = "1"; }}
+            onMouseLeave={(e) => { if (!copied) e.currentTarget.style.opacity = "0.3"; }}
+          >
+            {copied ? "Copied!" : "Copy JSON"}
+          </button>
+        )}
         <div ref={treeScrollRef} className="overflow-y-auto h-full p-0.5">
           {tree.length === 0 ? (
             <div className="flex items-center justify-center h-full">

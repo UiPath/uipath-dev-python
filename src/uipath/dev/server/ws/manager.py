@@ -123,6 +123,10 @@ class ConnectionManager:
             if not self._subscriptions[run_id]:
                 del self._subscriptions[run_id]
 
+    def remove_run_subscriptions(self, run_id: str) -> None:
+        """Remove all subscriptions for a run."""
+        self._subscriptions.pop(run_id, None)
+
     def broadcast_run_updated(self, run: ExecutionRun) -> None:
         """Broadcast a run update to all subscribers (safe from sync context)."""
         msg = server_message(ServerEvent.RUN_UPDATED, serialize_run(run))

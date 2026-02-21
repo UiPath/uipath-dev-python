@@ -448,17 +448,31 @@ export default function GraphPanel({ entrypoint, runId, breakpointNode, breakpoi
     );
   }, [breakpointNode, layoutSeq, setNodes]);
 
+  const stateEvents = useRunStore((s) => s.stateEvents[runId]);
+
   // Highlight edges + nodes during execution
   // - Paused at breakpoint: edges INTO breakpoint node + edges to next_nodes
-  // - Running: edges OUT of completed node, target nodes of those edges
+  // - Running: edges OUT of executing nodes, target nodes of those edges
   // - __start__: highlighted on first state event; __end__: highlighted when run completes
   useEffect(() => {
     const isPaused = !!breakpointNode;
-    let matchIds = new Set<string>(); // Full React Flow node IDs of the "current" node
+    let matchIds = new Set<string>(); // Full React Flow node IDs of the "current" node(s)
     const prevNodeIds = new Set<string>(); // Full RF IDs of the previous node (for edge filtering when paused)
     const nextNodeIds = new Set<string>(); // Full RF IDs of breakpoint next_nodes
     const activeTargetIds = new Set<string>(); // Full RF IDs for isActiveNode
     const nodeTypeById = new Map<string, string>();
+
+    // Derive currently-executing nodes from the full event log (always consistent)
+    const executingNodes = new Map<string, string | null>(); // nodeName → qualifiedNodeName
+    if (stateEvents) {
+      for (const evt of stateEvents) {
+        if (evt.phase === "started") {
+          executingNodes.set(evt.node_name, evt.qualified_node_name ?? null);
+        } else if (evt.phase === "completed") {
+          executingNodes.delete(evt.node_name);
+        }
+      }
+    }
 
     // 1) Build matchIds, nextNodeIds, node type map
     setNodes((nds) => {
@@ -494,33 +508,38 @@ export default function GraphPanel({ entrypoint, runId, breakpointNode, breakpoi
         if (activeNode?.prev) {
           findNodeIds(activeNode.prev).forEach((id) => prevNodeIds.add(id));
         }
-      } else if (activeNode) {
-        // Try qualified name first (exact match via "subgraph:node" → "subgraph/node")
-        const qualifiedName = activeNode.qualifiedNodeName;
-        if (qualifiedName) {
-          const qualifiedId = qualifiedName.replace(/:/g, "/");
-          for (const n of nds) {
-            if (n.id === qualifiedId) {
-              matchIds.add(n.id);
-            }
+      } else if (executingNodes.size > 0) {
+        // Build label → RF ID lookup once
+        const labelToIds = new Map<string, Set<string>>();
+        for (const n of nds) {
+          const label = n.data?.label as string | undefined;
+          if (!label) continue;
+          const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
+          for (const key of [plainId, label]) {
+            let s = labelToIds.get(key);
+            if (!s) { s = new Set(); labelToIds.set(key, s); }
+            s.add(n.id);
           }
-        }
-        // Fallback: label/plainId matching
-        if (matchIds.size === 0) {
-          const labelToIds = new Map<string, Set<string>>();
-          for (const n of nds) {
-            const label = n.data?.label as string | undefined;
-            if (!label) continue;
-            const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
-            for (const key of [plainId, label]) {
-              let s = labelToIds.get(key);
-              if (!s) { s = new Set(); labelToIds.set(key, s); }
-              s.add(n.id);
-            }
-          }
-          matchIds = labelToIds.get(activeNode.current) ?? new Set<string>();
         }
 
+        for (const [nodeName, qualifiedNodeName] of executingNodes) {
+          let found = false;
+          // Try qualified name first (exact match via "subgraph:node" → "subgraph/node")
+          if (qualifiedNodeName) {
+            const qualifiedId = qualifiedNodeName.replace(/:/g, "/");
+            for (const n of nds) {
+              if (n.id === qualifiedId) {
+                matchIds.add(n.id);
+                found = true;
+              }
+            }
+          }
+          // Fallback: label/plainId matching
+          if (!found) {
+            const ids = labelToIds.get(nodeName);
+            if (ids) ids.forEach((id) => matchIds.add(id));
+          }
+        }
       }
 
       return nds;
@@ -542,7 +561,7 @@ export default function GraphPanel({ entrypoint, runId, breakpointNode, breakpoi
           isActive = intoBreakpoint
             || (matchIds.has(e.source) && nextNodeIds.has(e.target));
         } else {
-          // Running: edges OUT of completed node
+          // Running: edges OUT of executing nodes
           isActive = matchIds.has(e.source);
           // For __end__: also highlight edges INTO it
           if (!isActive && nodeTypeById.get(e.target) === "endNode" && matchIds.has(e.target)) {
@@ -596,9 +615,7 @@ export default function GraphPanel({ entrypoint, runId, breakpointNode, breakpoi
           : n;
       }),
     );
-  }, [activeNode, breakpointNode, breakpointNextNodes, runStatus, layoutSeq, setNodes, setEdges]);
-
-  const stateEvents = useRunStore((s) => s.stateEvents[runId]);
+  }, [stateEvents, activeNode, breakpointNode, breakpointNextNodes, runStatus, layoutSeq, setNodes, setEdges]);
 
   // Subscribe to cached graph reactively (populated async from run detail)
   const cachedGraph = useRunStore((s) => s.graphCache[runId]);

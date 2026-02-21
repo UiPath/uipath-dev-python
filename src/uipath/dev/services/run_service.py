@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Literal, Protocol, cast
 
 from pydantic import BaseModel
@@ -44,6 +44,8 @@ from uipath.dev.models.data import (
 )
 from uipath.dev.models.execution import ExecutionMode, ExecutionRun
 from uipath.dev.services.chat_bridge import WebChatBridge
+
+MAX_RUNS = 50
 
 RunUpdatedCallback = Callable[[ExecutionRun], None]
 LogCallback = Callable[[LogData], None]
@@ -98,6 +100,7 @@ class RunService:
         on_state: StateCallback | None = None,
         on_interrupt: InterruptCallback | None = None,
         debug_bridge_factory: DebugBridgeFactory | None = None,
+        on_run_removed: Callable[[str], None] | None = None,
     ) -> None:
         """Initialize RunService with runtime factory and trace manager."""
         self.runtime_factory = runtime_factory
@@ -111,6 +114,7 @@ class RunService:
         self.on_state = on_state
         self.on_interrupt = on_interrupt
         self._debug_bridge_factory = debug_bridge_factory
+        self._on_run_removed = on_run_removed
 
         self._exporter = RunContextExporter(
             on_trace=self.handle_trace,
@@ -125,6 +129,36 @@ class RunService:
         """Register a new run and emit an initial update."""
         self.runs[run.id] = run
         self._emit_run_updated(run)
+        self._evict_old_runs()
+
+    def _evict_old_runs(self) -> None:
+        """Remove oldest terminal runs when total exceeds MAX_RUNS."""
+        if len(self.runs) <= MAX_RUNS:
+            return
+
+        active = []
+        terminal = []
+        for run in self.runs.values():
+            if run.status in ("pending", "running", "suspended"):
+                active.append(run)
+            else:
+                terminal.append(run)
+
+        keep_terminal = MAX_RUNS - len(active)
+        if keep_terminal < 0:
+            keep_terminal = 0
+
+        if len(terminal) <= keep_terminal:
+            return
+
+        terminal.sort(
+            key=lambda r: r.end_time or datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True,
+        )
+        for run in terminal[keep_terminal:]:
+            del self.runs[run.id]
+            if self._on_run_removed is not None:
+                self._on_run_removed(run.id)
 
     def get_run(self, run_id: str) -> ExecutionRun | None:
         """Get a registered run."""
@@ -154,7 +188,7 @@ class RunService:
                 self._add_info_log(run, f"Starting execution: {run.entrypoint}")
 
             run.status = "running"
-            run.start_time = datetime.now()
+            run.start_time = datetime.now(timezone.utc)
             self._emit_run_updated(run)
 
             log_handler = RunContextLogHandler(
@@ -289,18 +323,18 @@ class RunService:
                 self._add_error_log(run, detail)
             else:
                 self._add_info_log(run, "✅ Execution completed successfully")
-            run.end_time = datetime.now()
+            run.end_time = datetime.now(timezone.utc)
 
         except UiPathBaseRuntimeError as e:
             self._add_error_log(run)
             run.status = "failed"
-            run.end_time = datetime.now()
+            run.end_time = datetime.now(timezone.utc)
             run.error = e.error_info
 
         except Exception as e:
             self._add_error_log(run)
             run.status = "failed"
-            run.end_time = datetime.now()
+            run.end_time = datetime.now(timezone.utc)
             run.error = UiPathErrorContract(
                 code="Unknown",
                 title=str(e),
@@ -509,7 +543,7 @@ class RunService:
             run_id=run.id,
             level="INFO",
             message=message,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(timezone.utc),
         )
         self.handle_log(log_data)
 
@@ -531,13 +565,13 @@ class RunService:
                 run_id=run.id,
                 level="ERROR",
                 message=error_text,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(timezone.utc),
             )
         else:
             log_data = LogData(
                 run_id=run.id,
                 level="ERROR",
                 message=error,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(timezone.utc),
             )
         self.handle_log(log_data)

@@ -1,7 +1,7 @@
 """Models for representing execution runs and their data."""
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, cast
 from uuid import uuid4
@@ -38,7 +38,7 @@ class ExecutionRun:
         self.mode = mode
         self.resume_data: Any | None = None
         self.output_data: dict[str, Any] | str | None = None
-        self.start_time = datetime.now()
+        self.start_time = datetime.now(timezone.utc)
         self.end_time: datetime | None = None
         self.status = "pending"  # pending, running, completed, failed, suspended
         self.traces: list[TraceData] = []
@@ -58,7 +58,7 @@ class ExecutionRun:
             delta = self.end_time - self.start_time
             return f"{delta.total_seconds():.1f}s"
         elif self.start_time:
-            delta = datetime.now() - self.start_time
+            delta = datetime.now(timezone.utc) - self.start_time
             return f"{delta.total_seconds():.1f}s"
         return "0.0s"
 
