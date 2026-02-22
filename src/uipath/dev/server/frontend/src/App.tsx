@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRunStore } from "./store/useRunStore";
+import { useAuthStore } from "./store/useAuthStore";
 import { useWebSocket } from "./store/useWebSocket";
 import { listRuns, listEntrypoints, getRun } from "./api/client";
 import type { RunDetail } from "./types/run";
@@ -39,13 +40,15 @@ export default function App() {
     }
   }, [view, routeRunId, selectedRunId, selectRun]);
 
-  // Load existing runs and entrypoints on mount
+  // Load existing runs, entrypoints, and auth status on mount
+  const initAuth = useAuthStore((s) => s.init);
   useEffect(() => {
     listRuns().then(setRuns).catch(console.error);
     listEntrypoints()
       .then((eps) => setEntrypoints(eps.map((e) => e.name)))
       .catch(console.error);
-  }, [setRuns, setEntrypoints]);
+    initAuth();
+  }, [setRuns, setEntrypoints, initAuth]);
 
   const selectedRun = selectedRunId ? runs[selectedRunId] : null;
 

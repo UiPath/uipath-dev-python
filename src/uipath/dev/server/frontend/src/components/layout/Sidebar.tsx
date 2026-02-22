@@ -1,5 +1,7 @@
+import { useState } from "react";
 import type { RunSummary } from "../../types/run";
 import { useTheme } from "../../store/useTheme";
+import { useAuthStore } from "../../store/useAuthStore";
 import RunHistoryItem from "../runs/RunHistoryItem";
 
 interface Props {
@@ -114,21 +116,8 @@ export default function Sidebar({ runs, selectedRunId, onSelectRun, onNewRun, is
             )}
           </div>
 
-          {/* GitHub link */}
-          <div className="px-3 h-10 border-t border-[var(--border)] flex items-center justify-center">
-            <a
-              href="https://github.com/UiPath/uipath-dev-python"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest font-semibold transition-opacity hover:opacity-80"
-              style={{ color: "var(--text-muted)" }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
-              </svg>
-              GitHub
-            </a>
-          </div>
+          {/* Auth section */}
+          <AuthFooter />
         </aside>
       </>
     );
@@ -214,21 +203,160 @@ export default function Sidebar({ runs, selectedRunId, onSelectRun, onNewRun, is
         )}
       </div>
 
-      {/* GitHub link */}
-      <div className="px-3 h-10 border-t border-[var(--border)] flex items-center justify-center">
-        <a
-          href="https://github.com/UiPath/uipath-dev-python"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest font-semibold transition-opacity hover:opacity-80"
+      {/* Auth section */}
+      <AuthFooter />
+    </aside>
+  );
+}
+
+function AuthFooter() {
+  const { enabled, status, environment, tenants, uipathUrl, setEnvironment, startLogin, selectTenant, logout } = useAuthStore();
+  const [selectedTenant, setSelectedTenant] = useState("");
+
+  if (!enabled) return null;
+
+  if (status === "authenticated" || status === "expired") {
+    // Truncate URL for display: show org/tenant part only
+    const shortUrl = uipathUrl
+      ? uipathUrl.replace(/^https?:\/\/[^/]+\//, "")
+      : "";
+    const isExpired = status === "expired";
+    return (
+      <div className="px-2 py-2 border-t border-[var(--border)]">
+        <div className="flex items-center justify-center gap-1.5">
+          {isExpired ? (
+            <button
+              onClick={startLogin}
+              className="flex items-center gap-1.5 min-w-0 cursor-pointer transition-opacity hover:opacity-80"
+              style={{ background: "none", border: "none", padding: 0 }}
+              title="Token expired — click to re-authenticate"
+            >
+              <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: "var(--error)" }} />
+              <span
+                className="text-[11px] truncate"
+                style={{ color: "var(--text-muted)" }}
+              >
+                {shortUrl}
+              </span>
+            </button>
+          ) : (
+            <a
+              href={uipathUrl ?? "#"}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 min-w-0 transition-opacity hover:opacity-80"
+              title={uipathUrl ?? ""}
+            >
+              <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: "var(--success)" }} />
+              <span
+                className="text-[11px] truncate"
+                style={{ color: "var(--text-muted)" }}
+              >
+                {shortUrl}
+              </span>
+            </a>
+          )}
+          <button
+            onClick={logout}
+            className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded cursor-pointer transition-colors"
+            style={{ color: "var(--text-muted)" }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
+            title="Sign out"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "pending") {
+    return (
+      <div className="px-2 py-2 border-t border-[var(--border)] flex items-center gap-2">
+        <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+          <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+        </svg>
+        <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+          Signing in&hellip;
+        </span>
+      </div>
+    );
+  }
+
+  if (status === "needs_tenant") {
+    return (
+      <div className="px-2 py-2 border-t border-[var(--border)]">
+        <label
+          className="block text-[10px] uppercase tracking-wider font-semibold mb-1"
           style={{ color: "var(--text-muted)" }}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
-          </svg>
-          GitHub
-        </a>
+          Tenant
+        </label>
+        <select
+          value={selectedTenant}
+          onChange={(e) => setSelectedTenant(e.target.value)}
+          className="w-full rounded px-1.5 py-1 text-[10px] mb-1.5 appearance-auto"
+          style={{
+            background: "var(--bg-secondary)",
+            border: "1px solid var(--border)",
+            color: "var(--text-primary)",
+          }}
+        >
+          <option value="">Select&hellip;</option>
+          {tenants.map((t) => (
+            <option key={t} value={t}>{t}</option>
+          ))}
+        </select>
+        <button
+          onClick={() => selectedTenant && selectTenant(selectedTenant)}
+          disabled={!selectedTenant}
+          className="w-full px-2 py-1 text-[10px] uppercase tracking-wider font-semibold rounded border border-[var(--border)] bg-transparent cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          style={{ color: "var(--text-muted)" }}
+        >
+          Confirm
+        </button>
       </div>
-    </aside>
+    );
+  }
+
+  // Unauthenticated
+  return (
+    <div className="px-2 py-2 border-t border-[var(--border)]">
+      <select
+        value={environment}
+        onChange={(e) => setEnvironment(e.target.value as "cloud" | "staging" | "alpha")}
+        className="w-full rounded px-1.5 py-0.5 text-[10px] mb-1.5 appearance-auto"
+        style={{
+          background: "var(--bg-secondary)",
+          border: "1px solid var(--border)",
+          color: "var(--text-muted)",
+        }}
+      >
+        <option value="cloud">cloud</option>
+        <option value="staging">staging</option>
+        <option value="alpha">alpha</option>
+      </select>
+      <button
+        onClick={startLogin}
+        className="w-full px-2 py-1 text-[10px] uppercase tracking-wider font-semibold rounded border border-[var(--border)] bg-transparent cursor-pointer transition-colors"
+        style={{ color: "var(--text-muted)" }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.color = "var(--text-primary)";
+          e.currentTarget.style.borderColor = "var(--text-muted)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = "var(--text-muted)";
+          e.currentTarget.style.borderColor = "var(--border)";
+        }}
+      >
+        Sign In
+      </button>
+    </div>
   );
 }
