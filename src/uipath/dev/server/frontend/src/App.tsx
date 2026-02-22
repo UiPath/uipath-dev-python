@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRunStore } from "./store/useRunStore";
 import { useAuthStore } from "./store/useAuthStore";
+import { useConfigStore } from "./store/useConfigStore";
 import { useWebSocket } from "./store/useWebSocket";
 import { listRuns, listEntrypoints, getRun } from "./api/client";
 import type { RunDetail } from "./types/run";
 import { useHashRoute } from "./hooks/useHashRoute";
 import { useIsMobile } from "./hooks/useIsMobile";
 import Sidebar from "./components/layout/Sidebar";
+import StatusBar from "./components/layout/StatusBar";
 import NewRunPanel from "./components/runs/NewRunPanel";
 import SetupView from "./components/runs/SetupView";
 import RunDetailsPanel from "./components/runs/RunDetailsPanel";
@@ -40,15 +42,17 @@ export default function App() {
     }
   }, [view, routeRunId, selectedRunId, selectRun]);
 
-  // Load existing runs, entrypoints, and auth status on mount
+  // Load existing runs, entrypoints, auth status, and config on mount
   const initAuth = useAuthStore((s) => s.init);
+  const initConfig = useConfigStore((s) => s.init);
   useEffect(() => {
     listRuns().then(setRuns).catch(console.error);
     listEntrypoints()
       .then((eps) => setEntrypoints(eps.map((e) => e.name)))
       .catch(console.error);
     initAuth();
-  }, [setRuns, setEntrypoints, initAuth]);
+    initConfig();
+  }, [setRuns, setEntrypoints, initAuth, initConfig]);
 
   const selectedRun = selectedRunId ? runs[selectedRunId] : null;
 
@@ -182,49 +186,52 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen w-screen relative">
-      {/* Mobile hamburger button */}
-      {isMobile && !sidebarOpen && (
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className="fixed top-2 left-2 z-40 w-9 h-9 flex items-center justify-center rounded-lg cursor-pointer"
-          style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)" }}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <line x1="3" y1="6" x2="21" y2="6" />
-            <line x1="3" y1="12" x2="21" y2="12" />
-            <line x1="3" y1="18" x2="21" y2="18" />
-          </svg>
-        </button>
-      )}
-      <Sidebar
-        runs={Object.values(runs)}
-        selectedRunId={selectedRunId}
-        onSelectRun={handleSelectRun}
-        onNewRun={handleNewRun}
-        isMobile={isMobile}
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-      />
-      <main className="flex-1 overflow-hidden bg-[var(--bg-primary)]">
-        {view === "new" ? (
-          <NewRunPanel />
-        ) : view === "setup" && setupEntrypoint && setupMode ? (
-          <SetupView
-            entrypoint={setupEntrypoint}
-            mode={setupMode}
-            ws={ws}
-            onRunCreated={handleRunCreated}
-            isMobile={isMobile}
-          />
-        ) : selectedRun ? (
-          <RunDetailsPanel run={selectedRun} ws={ws} isMobile={isMobile} />
-        ) : (
-          <div className="flex items-center justify-center h-full text-[var(--text-muted)]">
-            Select a run or create a new one
-          </div>
+    <div className="flex flex-col h-screen w-screen">
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* Mobile hamburger button */}
+        {isMobile && !sidebarOpen && (
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="fixed top-2 left-2 z-40 w-9 h-9 flex items-center justify-center rounded-lg cursor-pointer"
+            style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)" }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
         )}
-      </main>
+        <Sidebar
+          runs={Object.values(runs)}
+          selectedRunId={selectedRunId}
+          onSelectRun={handleSelectRun}
+          onNewRun={handleNewRun}
+          isMobile={isMobile}
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+        />
+        <main className="flex-1 overflow-hidden bg-[var(--bg-primary)]">
+          {view === "new" ? (
+            <NewRunPanel />
+          ) : view === "setup" && setupEntrypoint && setupMode ? (
+            <SetupView
+              entrypoint={setupEntrypoint}
+              mode={setupMode}
+              ws={ws}
+              onRunCreated={handleRunCreated}
+              isMobile={isMobile}
+            />
+          ) : selectedRun ? (
+            <RunDetailsPanel run={selectedRun} ws={ws} isMobile={isMobile} />
+          ) : (
+            <div className="flex items-center justify-center h-full text-[var(--text-muted)]">
+              Select a run or create a new one
+            </div>
+          )}
+        </main>
+      </div>
+      <StatusBar />
       <ReloadToast />
     </div>
   );
