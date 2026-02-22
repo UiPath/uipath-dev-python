@@ -460,12 +460,14 @@ function DataSection({
         {copyText && (
           <button
             onClick={copy}
-            className="ml-auto text-[10px] cursor-pointer px-1.5 py-0.5 rounded"
+            className="ml-auto text-[10px] cursor-pointer px-1.5 py-0.5 rounded transition-colors"
             style={{
               color: copied ? "var(--success)" : "var(--text-muted)",
               background: "var(--bg-secondary)",
               border: "1px solid var(--border)",
             }}
+            onMouseEnter={(e) => { if (!copied) e.currentTarget.style.color = "var(--text-primary)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = copied ? "var(--success)" : "var(--text-muted)"; }}
           >
             {copied ? "Copied" : "Copy"}
           </button>

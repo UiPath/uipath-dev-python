@@ -2,8 +2,10 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import type { TraceSpan } from "../../types/run";
 import { useRunStore } from "../../store/useRunStore";
 import SpanDetails from "./SpanDetails";
+import WaterfallView from "./WaterfallView";
+import JsonHighlight from "../shared/JsonHighlight";
 
-const STATUS_COLORS: Record<string, string> = {
+export const STATUS_COLORS: Record<string, string> = {
   started: "var(--info)",
   running: "var(--warning)",
   completed: "var(--success)",
@@ -12,7 +14,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 /* Icons for openinference.span.kind */
-function SpanKindIcon({ kind, statusColor }: { kind: string | undefined; statusColor: string }) {
+export function SpanKindIcon({ kind, statusColor }: { kind: string | undefined; statusColor: string }) {
   const color = statusColor;
   const size = 14;
   const props = { width: size, height: size, viewBox: "0 0 16 16", fill: "none", stroke: color, strokeWidth: 1.5, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
@@ -85,7 +87,7 @@ interface Props {
   traces: TraceSpan[];
 }
 
-interface TreeNode {
+export interface TreeNode {
   span: TraceSpan;
   children: TreeNode[];
 }
@@ -123,7 +125,7 @@ function buildTree(traces: TraceSpan[]): TreeNode[] {
   );
 }
 
-function formatDuration(ms: number | null | undefined): string {
+export function formatDuration(ms: number | null | undefined): string {
   if (ms == null) return "";
   if (ms < 1000) return `${ms.toFixed(0)}ms`;
   return `${(ms / 1000).toFixed(2)}s`;
@@ -148,6 +150,9 @@ export default function TraceTree({ traces }: Props) {
   });
   const [isDragging, setIsDragging] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [viewMode, setViewMode] = useState<"tree" | "timeline" | "json">(() => {
+    return (localStorage.getItem("traceViewMode") as "tree" | "timeline" | "json") || "tree";
+  });
   const tree = buildTree(traces);
 
   const treeJson = useMemo(() => JSON.stringify(treeToJson(tree), null, 2), [traces]);
@@ -264,29 +269,56 @@ export default function TraceTree({ traces }: Props) {
   return (
     <div className="flex h-full trace-tree-container" style={{ cursor: isDragging ? "col-resize" : undefined }}>
       {/* Left: tree view */}
-      <div className="pr-0.5 pt-0.5 relative" style={{ width: `${leftWidth}%` }}>
+      <div className="flex flex-col" style={{ width: `${leftWidth}%` }}>
         {traces.length > 0 && (
-          <button
-            onClick={copyTree}
-            className="absolute top-2 left-2 z-20 text-[10px] cursor-pointer px-1.5 py-0.5 rounded transition-opacity"
-            style={{
-              opacity: copied ? 1 : 0.3,
-              color: copied ? "var(--success)" : "var(--text-muted)",
-              background: "var(--bg-secondary)",
-              border: "1px solid var(--border)",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.opacity = "1"; }}
-            onMouseLeave={(e) => { if (!copied) e.currentTarget.style.opacity = "0.3"; }}
+          <div
+            className="flex items-center gap-1 px-2 border-b shrink-0"
+            style={{ borderColor: "var(--border)", background: "var(--bg-secondary)", height: "28px" }}
           >
-            {copied ? "Copied!" : "Copy JSON"}
-          </button>
+            <button
+              onClick={() => { setViewMode("tree"); localStorage.setItem("traceViewMode", "tree"); }}
+              className="px-2 h-[18px] text-[10px] uppercase tracking-wider font-semibold rounded transition-colors cursor-pointer inline-flex items-center"
+              style={{
+                color: viewMode === "tree" ? "var(--accent)" : "var(--text-muted)",
+                background: viewMode === "tree" ? "color-mix(in srgb, var(--accent) 10%, transparent)" : "transparent",
+              }}
+              onMouseEnter={(e) => { if (viewMode !== "tree") e.currentTarget.style.color = "var(--text-primary)"; }}
+              onMouseLeave={(e) => { if (viewMode !== "tree") e.currentTarget.style.color = "var(--text-muted)"; }}
+            >
+              Tree
+            </button>
+            <button
+              onClick={() => { setViewMode("timeline"); localStorage.setItem("traceViewMode", "timeline"); }}
+              className="px-2 h-[18px] text-[10px] uppercase tracking-wider font-semibold rounded transition-colors cursor-pointer inline-flex items-center"
+              style={{
+                color: viewMode === "timeline" ? "var(--accent)" : "var(--text-muted)",
+                background: viewMode === "timeline" ? "color-mix(in srgb, var(--accent) 10%, transparent)" : "transparent",
+              }}
+              onMouseEnter={(e) => { if (viewMode !== "timeline") e.currentTarget.style.color = "var(--text-primary)"; }}
+              onMouseLeave={(e) => { if (viewMode !== "timeline") e.currentTarget.style.color = "var(--text-muted)"; }}
+            >
+              Timeline
+            </button>
+            <button
+              onClick={() => { setViewMode("json"); localStorage.setItem("traceViewMode", "json"); }}
+              className="px-2 h-[18px] text-[10px] uppercase tracking-wider font-semibold rounded transition-colors cursor-pointer inline-flex items-center"
+              style={{
+                color: viewMode === "json" ? "var(--accent)" : "var(--text-muted)",
+                background: viewMode === "json" ? "color-mix(in srgb, var(--accent) 10%, transparent)" : "transparent",
+              }}
+              onMouseEnter={(e) => { if (viewMode !== "json") e.currentTarget.style.color = "var(--text-primary)"; }}
+              onMouseLeave={(e) => { if (viewMode !== "json") e.currentTarget.style.color = "var(--text-muted)"; }}
+            >
+              JSON
+            </button>
+          </div>
         )}
-        <div ref={treeScrollRef} className="overflow-y-auto h-full p-0.5">
+        <div ref={treeScrollRef} className="overflow-y-auto flex-1 p-0.5 pr-0 pt-0 mr-0.5 mt-0.5">
           {tree.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <p className="text-[var(--text-muted)] text-sm">No traces yet</p>
             </div>
-          ) : (
+          ) : viewMode === "tree" ? (
             tree.map((node, i) => (
               <TreeNodeView
                 key={node.span.span_id}
@@ -299,6 +331,29 @@ export default function TraceTree({ traces }: Props) {
                 toggleExpanded={toggleExpanded}
               />
             ))
+          ) : viewMode === "timeline" ? (
+            <WaterfallView
+              tree={tree}
+              selectedSpan={selectedSpan}
+              onSelect={setSelectedSpan}
+            />
+          ) : (
+            <div className="relative">
+              <button
+                onClick={copyTree}
+                className="absolute top-1 right-1 z-10 text-[10px] cursor-pointer px-1.5 py-0.5 rounded transition-colors"
+                style={{
+                  color: copied ? "var(--success)" : "var(--text-muted)",
+                  background: "var(--bg-secondary)",
+                  border: "1px solid var(--border)",
+                }}
+                onMouseEnter={(e) => { if (!copied) e.currentTarget.style.color = "var(--text-primary)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = copied ? "var(--success)" : "var(--text-muted)"; }}
+              >
+                {copied ? "Copied!" : "Copy"}
+              </button>
+              <JsonHighlight json={treeJson} className="font-mono text-[11px] whitespace-pre-wrap p-2" style={{}} />
+            </div>
           )}
         </div>
       </div>
@@ -313,7 +368,7 @@ export default function TraceTree({ traces }: Props) {
       </div>
 
       {/* Right: span details */}
-      <div className="flex-1 overflow-hidden p-0.5">
+      <div className="flex-1 overflow-hidden">
         {selectedSpan ? (
           <SpanDetails span={selectedSpan} />
         ) : (
