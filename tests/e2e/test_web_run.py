@@ -12,7 +12,7 @@ def _wait_for_entrypoints(page: Page) -> None:
     """Wait until the entrypoint dropdown has real options loaded."""
     page.wait_for_function(
         "() => {"
-        "  const s = document.querySelector('select');"
+        "  const s = document.querySelector('#entrypoint-select');"
         "  return s && s.options.length > 0"
         "    && !s.options[0].text.includes('Loading');"
         "}",
@@ -23,7 +23,7 @@ def _wait_for_entrypoints(page: Page) -> None:
 def _go_to_new_run(page: Page, url: str) -> None:
     """Navigate to the new run page and wait for entrypoints."""
     page.goto(f"{url}/#/new")
-    expect(page.get_by_role("combobox")).to_be_visible()
+    expect(page.locator("#entrypoint-select")).to_be_visible()
     _wait_for_entrypoints(page)
 
 
@@ -54,7 +54,7 @@ def test_new_run_page_loads(page: Page, live_server_url: str):
     expect(page.get_by_text("New Run", exact=True)).to_be_visible()
 
     # Dropdown should have at least one real entrypoint
-    combo = page.get_by_role("combobox")
+    combo = page.locator("#entrypoint-select")
     option_count = combo.evaluate("el => el.options.length")
     assert option_count >= 1
 

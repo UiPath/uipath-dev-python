@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -129,12 +130,30 @@ def create_app(server: UiPathDeveloperServer) -> FastAPI:
     # Store server reference on app state for route access
     app.state.server = server
 
+    auth_enabled = os.environ.get("UIPATH_AUTH_ENABLED", "true").lower() not in (
+        "false",
+        "0",
+        "no",
+    )
+
+    # Config endpoint — tells the frontend which features are available
+    @app.get("/api/config", include_in_schema=False)
+    async def _config():
+        return {"auth_enabled": auth_enabled}
+
     # Register routes
     from uipath.dev.server.routes.entrypoints import router as entrypoints_router
     from uipath.dev.server.routes.graph import router as graph_router
     from uipath.dev.server.routes.reload import router as reload_router
     from uipath.dev.server.routes.runs import router as runs_router
     from uipath.dev.server.ws.handler import router as ws_router
+
+    if auth_enabled:
+        from uipath.dev.server.auth import restore_session
+        from uipath.dev.server.routes.auth import router as auth_router
+
+        app.include_router(auth_router, prefix="/api")
+        restore_session()
 
     app.include_router(entrypoints_router, prefix="/api")
     app.include_router(runs_router, prefix="/api")
