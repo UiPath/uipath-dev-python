@@ -1,4 +1,4 @@
-# !/bin/sh
+#!/bin/sh
 /root/.local/bin/uv venv --clear
 . ./.venv/bin/activate
 /root/.local/bin/uv sync
