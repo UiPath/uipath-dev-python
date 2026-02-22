@@ -174,7 +174,7 @@ export default function SpanDetails({ span }: Props) {
           <>
             <div
               className="px-2 py-1 text-[10px] uppercase font-bold tracking-wider border-b cursor-pointer flex items-center"
-              style={{ color: "var(--accent)", borderColor: "var(--border)", background: "var(--bg-secondary)" }}
+              style={{ color: "var(--success)", borderColor: "var(--border)", background: "var(--bg-secondary)" }}
               onClick={() => setAttrsOpen((o) => !o)}
             >
               <span className="flex-1">Attributes ({attrEntries.length})</span>
@@ -209,7 +209,7 @@ export default function SpanDetails({ span }: Props) {
         {/* Identifiers — collapsible */}
         <div
           className="px-2 py-1 text-[10px] uppercase font-bold tracking-wider border-b cursor-pointer flex items-center"
-          style={{ color: "var(--accent)", borderColor: "var(--border)", background: "var(--bg-secondary)" }}
+          style={{ color: "var(--success)", borderColor: "var(--border)", background: "var(--bg-secondary)" }}
           onClick={() => setIdsOpen((o) => !o)}
         >
           <span className="flex-1">Identifiers ({ids.length})</span>

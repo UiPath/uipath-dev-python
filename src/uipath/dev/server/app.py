@@ -8,7 +8,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse
 
 from uipath.dev.server import UiPathDeveloperServer
 
@@ -108,25 +108,6 @@ def create_app(server: UiPathDeveloperServer) -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Favicon — UiPath orange branded icon
-    _favicon_svg = (
-        '<?xml version="1.0" encoding="UTF-8"?>'
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
-        '<rect width="32" height="32" rx="6" fill="#FA4616"/>'
-        '<text x="16" y="24" font-size="22" text-anchor="middle" fill="#FFFFFF" '
-        'font-family="system-ui, -apple-system, sans-serif" font-weight="700">U</text>'
-        "</svg>"
-    )
-    _favicon_bytes = _favicon_svg.encode("utf-8")
-
-    @app.get("/favicon.ico", include_in_schema=False)
-    async def _favicon_ico():
-        return Response(content=_favicon_bytes, media_type="image/svg+xml")
-
-    @app.get("/favicon.svg", include_in_schema=False)
-    async def _favicon_svg_route():
-        return Response(content=_favicon_bytes, media_type="image/svg+xml")
-
     # Store server reference on app state for route access
     app.state.server = server
 
@@ -136,10 +117,36 @@ def create_app(server: UiPathDeveloperServer) -> FastAPI:
         "no",
     )
 
+    # Read user's pyproject.toml from CWD (once at startup)
+    _user_project: dict[str, str | None] = {
+        "project_name": None,
+        "project_version": None,
+        "project_authors": None,
+    }
+    _pyproject_path = Path.cwd() / "pyproject.toml"
+    if _pyproject_path.is_file():
+        try:
+            import tomllib
+
+            with open(_pyproject_path, "rb") as f:
+                _pydata = tomllib.load(f)
+            _proj = _pydata.get("project", {})
+            _user_project["project_name"] = _proj.get("name")
+            _user_project["project_version"] = _proj.get("version")
+            _authors = _proj.get("authors")
+            if _authors and isinstance(_authors, list) and len(_authors) > 0:
+                _user_project["project_authors"] = (
+                    _authors[0].get("name")
+                    if isinstance(_authors[0], dict)
+                    else str(_authors[0])
+                )
+        except Exception:
+            pass
+
     # Config endpoint — tells the frontend which features are available
     @app.get("/api/config", include_in_schema=False)
     async def _config():
-        return {"auth_enabled": auth_enabled}
+        return {"auth_enabled": auth_enabled, **_user_project}
 
     # Register routes
     from uipath.dev.server.routes.entrypoints import router as entrypoints_router
