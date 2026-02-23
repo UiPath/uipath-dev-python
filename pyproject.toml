@@ -1,6 +1,6 @@
 [project]
 name = "uipath-dev"
-version = "0.0.59"
+version = "0.0.60"
 description = "UiPath Developer Console"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
@@ -57,6 +57,7 @@ dev = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/uipath"]
 artifacts = ["src/uipath/dev/server/static/**"]
+exclude = ["src/uipath/dev/server/frontend/**"]
 
 [tool.hatch.build.targets.sdist]
 exclude = ["demo"]
