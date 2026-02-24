@@ -286,19 +286,28 @@ class RunService:
                     run.status = "suspended"
                 elif result.status == UiPathRuntimeStatus.FAULTED.value:
                     run.status = "failed"
-                    run.error = result.error
-                    err = result.error
+                    if isinstance(result.error, UiPathErrorContract):
+                        run.error = result.error
+                    else:
+                        run.error = UiPathErrorContract(
+                            code="Unknown",
+                            title=str(result.error)
+                            if result.error
+                            else "Unknown error",
+                            detail="",
+                        )
+                    err = run.error
                     error_state = StateData(
                         run_id=run.id,
                         node_name="__error__",
                         payload={
                             "status": "failed",
-                            "code": err.code if err else "Unknown",
-                            "title": err.title if err else "Unknown error",
-                            "detail": err.detail if err else "",
+                            "code": err.code,
+                            "title": err.title,
+                            "detail": err.detail,
                             "category": err.category.value
-                            if err and hasattr(err.category, "value")
-                            else "Unknown",
+                            if hasattr(err.category, "value")
+                            else str(err.category),
                         },
                     )
                     run.states.append(error_state)
@@ -311,15 +320,21 @@ class RunService:
                     run.output_data = {}
                 elif isinstance(result.output, BaseModel):
                     run.output_data = result.output.model_dump()
-                else:
+                elif isinstance(result.output, (dict, list, str, int, float, bool)):
                     run.output_data = result.output
+                else:
+                    run.output_data = {"result": str(result.output)}
 
                 if run.output_data:
                     self._add_info_log(run, f"Execution result: {run.output_data}")
 
             if run.status == "failed":
-                err = run.error
-                detail = f"{err.title}: {err.detail}" if err else "Unknown error"
+                failed_err = run.error
+                detail = (
+                    f"{failed_err.title}: {failed_err.detail}"
+                    if failed_err
+                    else "Unknown error"
+                )
                 self._add_error_log(run, detail)
             else:
                 self._add_info_log(run, "✅ Execution completed successfully")

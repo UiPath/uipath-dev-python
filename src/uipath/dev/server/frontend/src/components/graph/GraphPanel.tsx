@@ -361,10 +361,9 @@ interface Props {
   breakpointNode?: string | null;
   breakpointNextNodes?: string[];
   onBreakpointChange?: (breakpoints: string[]) => void;
-  fitViewTrigger?: number;
 }
 
-export default function GraphPanel({ entrypoint, runId, breakpointNode, breakpointNextNodes, onBreakpointChange, fitViewTrigger }: Props) {
+export default function GraphPanel({ entrypoint, runId, breakpointNode, breakpointNextNodes, onBreakpointChange }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [loading, setLoading] = useState(true);
@@ -676,12 +675,17 @@ export default function GraphPanel({ entrypoint, runId, breakpointNode, breakpoi
     return () => clearTimeout(t);
   }, [runId]);
 
-  // Fit view when parent container is resized (drag handles)
+  // Fit view when parent container is resized (any drag handle or window resize)
+  const containerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (fitViewTrigger) {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
       rfInstance.current?.fitView({ padding: 0.1, duration: 200 });
-    }
-  }, [fitViewTrigger]);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [loading, graphUnavailable]);
 
   // Update node status from state events (uses qualified_node_name for precise subgraph matching)
   useEffect(() => {
@@ -821,7 +825,7 @@ export default function GraphPanel({ entrypoint, runId, breakpointNode, breakpoi
   }
 
   return (
-    <div className="h-full graph-panel">
+    <div ref={containerRef} className="h-full graph-panel">
       <style>{`
         .graph-panel .react-flow__handle {
           opacity: 0 !important;

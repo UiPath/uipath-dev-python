@@ -8,6 +8,7 @@ import LogPanel from "../logs/LogPanel";
 const ChatPanel = lazy(() => import("../chat/ChatPanel"));
 import RunEventsPanel from "./RunEventsPanel";
 import JsonHighlight from "../shared/JsonHighlight";
+import DataSection from "../shared/DataSection";
 import DebugControls from "../debug/DebugControls";
 
 type SidebarTab = "primary" | "events" | "io" | "logs";
@@ -34,7 +35,7 @@ export default function RunDetailsPanel({ run, ws, isMobile }: Props) {
   });
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("primary");
   const [mobileTab, setMobileTab] = useState<MobileTab>(isChatMode ? "primary" : "traces");
-  const [fitViewTrigger, setFitViewTrigger] = useState(0);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const outerRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
@@ -83,7 +84,7 @@ export default function RunDetailsPanel({ run, ws, isMobile }: Props) {
       document.removeEventListener("touchend", onUp);
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
-      setFitViewTrigger((n) => n + 1);
+
     };
 
     document.body.style.cursor = "row-resize";
@@ -117,7 +118,7 @@ export default function RunDetailsPanel({ run, ws, isMobile }: Props) {
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
       localStorage.setItem("chatPanelWidth", String(sidebarWidth));
-      setFitViewTrigger((n) => n + 1);
+
     };
 
     document.body.style.cursor = "col-resize";
@@ -140,7 +141,7 @@ export default function RunDetailsPanel({ run, ws, isMobile }: Props) {
   const statusIndicator =
     run.status === "running" ? (
       <span
-        className="ml-auto text-[10px] px-2 py-0.5 rounded-full shrink-0"
+        className="ml-auto text-[11px] px-2 py-0.5 rounded-full shrink-0"
         style={{
           background: "color-mix(in srgb, var(--warning) 15%, var(--bg-secondary))",
           color: "var(--warning)",
@@ -150,7 +151,7 @@ export default function RunDetailsPanel({ run, ws, isMobile }: Props) {
       </span>
     ) : isChatMode && run.status === "suspended" && interrupt ? (
       <span
-        className="ml-auto text-[10px] px-2 py-0.5 rounded-full shrink-0"
+        className="ml-auto text-[11px] px-2 py-0.5 rounded-full shrink-0"
         style={{
           background: "color-mix(in srgb, var(--warning) 15%, var(--bg-secondary))",
           color: "var(--warning)",
@@ -178,7 +179,7 @@ export default function RunDetailsPanel({ run, ws, isMobile }: Props) {
         )}
         {/* Graph panel — fixed height */}
         <div className="shrink-0" style={{ height: "40vh" }}>
-          <GraphPanel entrypoint={run.entrypoint} traces={traces} runId={run.id} breakpointNode={run.breakpoint_node} breakpointNextNodes={run.breakpoint_next_nodes} onBreakpointChange={handleBreakpointChange} fitViewTrigger={fitViewTrigger} />
+          <GraphPanel entrypoint={run.entrypoint} traces={traces} runId={run.id} breakpointNode={run.breakpoint_node} breakpointNextNodes={run.breakpoint_next_nodes} onBreakpointChange={handleBreakpointChange} />
         </div>
         {/* Tab bar */}
         <div
@@ -189,7 +190,7 @@ export default function RunDetailsPanel({ run, ws, isMobile }: Props) {
             <button
               key={tab.id}
               onClick={() => setMobileTab(tab.id)}
-              className="px-2 py-0.5 h-5 text-[11px] uppercase tracking-wider font-semibold rounded transition-colors cursor-pointer"
+              className="px-2.5 py-1 h-7 text-xs font-semibold rounded transition-colors cursor-pointer"
               style={{
                 color:
                   mobileTab === tab.id
@@ -261,17 +262,15 @@ export default function RunDetailsPanel({ run, ws, isMobile }: Props) {
           <DebugControls runId={run.id} status={run.status} ws={ws} breakpointNode={run.breakpoint_node} />
         )}
         {/* Graph panel — resizable */}
-        <div className="shrink-0" style={{ height: graphHeight }}>
-          <GraphPanel entrypoint={run.entrypoint} traces={traces} runId={run.id} breakpointNode={run.breakpoint_node} breakpointNextNodes={run.breakpoint_next_nodes} onBreakpointChange={handleBreakpointChange} fitViewTrigger={fitViewTrigger} />
+        <div className="shrink-0 overflow-hidden" style={{ height: graphHeight }}>
+          <GraphPanel entrypoint={run.entrypoint} traces={traces} runId={run.id} breakpointNode={run.breakpoint_node} breakpointNextNodes={run.breakpoint_next_nodes} onBreakpointChange={handleBreakpointChange} />
         </div>
         {/* Drag handle */}
         <div
           onMouseDown={onResizeStart}
           onTouchStart={onResizeStart}
-          className="shrink-0 h-1.5 cursor-row-resize bg-[var(--border)] hover:bg-[var(--accent)] transition-colors relative"
-        >
-          <div className="absolute inset-0 -top-1 -bottom-1" />
-        </div>
+          className="shrink-0 drag-handle-row"
+        />
         {/* Trace tree */}
         <div className="flex-1 overflow-hidden">
           <TraceTree traces={traces} />
@@ -282,10 +281,8 @@ export default function RunDetailsPanel({ run, ws, isMobile }: Props) {
       <div
         onMouseDown={onSidebarResizeStart}
         onTouchStart={onSidebarResizeStart}
-        className="shrink-0 w-1.5 cursor-col-resize bg-[var(--border)] hover:bg-[var(--accent)] transition-colors relative"
-      >
-        <div className="absolute inset-0 -left-1 -right-1" />
-      </div>
+        className="shrink-0 drag-handle-col"
+      />
 
       {/* Sidebar */}
       <div
@@ -301,7 +298,7 @@ export default function RunDetailsPanel({ run, ws, isMobile }: Props) {
             <button
               key={tab.id}
               onClick={() => setSidebarTab(tab.id)}
-              className="px-2 py-0.5 h-5 text-[11px] uppercase tracking-wider font-semibold rounded transition-colors cursor-pointer"
+              className="px-2.5 py-1 h-7 text-xs font-semibold rounded transition-colors cursor-pointer"
               style={{
                 color:
                   sidebarTab === tab.id
@@ -363,38 +360,35 @@ export default function RunDetailsPanel({ run, ws, isMobile }: Props) {
 
 function IOView({ run }: { run: RunSummary }) {
   return (
-    <div className="p-4 overflow-y-auto h-full space-y-4">
-      <DataSection title="Input" color="var(--success)" copyText={JSON.stringify(run.input_data, null, 2)}>
+    <div className="p-2 overflow-y-auto h-full space-y-1.5">
+      <DataSection title="Input" copyText={JSON.stringify(run.input_data, null, 2)}>
         <JsonHighlight
           json={JSON.stringify(run.input_data, null, 2)}
-          className="p-3 rounded-lg text-xs font-mono whitespace-pre-wrap break-words"
-          style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)" }}
+          className="px-3 py-2 text-xs font-mono whitespace-pre-wrap break-words"
         />
       </DataSection>
 
       {run.output_data && (
         <DataSection
           title="Output"
-          color="var(--accent)"
           copyText={typeof run.output_data === "string" ? run.output_data : JSON.stringify(run.output_data, null, 2)}
         >
           <JsonHighlight
             json={typeof run.output_data === "string"
               ? run.output_data
               : JSON.stringify(run.output_data, null, 2)}
-            className="p-3 rounded-lg text-xs font-mono whitespace-pre-wrap break-words"
-            style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)" }}
+            className="px-3 py-2 text-xs font-mono whitespace-pre-wrap break-words"
           />
         </DataSection>
       )}
 
       {run.error && (
         <div
-          className="rounded-lg overflow-hidden"
+          className="overflow-hidden"
           style={{ border: "1px solid color-mix(in srgb, var(--error) 40%, var(--border))" }}
         >
           <div
-            className="px-4 py-2 text-xs font-semibold flex items-center gap-2"
+            className="px-3 py-2 text-xs font-semibold flex items-center gap-2"
             style={{
               background: "color-mix(in srgb, var(--error) 15%, var(--bg-secondary))",
               color: "var(--error)",
@@ -414,7 +408,7 @@ function IOView({ run }: { run: RunSummary }) {
               {run.error.category}
             </span>
           </div>
-          <div className="p-4 text-xs leading-normal" style={{ background: "var(--bg-secondary)" }}>
+          <div className="px-3 py-2 text-xs leading-normal">
             <div className="font-semibold mb-2" style={{ color: "var(--text-primary)" }}>
               {run.error.title}
             </div>
@@ -431,49 +425,3 @@ function IOView({ run }: { run: RunSummary }) {
   );
 }
 
-function DataSection({
-  title,
-  color,
-  copyText,
-  children,
-}: {
-  title: string;
-  color: string;
-  copyText?: string;
-  children: React.ReactNode;
-}) {
-  const [copied, setCopied] = useState(false);
-
-  const copy = useCallback(() => {
-    if (!copyText) return;
-    navigator.clipboard.writeText(copyText).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  }, [copyText]);
-
-  return (
-    <div>
-      <div className="flex items-center gap-2 mb-2">
-        <div className="w-1 h-4 rounded-full" style={{ background: color }} />
-        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color }}>{title}</span>
-        {copyText && (
-          <button
-            onClick={copy}
-            className="ml-auto text-[10px] cursor-pointer px-1.5 py-0.5 rounded transition-colors"
-            style={{
-              color: copied ? "var(--success)" : "var(--text-muted)",
-              background: "var(--bg-secondary)",
-              border: "1px solid var(--border)",
-            }}
-            onMouseEnter={(e) => { if (!copied) e.currentTarget.style.color = "var(--text-primary)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = copied ? "var(--success)" : "var(--text-muted)"; }}
-          >
-            {copied ? "Copied" : "Copy"}
-          </button>
-        )}
-      </div>
-      {children}
-    </div>
-  );
-}

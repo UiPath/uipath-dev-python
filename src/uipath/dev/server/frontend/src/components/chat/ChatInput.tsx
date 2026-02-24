@@ -36,13 +36,14 @@ export default function ChatInput({ onSend, disabled, placeholder }: Props) {
         onKeyDown={handleKeyDown}
         disabled={disabled}
         placeholder={placeholder ?? "Message..."}
-        className="flex-1 bg-transparent text-sm py-1 focus:outline-none disabled:opacity-40 placeholder:text-[var(--text-muted)]"
+        className="flex-1 bg-transparent text-sm py-1 disabled:opacity-40 placeholder:text-[var(--text-muted)]"
         style={{ color: "var(--text-primary)" }}
       />
       <button
         onClick={handleSubmit}
         disabled={!canSend}
-        className="text-[11px] uppercase tracking-wider font-semibold px-2 py-1 rounded transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+        className="text-xs font-semibold px-3 py-1.5 rounded transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+        aria-label="Send message"
         style={{
           color: canSend ? "var(--accent)" : "var(--text-muted)",
           background: "transparent",

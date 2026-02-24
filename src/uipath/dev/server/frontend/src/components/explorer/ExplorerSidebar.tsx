@@ -1,0 +1,147 @@
+import { useEffect, useCallback } from "react";
+import { useExplorerStore } from "../../store/useExplorerStore";
+import { useHashRoute } from "../../hooks/useHashRoute";
+import { listDirectory } from "../../api/explorer-client";
+
+function FileTreeNode({ path, name, type, depth }: {
+  path: string;
+  name: string;
+  type: "file" | "directory";
+  depth: number;
+}) {
+  const children = useExplorerStore((s) => s.children[path]);
+  const isExpanded = useExplorerStore((s) => !!s.expanded[path]);
+  const isLoading = useExplorerStore((s) => !!s.loadingDirs[path]);
+  const isDirty = useExplorerStore((s) => !!s.dirty[path]);
+  const selectedFile = useExplorerStore((s) => s.selectedFile);
+  const { setChildren, toggleExpanded, setLoadingDir, openTab } = useExplorerStore();
+  const { navigate } = useHashRoute();
+
+  const isDir = type === "directory";
+  const isSelected = !isDir && selectedFile === path;
+
+  const handleClick = useCallback(() => {
+    if (isDir) {
+      if (!children && !isLoading) {
+        setLoadingDir(path, true);
+        listDirectory(path)
+          .then((entries) => setChildren(path, entries))
+          .catch(console.error)
+          .finally(() => setLoadingDir(path, false));
+      }
+      toggleExpanded(path);
+    } else {
+      openTab(path);
+      navigate(`#/explorer/file/${encodeURIComponent(path)}`);
+    }
+  }, [isDir, children, isLoading, path, setChildren, toggleExpanded, setLoadingDir, openTab, navigate]);
+
+  return (
+    <>
+      <button
+        onClick={handleClick}
+        className="w-full text-left flex items-center gap-1 py-[3px] text-[13px] cursor-pointer transition-colors group"
+        style={{
+          paddingLeft: `${12 + depth * 16}px`,
+          paddingRight: "8px",
+          background: isSelected
+            ? "color-mix(in srgb, var(--accent) 15%, var(--bg-primary))"
+            : "transparent",
+          color: isSelected ? "var(--text-primary)" : "var(--text-secondary)",
+          border: "none",
+        }}
+        onMouseEnter={(e) => {
+          if (!isSelected) e.currentTarget.style.background = "var(--bg-hover)";
+        }}
+        onMouseLeave={(e) => {
+          if (!isSelected) e.currentTarget.style.background = "transparent";
+        }}
+      >
+        {/* Chevron / spacer */}
+        <span className="w-3 shrink-0 flex items-center justify-center" style={{ color: "var(--text-muted)" }}>
+          {isDir && (
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 10 10"
+              fill="currentColor"
+              style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s" }}
+            >
+              <path d="M3 1.5L7 5L3 8.5z" />
+            </svg>
+          )}
+        </span>
+        {/* Icon */}
+        <span className="shrink-0" style={{ color: isDir ? "var(--accent)" : "var(--text-muted)" }}>
+          {isDir ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+            </svg>
+          )}
+        </span>
+        {/* Label */}
+        <span className="truncate flex-1">{name}</span>
+        {/* Dirty dot */}
+        {isDirty && (
+          <span
+            className="w-2 h-2 rounded-full shrink-0"
+            style={{ background: "var(--accent)" }}
+          />
+        )}
+        {isLoading && (
+          <span className="text-[10px] shrink-0" style={{ color: "var(--text-muted)" }}>...</span>
+        )}
+      </button>
+      {isDir && isExpanded && children && (
+        children.map((child) => (
+          <FileTreeNode
+            key={child.path}
+            path={child.path}
+            name={child.name}
+            type={child.type}
+            depth={depth + 1}
+          />
+        ))
+      )}
+    </>
+  );
+}
+
+export default function ExplorerSidebar() {
+  const rootChildren = useExplorerStore((s) => s.children[""]);
+  const { setChildren } = useExplorerStore();
+
+  // Load root directory on mount
+  useEffect(() => {
+    if (!rootChildren) {
+      listDirectory("")
+        .then((entries) => setChildren("", entries))
+        .catch(console.error);
+    }
+  }, [rootChildren, setChildren]);
+
+  return (
+    <div className="flex-1 overflow-y-auto py-1">
+      {rootChildren ? (
+        rootChildren.map((entry) => (
+          <FileTreeNode
+            key={entry.path}
+            path={entry.path}
+            name={entry.name}
+            type={entry.type}
+            depth={0}
+          />
+        ))
+      ) : (
+        <p className="text-[11px] px-3 py-2" style={{ color: "var(--text-muted)" }}>
+          Loading...
+        </p>
+      )}
+    </div>
+  );
+}

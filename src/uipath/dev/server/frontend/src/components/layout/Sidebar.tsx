@@ -62,7 +62,7 @@ export default function Sidebar({ runs, selectedRunId, onSelectRun, onNewRun, is
           {/* New Run */}
           <button
             onClick={onNewRun}
-            className="mx-3 mt-2.5 mb-1 px-2 py-1.5 text-[10px] uppercase tracking-wider font-semibold rounded border border-[var(--border)] bg-transparent transition-colors cursor-pointer"
+            className="mx-3 mt-2.5 mb-1 px-2 py-1.5 text-[11px] font-medium rounded border border-[var(--border)] bg-transparent transition-colors cursor-pointer"
             style={{ color: "var(--text-muted)" }}
           >
             + New Run
@@ -120,7 +120,7 @@ export default function Sidebar({ runs, selectedRunId, onSelectRun, onNewRun, is
       {/* New Run */}
       <button
         onClick={onNewRun}
-        className="mx-3 mt-2.5 mb-1 px-2 py-1 text-[10px] uppercase tracking-wider font-semibold rounded border border-[var(--border)] bg-transparent transition-colors cursor-pointer"
+        className="mx-3 mt-2.5 mb-1 px-2 py-1 text-[11px] font-medium rounded border border-[var(--border)] bg-transparent transition-colors cursor-pointer"
         style={{ color: "var(--text-muted)" }}
         onMouseEnter={(e) => {
           e.currentTarget.style.color = "var(--text-primary)";

@@ -16,6 +16,7 @@
     "reactflow": "^11.11.4",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
+    "@monaco-editor/react": "^4.7.0",
     "zustand": "^5.0.0"
   },
   "devDependencies": {

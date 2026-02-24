@@ -114,14 +114,14 @@ export default function StatusBar() {
           {popoverOpen && (
             <div
               ref={popoverRef}
-              className="absolute bottom-full right-0 mb-1 rounded border shadow-lg p-1 min-w-[160px]"
+              className="absolute bottom-full right-0 mb-1 rounded border shadow-lg p-1 min-w-[180px]"
               style={{ background: "var(--bg-secondary)", borderColor: "var(--border)" }}
             >
               {(isAuthenticated || isExpired) ? (
                 <>
                   <button
                     onClick={() => { if (uipathUrl) window.open(uipathUrl, "_blank", "noopener,noreferrer"); setPopoverOpen(false); }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 text-[11px] rounded cursor-pointer transition-colors text-left"
+                    className="w-full flex items-center gap-2 px-2 py-2 text-[11px] rounded cursor-pointer transition-colors text-left"
                     style={{ color: "var(--text-muted)", background: "transparent", border: "none" }}
                     onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text-primary)"; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-muted)"; }}
@@ -135,7 +135,7 @@ export default function StatusBar() {
                   </button>
                   <button
                     onClick={() => { logout(); setPopoverOpen(false); }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 text-[11px] rounded cursor-pointer transition-colors text-left"
+                    className="w-full flex items-center gap-2 px-2 py-2 text-[11px] rounded cursor-pointer transition-colors text-left"
                     style={{ color: "var(--text-muted)", background: "transparent", border: "none" }}
                     onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text-primary)"; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-muted)"; }}
@@ -150,7 +150,7 @@ export default function StatusBar() {
                 </>
               ) : needsTenant ? (
                 <div className="p-1">
-                  <label className="block text-[10px] uppercase tracking-wider font-semibold mb-1" style={{ color: "var(--text-muted)" }}>Tenant</label>
+                  <label className="block text-[10px] font-medium mb-1" style={{ color: "var(--text-muted)" }}>Tenant</label>
                   <select
                     value={selectedTenant}
                     onChange={(e) => setSelectedTenant(e.target.value)}
@@ -163,7 +163,7 @@ export default function StatusBar() {
                   <button
                     onClick={() => { if (selectedTenant) { selectTenant(selectedTenant); setPopoverOpen(false); } }}
                     disabled={!selectedTenant}
-                    className="w-full px-2 py-1 text-[10px] uppercase tracking-wider font-semibold rounded border border-[var(--border)] bg-transparent cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="w-full px-2 py-1 text-[10px] font-medium rounded border border-[var(--border)] bg-transparent cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                     style={{ color: "var(--text-muted)" }}
                   >
                     Confirm
@@ -171,7 +171,7 @@ export default function StatusBar() {
                 </div>
               ) : (
                 <div className="p-1">
-                  <label className="block text-[10px] uppercase tracking-wider font-semibold mb-1" style={{ color: "var(--text-muted)" }}>Environment</label>
+                  <label className="block text-[10px] font-medium mb-1" style={{ color: "var(--text-muted)" }}>Environment</label>
                   <select
                     value={environment}
                     onChange={(e) => setEnvironment(e.target.value as "cloud" | "staging" | "alpha")}
@@ -184,7 +184,7 @@ export default function StatusBar() {
                   </select>
                   <button
                     onClick={() => { startLogin(); setPopoverOpen(false); }}
-                    className="w-full px-2 py-1 text-[10px] uppercase tracking-wider font-semibold rounded border border-[var(--border)] bg-transparent cursor-pointer transition-colors"
+                    className="w-full px-2 py-1 text-[10px] font-medium rounded border border-[var(--border)] bg-transparent cursor-pointer transition-colors"
                     style={{ color: "var(--text-muted)" }}
                     onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; e.currentTarget.style.borderColor = "var(--text-muted)"; }}
                     onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.borderColor = "var(--border)"; }}

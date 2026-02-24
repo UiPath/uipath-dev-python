@@ -49,7 +49,7 @@ export default function NewRunPanel() {
               style={{ background: entrypointError ? "var(--error)" : "var(--accent)" }}
             />
             <span
-              className="text-xs uppercase tracking-widest font-semibold"
+              className="text-sm font-semibold"
               style={{ color: "var(--text-muted)" }}
             >
               New Run
@@ -66,7 +66,7 @@ export default function NewRunPanel() {
         {entrypoints.length > 1 && (
           <div className="mb-8">
             <label
-              className="block text-[10px] uppercase tracking-wider font-semibold mb-2"
+              className="block text-[11px] font-medium mb-1.5"
               style={{ color: "var(--text-muted)" }}
             >
               Entrypoint
@@ -75,7 +75,7 @@ export default function NewRunPanel() {
               id="entrypoint-select"
               value={selectedEp}
               onChange={(e) => setSelectedEp(e.target.value)}
-              className="w-full rounded-md px-3 py-1.5 text-xs font-mono cursor-pointer appearance-auto"
+              className="w-full rounded-md px-3 py-2 text-xs font-mono cursor-pointer appearance-auto"
               style={{
                 background: "var(--bg-secondary)",
                 border: "1px solid var(--border)",
@@ -174,7 +174,7 @@ function ModeCard({
     <button
       onClick={onClick}
       disabled={disabled}
-      className="group flex flex-col items-center text-center p-6 rounded-lg border transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+      className="group flex flex-col items-center text-center p-6 rounded-md border transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
       style={{
         background: "var(--bg-secondary)",
         borderColor: "var(--border)",

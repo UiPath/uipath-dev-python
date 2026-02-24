@@ -149,7 +149,11 @@ def create_app(server: UiPathDeveloperServer) -> FastAPI:
         return {"auth_enabled": auth_enabled, **_user_project}
 
     # Register routes
+    from uipath.dev.server.routes.agent import router as agent_router
     from uipath.dev.server.routes.entrypoints import router as entrypoints_router
+    from uipath.dev.server.routes.evals import router as evals_router
+    from uipath.dev.server.routes.evaluators import router as evaluators_router
+    from uipath.dev.server.routes.files import router as files_router
     from uipath.dev.server.routes.graph import router as graph_router
     from uipath.dev.server.routes.reload import router as reload_router
     from uipath.dev.server.routes.runs import router as runs_router
@@ -166,6 +170,10 @@ def create_app(server: UiPathDeveloperServer) -> FastAPI:
     app.include_router(runs_router, prefix="/api")
     app.include_router(graph_router, prefix="/api")
     app.include_router(reload_router, prefix="/api")
+    app.include_router(evaluators_router, prefix="/api")
+    app.include_router(evals_router, prefix="/api")
+    app.include_router(agent_router, prefix="/api")
+    app.include_router(files_router, prefix="/api")
     app.include_router(ws_router)
 
     # Auto-build frontend if source is available and build is stale

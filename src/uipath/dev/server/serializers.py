@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from uipath.dev.models.data import (
@@ -12,6 +13,22 @@ from uipath.dev.models.data import (
     TraceData,
 )
 from uipath.dev.models.execution import ExecutionRun
+
+
+def _sanitize(obj: Any) -> Any:
+    """Ensure a value is JSON-serializable, converting non-serializable objects to str."""
+    if obj is None or isinstance(obj, (str, int, float, bool)):
+        return obj
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_sanitize(v) for v in obj]
+    # Catch-all: try json.dumps; if it fails, stringify
+    try:
+        json.dumps(obj)
+        return obj
+    except (TypeError, ValueError):
+        return str(obj)
 
 
 def serialize_log(log_data: LogData) -> dict[str, Any]:
@@ -35,7 +52,7 @@ def serialize_trace(trace_data: TraceData) -> dict[str, Any]:
         "status": trace_data.status,
         "duration_ms": trace_data.duration_ms,
         "timestamp": trace_data.timestamp.isoformat(),
-        "attributes": trace_data.attributes,
+        "attributes": _sanitize(trace_data.attributes),
     }
 
 
@@ -65,7 +82,7 @@ def serialize_state(state_data: StateData) -> dict[str, Any]:
     if state_data.phase is not None:
         result["phase"] = state_data.phase
     if state_data.payload is not None:
-        result["payload"] = state_data.payload
+        result["payload"] = _sanitize(state_data.payload)
     return result
 
 
@@ -81,11 +98,11 @@ def serialize_interrupt(interrupt_data: InterruptData) -> dict[str, Any]:
     if interrupt_data.tool_name is not None:
         result["tool_name"] = interrupt_data.tool_name
     if interrupt_data.input_schema is not None:
-        result["input_schema"] = interrupt_data.input_schema
+        result["input_schema"] = _sanitize(interrupt_data.input_schema)
     if interrupt_data.input_value is not None:
-        result["input_value"] = interrupt_data.input_value
+        result["input_value"] = _sanitize(interrupt_data.input_value)
     if interrupt_data.content is not None:
-        result["content"] = interrupt_data.content
+        result["content"] = _sanitize(interrupt_data.content)
     return result
 
 
@@ -100,7 +117,7 @@ def serialize_run(run: ExecutionRun) -> dict[str, Any]:
         "start_time": run.start_time.isoformat() if run.start_time else None,
         "end_time": run.end_time.isoformat() if run.end_time else None,
         "duration": run.duration,
-        "output_data": run.output_data,
+        "output_data": _sanitize(run.output_data),
         "error": (
             {
                 "code": run.error.code,

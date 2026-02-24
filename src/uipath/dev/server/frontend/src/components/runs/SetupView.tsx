@@ -21,7 +21,7 @@ export default function SetupView({ entrypoint, mode, ws, onRunCreated, isMobile
   const [loadingSchema, setLoadingSchema] = useState(true);
   const [schemaError, setSchemaError] = useState<string | null>(null);
   const [chatText, setChatText] = useState("");
-  const [fitViewTrigger, setFitViewTrigger] = useState(0);
+
   const [jsonValid, setJsonValid] = useState(true);
   const [textareaHeight, setTextareaHeight] = useState(() => {
     const saved = localStorage.getItem("setupTextareaHeight");
@@ -183,7 +183,6 @@ export default function SetupView({ entrypoint, mode, ws, onRunCreated, isMobile
         document.body.style.cursor = "";
         document.body.style.userSelect = "";
         localStorage.setItem("setupPanelWidth", String(panelWidth));
-        setFitViewTrigger((n) => n + 1);
       };
 
       document.body.style.cursor = "col-resize";
@@ -204,7 +203,7 @@ export default function SetupView({ entrypoint, mode, ws, onRunCreated, isMobile
     <div className="shrink-0 flex flex-col" style={isMobile ? { background: "var(--bg-primary)" } : { width: panelWidth, background: "var(--bg-primary)" }}>
       {/* Header */}
       <div
-        className="px-4 text-xs font-semibold uppercase tracking-wider border-b flex items-center gap-2 h-[33px]"
+        className="px-4 text-xs font-semibold border-b flex items-center gap-2 h-10"
         style={{
           color: "var(--text-muted)",
           borderColor: "var(--border)",
@@ -264,7 +263,7 @@ export default function SetupView({ entrypoint, mode, ws, onRunCreated, isMobile
             <div
               onMouseDown={onTextareaDragStart}
               onTouchStart={onTextareaDragStart}
-              className="shrink-0 h-1.5 cursor-row-resize bg-[var(--border)] hover:bg-[var(--accent)] transition-colors"
+              className="shrink-0 drag-handle-row"
             />
           )}
         <div className="px-4 py-3">
@@ -282,7 +281,7 @@ export default function SetupView({ entrypoint, mode, ws, onRunCreated, isMobile
           ) : (
             <>
               <label
-                className="block text-[10px] uppercase tracking-wider font-semibold mb-2"
+                className="block text-[11px] font-medium mb-1.5"
                 style={{ color: "var(--text-muted)" }}
               >
                 Input
@@ -294,7 +293,7 @@ export default function SetupView({ entrypoint, mode, ws, onRunCreated, isMobile
                 value={inputJson}
                 onChange={(e) => setInputJson(e.target.value)}
                 spellCheck={false}
-                className="w-full rounded-md px-3 py-2 text-xs font-mono leading-relaxed resize-none focus:outline-none mb-3"
+                className="w-full rounded-md px-3 py-2 text-xs font-mono leading-relaxed resize-none mb-3"
                 style={{
                   height: isMobile ? 120 : textareaHeight,
                   background: "var(--bg-secondary)",
@@ -358,13 +357,13 @@ export default function SetupView({ entrypoint, mode, ws, onRunCreated, isMobile
             }}
             disabled={loading || loadingSchema}
             placeholder={loading ? "Starting..." : "Message..."}
-            className="flex-1 bg-transparent text-sm py-1 focus:outline-none disabled:opacity-40 placeholder:text-[var(--text-muted)]"
+            className="flex-1 bg-transparent text-sm py-1 disabled:opacity-40 placeholder:text-[var(--text-muted)]"
             style={{ color: "var(--text-primary)" }}
           />
           <button
             onClick={handleChatSend}
             disabled={loading || loadingSchema || !chatText.trim()}
-            className="text-[11px] uppercase tracking-wider font-semibold px-2 py-1 rounded transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+            className="text-xs font-semibold px-3 py-1.5 rounded transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
             style={{
               color:
                 !loading && chatText.trim()
@@ -399,7 +398,7 @@ export default function SetupView({ entrypoint, mode, ws, onRunCreated, isMobile
             entrypoint={entrypoint}
             traces={[]}
             runId={SETUP_RUN_ID}
-            fitViewTrigger={fitViewTrigger}
+
           />
         </div>
         {/* Input panel below — scrollable */}
@@ -419,7 +418,6 @@ export default function SetupView({ entrypoint, mode, ws, onRunCreated, isMobile
           entrypoint={entrypoint}
           traces={[]}
           runId={SETUP_RUN_ID}
-          fitViewTrigger={fitViewTrigger}
         />
       </div>
 
@@ -427,10 +425,8 @@ export default function SetupView({ entrypoint, mode, ws, onRunCreated, isMobile
       <div
         onMouseDown={onPanelResizeStart}
         onTouchStart={onPanelResizeStart}
-        className="shrink-0 w-1.5 cursor-col-resize bg-[var(--border)] hover:bg-[var(--accent)] transition-colors relative"
-      >
-        <div className="absolute inset-0 -left-1 -right-1" />
-      </div>
+        className="shrink-0 drag-handle-col"
+      />
 
       {/* Side panel */}
       {inputPanel}
