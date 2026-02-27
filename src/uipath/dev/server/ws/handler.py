@@ -91,6 +91,31 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     if run:
                         server.run_service.set_breakpoints(run, breakpoints)
 
+            elif command == ClientCommand.AGENT_MESSAGE.value:
+                text = payload.get("text", "")
+                model = payload.get("model", "")
+                session_id = payload.get("session_id") or None
+                skill_ids = payload.get("skill_ids") or None
+                if text and model:
+                    asyncio.create_task(
+                        server.agent_service.send_message(
+                            session_id, text, model, skill_ids=skill_ids
+                        )
+                    )
+
+            elif command == ClientCommand.AGENT_STOP.value:
+                session_id = payload.get("session_id", "")
+                if session_id:
+                    server.agent_service.stop_session(session_id)
+
+            elif command == ClientCommand.AGENT_TOOL_RESPONSE.value:
+                tool_call_id = payload.get("tool_call_id", "")
+                approved = payload.get("approved", False)
+                if tool_call_id:
+                    server.agent_service.resolve_tool_approval(
+                        tool_call_id, bool(approved)
+                    )
+
     except WebSocketDisconnect:
         manager.disconnect(websocket)
     except Exception:

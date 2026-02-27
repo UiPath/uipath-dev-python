@@ -1,0 +1,228 @@
+import { create } from "zustand";
+import type { AgentMessage, AgentPlanItem, AgentStatus, AgentModel, AgentSkill, AgentToolCall } from "../types/agent";
+
+let msgCounter = 0;
+function nextId() {
+  return `agent-msg-${++msgCounter}`;
+}
+
+interface AgentStore {
+  sessionId: string | null;
+  status: AgentStatus;
+  messages: AgentMessage[];
+  plan: AgentPlanItem[];
+  models: AgentModel[];
+  selectedModel: string | null;
+  modelsLoading: boolean;
+  skills: AgentSkill[];
+  selectedSkillIds: string[];
+  skillsLoading: boolean;
+
+  setStatus: (status: AgentStatus) => void;
+  addUserMessage: (text: string) => void;
+  appendAssistantText: (content: string, done: boolean) => void;
+  setPlan: (items: AgentPlanItem[]) => void;
+  addToolUse: (tool: string, args: Record<string, unknown>) => void;
+  addToolResult: (tool: string, result: string, isError: boolean) => void;
+  addToolApprovalRequest: (toolCallId: string, tool: string, args: Record<string, unknown>) => void;
+  resolveToolApproval: (toolCallId: string, approved: boolean) => void;
+  addError: (message: string) => void;
+  setSessionId: (id: string) => void;
+  setModels: (models: AgentModel[]) => void;
+  setSelectedModel: (model: string) => void;
+  setModelsLoading: (loading: boolean) => void;
+  setSkills: (skills: AgentSkill[]) => void;
+  setSelectedSkillIds: (ids: string[]) => void;
+  toggleSkill: (id: string) => void;
+  setSkillsLoading: (loading: boolean) => void;
+  clearSession: () => void;
+}
+
+export const useAgentStore = create<AgentStore>((set) => ({
+  sessionId: null,
+  status: "idle",
+  messages: [],
+  plan: [],
+  models: [],
+  selectedModel: null,
+  modelsLoading: false,
+  skills: [],
+  selectedSkillIds: [],
+  skillsLoading: false,
+
+  setStatus: (status) => set({ status }),
+
+  addUserMessage: (text) =>
+    set((state) => ({
+      messages: [
+        ...state.messages,
+        {
+          id: nextId(),
+          role: "user",
+          content: text,
+          timestamp: Date.now(),
+        },
+      ],
+    })),
+
+  appendAssistantText: (content, done) =>
+    set((state) => {
+      const msgs = [...state.messages];
+      const last = msgs[msgs.length - 1];
+      if (last && last.role === "assistant" && !last.done) {
+        // Append to existing assistant message
+        msgs[msgs.length - 1] = { ...last, content: last.content + content, done };
+      } else {
+        msgs.push({
+          id: nextId(),
+          role: "assistant",
+          content,
+          timestamp: Date.now(),
+          done,
+        });
+      }
+      return { messages: msgs };
+    }),
+
+  setPlan: (items) =>
+    set((state) => {
+      const msgs = [...state.messages];
+      // Find existing plan message and update it, or insert new one
+      const planIdx = msgs.findIndex((m) => m.role === "plan");
+      const planMsg: AgentMessage = {
+        id: planIdx >= 0 ? msgs[planIdx].id : nextId(),
+        role: "plan",
+        content: "",
+        timestamp: Date.now(),
+        planItems: items,
+      };
+      if (planIdx >= 0) {
+        msgs[planIdx] = planMsg;
+      } else {
+        msgs.push(planMsg);
+      }
+      return { messages: msgs, plan: items };
+    }),
+
+  addToolUse: (tool, args) =>
+    set((state) => {
+      const msgs = [...state.messages];
+      const last = msgs[msgs.length - 1];
+      const newCall: AgentToolCall = { tool, args };
+      // Merge into last tool message if it exists
+      if (last && last.role === "tool" && last.toolCalls) {
+        msgs[msgs.length - 1] = {
+          ...last,
+          toolCalls: [...last.toolCalls, newCall],
+        };
+      } else {
+        msgs.push({
+          id: nextId(),
+          role: "tool",
+          content: "",
+          timestamp: Date.now(),
+          toolCalls: [newCall],
+        });
+      }
+      return { messages: msgs };
+    }),
+
+  addToolResult: (tool, result, isError) =>
+    set((state) => {
+      const msgs = [...state.messages];
+      // Find last tool message, then find the last call with matching tool and no result
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        const msg = msgs[i];
+        if (msg.role === "tool" && msg.toolCalls) {
+          const calls = [...msg.toolCalls];
+          for (let j = calls.length - 1; j >= 0; j--) {
+            if (calls[j].tool === tool && calls[j].result === undefined) {
+              calls[j] = { ...calls[j], result, is_error: isError };
+              msgs[i] = { ...msg, toolCalls: calls };
+              return { messages: msgs };
+            }
+          }
+        }
+      }
+      return { messages: msgs };
+    }),
+
+  addToolApprovalRequest: (toolCallId, tool, args) =>
+    set((state) => {
+      const msgs = [...state.messages];
+      const newCall: AgentToolCall = { tool, args, tool_call_id: toolCallId, status: "pending" };
+      const last = msgs[msgs.length - 1];
+      if (last && last.role === "tool" && last.toolCalls) {
+        msgs[msgs.length - 1] = {
+          ...last,
+          toolCalls: [...last.toolCalls, newCall],
+        };
+      } else {
+        msgs.push({
+          id: nextId(),
+          role: "tool",
+          content: "",
+          timestamp: Date.now(),
+          toolCalls: [newCall],
+        });
+      }
+      return { messages: msgs };
+    }),
+
+  resolveToolApproval: (toolCallId, approved) =>
+    set((state) => {
+      const msgs = [...state.messages];
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        const msg = msgs[i];
+        if (msg.role === "tool" && msg.toolCalls) {
+          const calls = [...msg.toolCalls];
+          for (let j = calls.length - 1; j >= 0; j--) {
+            if (calls[j].tool_call_id === toolCallId) {
+              calls[j] = { ...calls[j], status: approved ? "approved" : "denied" };
+              msgs[i] = { ...msg, toolCalls: calls };
+              return { messages: msgs };
+            }
+          }
+        }
+      }
+      return { messages: msgs };
+    }),
+
+  addError: (message) =>
+    set((state) => ({
+      status: "error" as AgentStatus,
+      messages: [
+        ...state.messages,
+        {
+          id: nextId(),
+          role: "assistant",
+          content: `Error: ${message}`,
+          timestamp: Date.now(),
+          done: true,
+        },
+      ],
+    })),
+
+  setSessionId: (id) => set({ sessionId: id }),
+  setModels: (models) => set({ models }),
+  setSelectedModel: (model) => set({ selectedModel: model }),
+  setModelsLoading: (loading) => set({ modelsLoading: loading }),
+  setSkills: (skills) => set({ skills }),
+  setSelectedSkillIds: (ids) => set({ selectedSkillIds: ids }),
+  toggleSkill: (id) =>
+    set((state) => {
+      const selected = state.selectedSkillIds.includes(id)
+        ? state.selectedSkillIds.filter((s) => s !== id)
+        : [...state.selectedSkillIds, id];
+      return { selectedSkillIds: selected };
+    }),
+  setSkillsLoading: (loading) => set({ skillsLoading: loading }),
+
+  clearSession: () =>
+    set({
+      sessionId: null,
+      status: "idle",
+      messages: [],
+      plan: [],
+    }),
+}));

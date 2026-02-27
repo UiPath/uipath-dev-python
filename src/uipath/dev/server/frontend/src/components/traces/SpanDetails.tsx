@@ -91,7 +91,7 @@ function AttributeValue({ value }: { value: unknown }) {
       )}
       <button
         onClick={toggle}
-        className="text-[10px] cursor-pointer ml-1"
+        className="text-[11px] cursor-pointer ml-1 px-1"
         style={{ color: "var(--info)" }}
       >
         {expanded ? "[less]" : "[more]"}
@@ -127,11 +127,11 @@ export default function SpanDetails({ span }: Props) {
       {/* Header: tabs + status pill — fixed */}
       <div
         className="px-2 border-b flex items-center gap-1 shrink-0"
-        style={{ borderColor: "var(--border)", background: "var(--bg-secondary)", height: "28px" }}
+        style={{ borderColor: "var(--border)", background: "var(--bg-secondary)", height: "32px" }}
       >
         <button
           onClick={() => setDetailMode("table")}
-          className="px-2 h-[18px] text-[10px] uppercase tracking-wider font-semibold rounded transition-colors cursor-pointer inline-flex items-center"
+          className="px-2.5 h-6 text-[11px] font-semibold rounded transition-colors cursor-pointer inline-flex items-center"
           style={{
             color: detailMode === "table" ? "var(--accent)" : "var(--text-muted)",
             background: detailMode === "table" ? "color-mix(in srgb, var(--accent) 10%, transparent)" : "transparent",
@@ -143,7 +143,7 @@ export default function SpanDetails({ span }: Props) {
         </button>
         <button
           onClick={() => setDetailMode("json")}
-          className="px-2 h-[18px] text-[10px] uppercase tracking-wider font-semibold rounded transition-colors cursor-pointer inline-flex items-center"
+          className="px-2.5 h-6 text-[11px] font-semibold rounded transition-colors cursor-pointer inline-flex items-center"
           style={{
             color: detailMode === "json" ? "var(--accent)" : "var(--text-muted)",
             background: detailMode === "json" ? "color-mix(in srgb, var(--accent) 10%, transparent)" : "transparent",
@@ -154,7 +154,7 @@ export default function SpanDetails({ span }: Props) {
           JSON
         </button>
         <span
-          className="ml-auto shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"
+          className="ml-auto shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider"
           style={{
             background: `color-mix(in srgb, ${status.color} 15%, var(--bg-secondary))`,
             color: status.color,
@@ -173,7 +173,7 @@ export default function SpanDetails({ span }: Props) {
         {attrEntries.length > 0 && (
           <>
             <div
-              className="px-2 py-1 text-[10px] uppercase font-bold tracking-wider border-b cursor-pointer flex items-center"
+              className="px-2 py-1 text-[11px] uppercase font-bold tracking-wider border-b cursor-pointer flex items-center"
               style={{ color: "var(--success)", borderColor: "var(--border)", background: "var(--bg-secondary)" }}
               onClick={() => setAttrsOpen((o) => !o)}
             >
@@ -208,7 +208,7 @@ export default function SpanDetails({ span }: Props) {
 
         {/* Identifiers — collapsible */}
         <div
-          className="px-2 py-1 text-[10px] uppercase font-bold tracking-wider border-b cursor-pointer flex items-center"
+          className="px-2 py-1 text-[11px] uppercase font-bold tracking-wider border-b cursor-pointer flex items-center"
           style={{ color: "var(--success)", borderColor: "var(--border)", background: "var(--bg-secondary)" }}
           onClick={() => setIdsOpen((o) => !o)}
         >
@@ -245,7 +245,7 @@ export default function SpanDetails({ span }: Props) {
         <div className="relative">
           <button
             onClick={copySpanJson}
-            className="absolute top-1 right-1 z-10 text-[10px] cursor-pointer px-1.5 py-0.5 rounded transition-colors"
+            className="absolute top-1 right-1 z-10 text-[11px] cursor-pointer px-2 py-1 rounded transition-colors"
             style={{
               color: copied ? "var(--success)" : "var(--text-muted)",
               background: "var(--bg-secondary)",

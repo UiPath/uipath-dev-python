@@ -123,4 +123,25 @@ export class WsClient {
   setBreakpoints(runId: string, breakpoints: string[]): void {
     this.send("debug.set_breakpoints", { run_id: runId, breakpoints });
   }
+
+  sendAgentMessage(text: string, model: string, sessionId?: string | null, skillIds?: string[]): void {
+    this.send("agent.message", {
+      text,
+      model,
+      session_id: sessionId ?? undefined,
+      skill_ids: skillIds && skillIds.length > 0 ? skillIds : undefined,
+    });
+  }
+
+  sendAgentStop(sessionId: string): void {
+    this.send("agent.stop", { session_id: sessionId });
+  }
+
+  sendToolApproval(sessionId: string, toolCallId: string, approved: boolean): void {
+    this.send("agent.tool_response", {
+      session_id: sessionId,
+      tool_call_id: toolCallId,
+      approved,
+    });
+  }
 }

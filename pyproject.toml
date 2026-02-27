@@ -1,6 +1,6 @@
 [project]
 name = "uipath-dev"
-version = "0.0.60"
+version = "0.0.61"
 description = "UiPath Developer Console"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
@@ -10,6 +10,8 @@ dependencies = [
   "pyperclip>=1.11.0, <2.0.0",
   "fastapi>=0.128.8",
   "uvicorn[standard]>=0.40.0",
+  "uipath>=2.10.0, <2.11.0",
+  "openai",
 ]
 classifiers = [
   "Intended Audience :: Developers",

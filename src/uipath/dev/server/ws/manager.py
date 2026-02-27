@@ -15,6 +15,7 @@ from uipath.dev.models.data import (
     StateData,
     TraceData,
 )
+from uipath.dev.models.eval_data import EvalItemResult, EvalRunState
 from uipath.dev.models.execution import ExecutionRun
 from uipath.dev.server.serializers import (
     serialize_chat,
@@ -162,6 +163,141 @@ class ConnectionManager:
     def broadcast_reload(self, changed_files: list[str]) -> None:
         """Broadcast a reload event to all connected clients."""
         msg = server_message(ServerEvent.RELOAD, {"files": changed_files})
+        for ws in self._connections:
+            self._enqueue(ws, msg)
+
+    def broadcast_files_changed(self, changed_files: list[str]) -> None:
+        """Broadcast file changes for editor auto-refresh."""
+        msg = server_message(ServerEvent.FILES_CHANGED, {"files": changed_files})
+        for ws in self._connections:
+            self._enqueue(ws, msg)
+
+    def broadcast_eval_run_created(self, run: EvalRunState) -> None:
+        """Broadcast eval run created to all connected clients."""
+        msg = server_message(ServerEvent.EVAL_RUN_CREATED, run.to_summary())
+        for ws in self._connections:
+            self._enqueue(ws, msg)
+
+    def broadcast_eval_run_progress(
+        self,
+        run_id: str,
+        completed: int,
+        total: int,
+        item_result: EvalItemResult | None,
+    ) -> None:
+        """Broadcast eval run progress to all connected clients."""
+        payload: dict[str, Any] = {
+            "run_id": run_id,
+            "completed": completed,
+            "total": total,
+        }
+        if item_result is not None:
+            payload["item_result"] = {
+                "name": item_result.name,
+                "scores": item_result.scores,
+                "overall_score": item_result.overall_score,
+                "output": item_result.output,
+                "justifications": item_result.justifications,
+                "duration_ms": item_result.duration_ms,
+                "status": item_result.status,
+            }
+        msg = server_message(ServerEvent.EVAL_RUN_PROGRESS, payload)
+        for ws in self._connections:
+            self._enqueue(ws, msg)
+
+    def broadcast_eval_run_completed(self, run: EvalRunState) -> None:
+        """Broadcast eval run completed to all connected clients."""
+        msg = server_message(
+            ServerEvent.EVAL_RUN_COMPLETED,
+            {
+                "run_id": run.id,
+                "overall_score": run.overall_score,
+                "evaluator_scores": run.evaluator_scores,
+            },
+        )
+        for ws in self._connections:
+            self._enqueue(ws, msg)
+
+    def broadcast_agent_status(self, session_id: str, status: str) -> None:
+        """Broadcast agent status to all connected clients."""
+        msg = server_message(
+            ServerEvent.AGENT_STATUS, {"session_id": session_id, "status": status}
+        )
+        for ws in self._connections:
+            self._enqueue(ws, msg)
+
+    def broadcast_agent_text(self, session_id: str, content: str, done: bool) -> None:
+        """Broadcast agent text to all connected clients."""
+        msg = server_message(
+            ServerEvent.AGENT_TEXT,
+            {"session_id": session_id, "content": content, "done": done},
+        )
+        for ws in self._connections:
+            self._enqueue(ws, msg)
+
+    def broadcast_agent_plan(
+        self, session_id: str, items: list[dict[str, str]]
+    ) -> None:
+        """Broadcast agent plan to all connected clients."""
+        msg = server_message(
+            ServerEvent.AGENT_PLAN, {"session_id": session_id, "items": items}
+        )
+        for ws in self._connections:
+            self._enqueue(ws, msg)
+
+    def broadcast_agent_tool_use(
+        self, session_id: str, tool: str, args: dict[str, Any]
+    ) -> None:
+        """Broadcast agent tool use to all connected clients."""
+        msg = server_message(
+            ServerEvent.AGENT_TOOL_USE,
+            {"session_id": session_id, "tool": tool, "args": args},
+        )
+        for ws in self._connections:
+            self._enqueue(ws, msg)
+
+    def broadcast_agent_tool_result(
+        self, session_id: str, tool: str, result: str, is_error: bool
+    ) -> None:
+        """Broadcast agent tool result to all connected clients."""
+        msg = server_message(
+            ServerEvent.AGENT_TOOL_RESULT,
+            {
+                "session_id": session_id,
+                "tool": tool,
+                "result": result,
+                "is_error": is_error,
+            },
+        )
+        for ws in self._connections:
+            self._enqueue(ws, msg)
+
+    def broadcast_agent_tool_approval(
+        self,
+        session_id: str,
+        tool_call_id: str,
+        tool: str,
+        args: dict[str, Any],
+    ) -> None:
+        """Broadcast agent tool approval request to all connected clients."""
+        msg = server_message(
+            ServerEvent.AGENT_TOOL_APPROVAL,
+            {
+                "session_id": session_id,
+                "tool_call_id": tool_call_id,
+                "tool": tool,
+                "args": args,
+            },
+        )
+        for ws in self._connections:
+            self._enqueue(ws, msg)
+
+    def broadcast_agent_error(self, session_id: str, message: str) -> None:
+        """Broadcast agent error to all connected clients."""
+        msg = server_message(
+            ServerEvent.AGENT_ERROR,
+            {"session_id": session_id, "message": message},
+        )
         for ws in self._connections:
             self._enqueue(ws, msg)
 

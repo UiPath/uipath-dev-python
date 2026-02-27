@@ -53,7 +53,7 @@ function FormField({
 }) {
   const label = (
     <label
-      className="text-[10px] font-semibold uppercase tracking-wider block mb-1"
+      className="text-[11px] font-medium block mb-1"
       style={{ color: "var(--text-muted)" }}
     >
       {name}
@@ -192,7 +192,7 @@ function ActionButton({
   return (
     <button
       onClick={onClick}
-      className="text-[10px] uppercase tracking-wider font-semibold px-3 py-1 rounded cursor-pointer transition-colors"
+      className="text-xs font-semibold px-3 py-1.5 rounded cursor-pointer transition-colors"
       style={{
         background: `color-mix(in srgb, var(--${color}) 15%, var(--bg-secondary))`,
         color: `var(--${color})`,
@@ -324,7 +324,7 @@ export default function ChatInterrupt({ interrupt, onRespond }: Props) {
           }}
         >
           <span
-            className="text-[10px] uppercase tracking-wider font-semibold"
+            className="text-[11px] font-semibold"
             style={{ color: "var(--warning)" }}
           >
             {editing ? "Edit Arguments" : "Action Required"}
@@ -344,8 +344,9 @@ export default function ChatInterrupt({ interrupt, onRespond }: Props) {
           {!editing && (interrupt.input_value != null || canEditWithForm) && (
             <button
               onClick={startEditing}
-              className="ml-auto p-1 rounded cursor-pointer transition-colors"
+              className="ml-auto p-1.5 rounded cursor-pointer transition-colors"
               style={{ color: "var(--text-muted)" }}
+              aria-label="Edit arguments"
               onMouseEnter={(e) => {
                 e.currentTarget.style.color = "var(--warning)";
               }}
@@ -355,8 +356,8 @@ export default function ChatInterrupt({ interrupt, onRespond }: Props) {
               title="Edit arguments"
             >
               <svg
-                width="12"
-                height="12"
+                width="14"
+                height="14"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -406,7 +407,7 @@ export default function ChatInterrupt({ interrupt, onRespond }: Props) {
               />
             )}
             {jsonError && (
-              <p className="text-[10px]" style={{ color: "var(--error)" }}>
+              <p className="text-[11px]" style={{ color: "var(--error)" }}>
                 {jsonError}
               </p>
             )}
@@ -486,7 +487,7 @@ export default function ChatInterrupt({ interrupt, onRespond }: Props) {
         }}
       >
         <span
-          className="text-[10px] uppercase tracking-wider font-semibold"
+          className="text-[11px] font-semibold"
           style={{ color: "var(--accent)" }}
         >
           Input Required
@@ -522,7 +523,7 @@ export default function ChatInterrupt({ interrupt, onRespond }: Props) {
             }
           }}
           placeholder="Type your response..."
-          className="flex-1 bg-transparent text-sm py-1 focus:outline-none placeholder:text-[var(--text-muted)]"
+          className="flex-1 bg-transparent text-sm py-1 placeholder:text-[var(--text-muted)]"
           style={{ color: "var(--text-primary)" }}
         />
         <button
@@ -532,7 +533,7 @@ export default function ChatInterrupt({ interrupt, onRespond }: Props) {
             }
           }}
           disabled={!responseText.trim()}
-          className="text-[11px] uppercase tracking-wider font-semibold px-2 py-1 rounded transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+          className="text-xs font-semibold px-3 py-1.5 rounded transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
           style={{
             color: responseText.trim() ? "var(--accent)" : "var(--text-muted)",
             background: "transparent",

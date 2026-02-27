@@ -32,11 +32,11 @@ export default function ChatMessage({ message, onToolCallClick, toolCallIndices 
       {/* Role indicator */}
       <div className="flex items-center gap-1.5 mb-0.5">
         <div
-          className="w-1 h-1 rounded-full"
+          className="w-2 h-2 rounded-full"
           style={{ background: role.color }}
         />
         <span
-          className="text-[10px] uppercase tracking-wider font-semibold"
+          className="text-[11px] font-semibold"
           style={{ color: role.color }}
         >
           {role.label}
@@ -68,7 +68,7 @@ export default function ChatMessage({ message, onToolCallClick, toolCallIndices 
           {message.tool_calls.map((tc, i) => (
             <span
               key={`${tc.name}-${i}`}
-              className="inline-flex items-center gap-1 text-[11px] font-mono px-1.5 py-0.5 rounded cursor-pointer hover:brightness-125"
+              className="inline-flex items-center gap-1 text-[11px] font-mono px-2 py-1 rounded cursor-pointer hover:brightness-125"
               style={{
                 background: "var(--bg-primary)",
                 border: "1px solid var(--border)",

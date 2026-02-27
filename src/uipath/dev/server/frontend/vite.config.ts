@@ -27,6 +27,7 @@ export default defineConfig({
             if (id.includes('/react-dom/') || id.includes('/react/')) return 'vendor-react';
             if (id.includes('/reactflow/') || id.includes('/@reactflow/')) return 'vendor-reactflow';
             if (id.includes('/elkjs/')) return 'vendor-elk';
+            if (id.includes('/monaco-editor/')) return 'vendor-monaco';
           }
         },
       },

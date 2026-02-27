@@ -1,4 +1,4 @@
-"""File watcher for Python source files."""
+"""File watcher for project source files."""
 
 from __future__ import annotations
 
@@ -6,23 +6,22 @@ import asyncio
 import logging
 from collections.abc import Callable
 
-from watchfiles import PythonFilter, awatch
+from watchfiles import DefaultFilter, awatch
 
 logger = logging.getLogger(__name__)
 
 
-async def watch_python_files(
+async def watch_project_files(
     on_change: Callable[[list[str]], None],
     stop_event: asyncio.Event,
 ) -> None:
-    """Watch for Python file changes in the current directory.
+    """Watch for file changes in the current directory.
 
-    Uses watchfiles which already ignores .venv, __pycache__, node_modules, .git.
-    PythonFilter restricts to .py / .pyx files only.
+    Uses DefaultFilter which ignores .git, __pycache__, node_modules, etc.
     """
     try:
         async for changes in awatch(
-            ".", watch_filter=PythonFilter(), stop_event=stop_event
+            ".", watch_filter=DefaultFilter(), stop_event=stop_event
         ):
             changed_files = [str(path) for _, path in changes]
             logger.debug("Detected file changes: %s", changed_files)

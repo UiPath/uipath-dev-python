@@ -7,7 +7,8 @@
   --bg-primary: #0f172a;
   --bg-secondary: #1e293b;
   --bg-tertiary: #334155;
-  --bg-hover: #1e293b;
+  --bg-hover: #263348;
+  --bg-elevated: #253041;
   --text-primary: #cbd5e1;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
@@ -19,14 +20,17 @@
   --warning: #eab308;
   --error: #ef4444;
   --info: #3b82f6;
-  --sidebar-bg: #0c1222;
+  --sidebar-bg: #0e1526;
+  --activity-bar-bg: #0a1020;
   --card-bg: #1e293b;
   --input-bg: #0f172a;
+  --code-bg: #0f172a;
   --tab-active: #fa4616;
   --tab-text: #94a3b8;
   --tab-text-active: #fa4616;
   --node-bg: #1e293b;
   --node-border: #475569;
+  --scrollbar-thumb: #334155;
   color-scheme: dark;
 }
 
@@ -36,6 +40,7 @@
   --bg-secondary: #ffffff;
   --bg-tertiary: #cbd5e1;
   --bg-hover: #f1f5f9;
+  --bg-elevated: #ffffff;
   --text-primary: #0f172a;
   --text-secondary: #475569;
   --text-muted: #94a3b8;
@@ -48,13 +53,16 @@
   --error: #ef4444;
   --info: #2563eb;
   --sidebar-bg: #ffffff;
+  --activity-bar-bg: #f1f5f9;
   --card-bg: #ffffff;
   --input-bg: #f8fafc;
+  --code-bg: #e8ecf1;
   --tab-active: #fa4616;
   --tab-text: #64748b;
   --tab-text-active: #fa4616;
   --node-bg: #ffffff;
   --node-border: #cbd5e1;
+  --scrollbar-thumb: #d1d5db;
   color-scheme: light;
 }
 
@@ -70,6 +78,74 @@ body {
   height: 100vh;
   height: 100dvh;
   display: flex;
+}
+
+/* ── Focus-visible indicators (P0 accessibility) ──────────── */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Remove for elements that handle their own focus styles */
+button:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  outline-offset: 0px;
+  border-radius: 3px;
+}
+
+/* ── Drag handle improvements ─────────────────────────────── */
+.drag-handle-row {
+  height: 3px;
+  cursor: row-resize;
+  background: var(--border);
+  transition: background 0.15s;
+  position: relative;
+}
+
+.drag-handle-row::before {
+  content: "";
+  position: absolute;
+  inset: -5px 0;
+}
+
+.drag-handle-row:hover,
+.drag-handle-row:active {
+  background: var(--accent);
+}
+
+.drag-handle-col {
+  width: 3px;
+  cursor: col-resize;
+  background: var(--border);
+  transition: background 0.15s;
+  position: relative;
+}
+
+.drag-handle-col::before {
+  content: "";
+  position: absolute;
+  inset: 0 -5px;
+}
+
+.drag-handle-col:hover,
+.drag-handle-col:active {
+  background: var(--accent);
+}
+
+/* ── Loading skeleton animation ───────────────────────────── */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.7; }
+}
+
+.skeleton {
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
 }
 
 /* React Flow overrides */
@@ -112,7 +188,7 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--bg-tertiary);
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
 
@@ -140,7 +216,7 @@ select option {
 }
 
 .chat-markdown code {
-  background: var(--bg-primary);
+  background: var(--code-bg);
   border: 1px solid var(--border);
   border-radius: 3px;
   padding: 0.1em 0.35em;
@@ -148,7 +224,7 @@ select option {
 }
 
 .chat-markdown pre {
-  background: var(--bg-primary);
+  background: var(--code-bg);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0.75em;
@@ -214,12 +290,12 @@ select option {
 }
 
 .chat-markdown th {
-  background: var(--bg-primary);
+  background: var(--code-bg);
   font-weight: 600;
 }
 
 .chat-markdown tr:nth-child(even) {
-  background: var(--bg-primary);
+  background: var(--code-bg);
 }
 
 /* Highlight.js: let our pre styles control background */

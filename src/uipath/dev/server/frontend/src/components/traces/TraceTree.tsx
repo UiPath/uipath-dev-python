@@ -178,9 +178,17 @@ export default function TraceTree({ traces }: Props) {
     });
   }, []);
 
-  // Auto-select first span only when nothing is selected; keep selected span data fresh
+  // Track trace identity — reset selection when traces are replaced (different run/item)
+  const prevTraceRootRef = useRef<string | null>(null);
   useEffect(() => {
-    if (selectedSpan === null) {
+    const rootId = tree.length > 0 ? tree[0].span.span_id : null;
+    const prevRootId = prevTraceRootRef.current;
+    prevTraceRootRef.current = rootId;
+
+    if (rootId && rootId !== prevRootId) {
+      // Traces changed to a different root — select the new root
+      setSelectedSpan(tree[0].span);
+    } else if (selectedSpan === null) {
       if (tree.length > 0) setSelectedSpan(tree[0].span);
     } else {
       const updated = traces.find((t) => t.span_id === selectedSpan.span_id);
@@ -273,11 +281,11 @@ export default function TraceTree({ traces }: Props) {
         {traces.length > 0 && (
           <div
             className="flex items-center gap-1 px-2 border-b shrink-0"
-            style={{ borderColor: "var(--border)", background: "var(--bg-secondary)", height: "28px" }}
+            style={{ borderColor: "var(--border)", background: "var(--bg-secondary)", height: "32px" }}
           >
             <button
               onClick={() => { setViewMode("tree"); localStorage.setItem("traceViewMode", "tree"); }}
-              className="px-2 h-[18px] text-[10px] uppercase tracking-wider font-semibold rounded transition-colors cursor-pointer inline-flex items-center"
+              className="px-2.5 h-6 text-[11px] font-semibold rounded transition-colors cursor-pointer inline-flex items-center"
               style={{
                 color: viewMode === "tree" ? "var(--accent)" : "var(--text-muted)",
                 background: viewMode === "tree" ? "color-mix(in srgb, var(--accent) 10%, transparent)" : "transparent",
@@ -289,7 +297,7 @@ export default function TraceTree({ traces }: Props) {
             </button>
             <button
               onClick={() => { setViewMode("timeline"); localStorage.setItem("traceViewMode", "timeline"); }}
-              className="px-2 h-[18px] text-[10px] uppercase tracking-wider font-semibold rounded transition-colors cursor-pointer inline-flex items-center"
+              className="px-2.5 h-6 text-[11px] font-semibold rounded transition-colors cursor-pointer inline-flex items-center"
               style={{
                 color: viewMode === "timeline" ? "var(--accent)" : "var(--text-muted)",
                 background: viewMode === "timeline" ? "color-mix(in srgb, var(--accent) 10%, transparent)" : "transparent",
@@ -301,7 +309,7 @@ export default function TraceTree({ traces }: Props) {
             </button>
             <button
               onClick={() => { setViewMode("json"); localStorage.setItem("traceViewMode", "json"); }}
-              className="px-2 h-[18px] text-[10px] uppercase tracking-wider font-semibold rounded transition-colors cursor-pointer inline-flex items-center"
+              className="px-2.5 h-6 text-[11px] font-semibold rounded transition-colors cursor-pointer inline-flex items-center"
               style={{
                 color: viewMode === "json" ? "var(--accent)" : "var(--text-muted)",
                 background: viewMode === "json" ? "color-mix(in srgb, var(--accent) 10%, transparent)" : "transparent",
@@ -341,7 +349,7 @@ export default function TraceTree({ traces }: Props) {
             <div className="relative">
               <button
                 onClick={copyTree}
-                className="absolute top-1 right-1 z-10 text-[10px] cursor-pointer px-1.5 py-0.5 rounded transition-colors"
+                className="absolute top-1 right-1 z-10 text-[11px] cursor-pointer px-2 py-1 rounded transition-colors"
                 style={{
                   color: copied ? "var(--success)" : "var(--text-muted)",
                   background: "var(--bg-secondary)",
@@ -361,11 +369,10 @@ export default function TraceTree({ traces }: Props) {
       {/* Draggable divider */}
       <div
         onMouseDown={handleMouseDown}
-        className="shrink-0 w-1.5 cursor-col-resize bg-[var(--border)] hover:bg-[var(--accent)] transition-colors relative"
+        className="shrink-0 drag-handle-col"
         style={isDragging ? { background: "var(--accent)" } : undefined}
-      >
-        <div className="absolute inset-0 -left-1 -right-1" />
-      </div>
+      />
+
 
       {/* Right: span details */}
       <div className="flex-1 overflow-hidden">
@@ -432,9 +439,9 @@ function TreeNodeView({
         style={{
           paddingLeft: `${indent + 4}px`,
           background: isSelected
-            ? "color-mix(in srgb, var(--accent) 10%, var(--bg-primary))"
+            ? "color-mix(in srgb, var(--accent) 15%, var(--bg-primary))"
             : undefined,
-          borderLeft: isSelected ? `2px solid var(--accent)` : "2px solid transparent",
+          borderLeft: isSelected ? `3px solid var(--accent)` : "3px solid transparent",
         }}
         onMouseEnter={(e) => {
           if (!isSelected) e.currentTarget.style.background = "var(--bg-hover)";
@@ -464,7 +471,7 @@ function TreeNodeView({
               e.stopPropagation();
               toggleExpanded(span.span_id);
             }}
-            className="shrink-0 w-4 h-4 flex items-center justify-center cursor-pointer rounded hover:bg-[var(--bg-hover)]"
+            className="shrink-0 w-5 h-5 flex items-center justify-center cursor-pointer rounded hover:bg-[var(--bg-hover)]"
             style={{ color: "var(--text-muted)" }}
           >
             <svg

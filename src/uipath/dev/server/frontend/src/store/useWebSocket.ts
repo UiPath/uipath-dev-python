@@ -1,11 +1,17 @@
 import { useEffect, useRef } from "react";
 import { WsClient } from "../api/websocket";
 import { useRunStore } from "./useRunStore";
+import { useEvalStore } from "./useEvalStore";
+import { useAgentStore } from "./useAgentStore";
+import { useExplorerStore } from "./useExplorerStore";
+import { readFile } from "../api/explorer-client";
 import type { RunSummary, TraceSpan, LogEntry, InterruptEvent } from "../types/run";
+import type { EvalRunSummary, EvalItemResult } from "../types/eval";
+import type { AgentPlanItem, AgentStatus } from "../types/agent";
 
 let sharedWs: WsClient | null = null;
 
-function getWs(): WsClient {
+export function getWs(): WsClient {
   if (!sharedWs) {
     sharedWs = new WsClient();
     sharedWs.connect();
@@ -16,6 +22,7 @@ function getWs(): WsClient {
 export function useWebSocket() {
   const ws = useRef(getWs());
   const { upsertRun, addTrace, addLog, addChatEvent, setActiveInterrupt, setActiveNode, removeActiveNode, resetRunGraphState, addStateEvent, setReloadPending } = useRunStore();
+  const { upsertEvalRun, updateEvalRunProgress, completeEvalRun } = useEvalStore();
 
   useEffect(() => {
     const client = ws.current;
@@ -61,11 +68,100 @@ export function useWebSocket() {
         case "reload":
           setReloadPending(true);
           break;
+        case "files.changed": {
+          const changedFiles = msg.payload.files as string[];
+          const changedSet = new Set(changedFiles);
+          const explorer = useExplorerStore.getState();
+          for (const tab of explorer.openTabs) {
+            if (explorer.dirty[tab] || !changedSet.has(tab)) continue;
+            readFile(tab).then((fc) => {
+              const s = useExplorerStore.getState();
+              if (s.dirty[tab]) return;
+              if (s.fileCache[tab]?.content === fc.content) return;
+              s.setFileContent(tab, fc);
+            }).catch(() => {});
+          }
+          break;
+        }
+        // Eval events
+        case "eval_run.created":
+          upsertEvalRun(msg.payload as unknown as EvalRunSummary);
+          break;
+        case "eval_run.progress": {
+          const { run_id, completed, total, item_result } = msg.payload as {
+            run_id: string;
+            completed: number;
+            total: number;
+            item_result?: EvalItemResult;
+          };
+          updateEvalRunProgress(run_id, completed, total, item_result);
+          break;
+        }
+        case "eval_run.completed": {
+          const { run_id, overall_score, evaluator_scores } = msg.payload as {
+            run_id: string;
+            overall_score: number;
+            evaluator_scores: Record<string, number>;
+          };
+          completeEvalRun(run_id, overall_score, evaluator_scores);
+          break;
+        }
+        // Agent events
+        case "agent.status": {
+          const { session_id, status } = msg.payload as { session_id: string; status: AgentStatus };
+          const agent = useAgentStore.getState();
+          if (!agent.sessionId) agent.setSessionId(session_id);
+          agent.setStatus(status);
+          break;
+        }
+        case "agent.text": {
+          const { session_id, content, done } = msg.payload as { session_id: string; content: string; done: boolean };
+          const agent = useAgentStore.getState();
+          if (!agent.sessionId) agent.setSessionId(session_id);
+          agent.appendAssistantText(content, done);
+          break;
+        }
+        case "agent.plan": {
+          const { session_id, items } = msg.payload as { session_id: string; items: AgentPlanItem[] };
+          const agent = useAgentStore.getState();
+          if (!agent.sessionId) agent.setSessionId(session_id);
+          agent.setPlan(items);
+          break;
+        }
+        case "agent.tool_use": {
+          const { session_id, tool, args } = msg.payload as { session_id: string; tool: string; args: Record<string, unknown> };
+          const agent = useAgentStore.getState();
+          if (!agent.sessionId) agent.setSessionId(session_id);
+          agent.addToolUse(tool, args);
+          break;
+        }
+        case "agent.tool_result": {
+          const { tool, result, is_error } = msg.payload as { session_id: string; tool: string; result: string; is_error: boolean };
+          useAgentStore.getState().addToolResult(tool, result, is_error);
+          break;
+        }
+        case "agent.tool_approval": {
+          const { session_id, tool_call_id, tool, args } = msg.payload as {
+            session_id: string;
+            tool_call_id: string;
+            tool: string;
+            args: Record<string, unknown>;
+          };
+          const agent = useAgentStore.getState();
+          if (!agent.sessionId) agent.setSessionId(session_id);
+          agent.addToolApprovalRequest(tool_call_id, tool, args);
+          break;
+        }
+        case "agent.error": {
+          const { message: errMsg } = msg.payload as { session_id: string; message: string };
+          useAgentStore.getState().addError(errMsg);
+          break;
+        }
       }
     });
 
     return unsub;
-  }, [upsertRun, addTrace, addLog, addChatEvent, setActiveInterrupt, setActiveNode, removeActiveNode, resetRunGraphState, addStateEvent, setReloadPending]);
+  }, [upsertRun, addTrace, addLog, addChatEvent, setActiveInterrupt, setActiveNode, removeActiveNode, resetRunGraphState, addStateEvent, setReloadPending, upsertEvalRun, updateEvalRunProgress, completeEvalRun]);
 
   return ws.current;
 }

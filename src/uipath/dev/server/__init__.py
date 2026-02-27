@@ -24,9 +24,13 @@ from uipath.dev.models.data import (
     StateData,
     TraceData,
 )
+from uipath.dev.models.eval_data import EvalItemResult, EvalRunState
 from uipath.dev.models.execution import ExecutionRun
 from uipath.dev.server.debug_bridge import WebDebugBridge
+from uipath.dev.services.agent_service import AgentService
+from uipath.dev.services.eval_service import EvalService
 from uipath.dev.services.run_service import RunService
+from uipath.dev.services.skill_service import SkillService
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +90,27 @@ class UiPathDeveloperServer:
             on_run_removed=self.connection_manager.remove_run_subscriptions,
         )
 
+        self.eval_service = EvalService(
+            runtime_factory=self.runtime_factory,
+            trace_manager=self.trace_manager,
+            on_eval_run_created=self._on_eval_run_created,
+            on_eval_run_progress=self._on_eval_run_progress,
+            on_eval_run_completed=self._on_eval_run_completed,
+        )
+
+        self.skill_service = SkillService()
+
+        self.agent_service = AgentService(
+            skill_service=self.skill_service,
+            on_status=self._on_agent_status,
+            on_text=self._on_agent_text,
+            on_plan=self._on_agent_plan,
+            on_tool_use=self._on_agent_tool_use,
+            on_tool_result=self._on_agent_tool_result,
+            on_tool_approval=self._on_agent_tool_approval,
+            on_error=self._on_agent_error,
+        )
+
     def create_app(self) -> Any:
         """Create and return a FastAPI application."""
         from uipath.dev.server.app import create_app
@@ -111,9 +136,8 @@ class UiPathDeveloperServer:
                 daemon=True,
             ).start()
 
-        # Start file watcher if factory_creator is available
-        if self.factory_creator is not None:
-            self._start_watcher()
+        # Start file watcher for editor auto-refresh and factory hot-reload
+        self._start_watcher()
 
         config = uvicorn.Config(
             app,
@@ -180,11 +204,11 @@ class UiPathDeveloperServer:
 
     def _start_watcher(self) -> None:
         """Start the file watcher background task."""
-        from uipath.dev.server.watcher import watch_python_files
+        from uipath.dev.server.watcher import watch_project_files
 
         self._watcher_stop = asyncio.Event()
         self._watcher_task = asyncio.create_task(
-            watch_python_files(
+            watch_project_files(
                 on_change=self._on_files_changed,
                 stop_event=self._watcher_stop,
             )
@@ -200,8 +224,24 @@ class UiPathDeveloperServer:
 
     def _on_files_changed(self, changed_files: list[str]) -> None:
         """Handle file change events from the watcher."""
-        self.reload_pending = True
-        self.connection_manager.broadcast_reload(changed_files)
+        # Convert to relative paths with forward slashes for frontend
+        cwd = os.getcwd()
+        relative_files = []
+        for f in changed_files:
+            try:
+                relative_files.append(os.path.relpath(f, cwd).replace("\\", "/"))
+            except ValueError:
+                continue  # different drive on Windows
+
+        # Broadcast files.changed for editor auto-refresh
+        if relative_files:
+            self.connection_manager.broadcast_files_changed(relative_files)
+
+        # Factory hot-reload for Python files only
+        py_files = [f for f in changed_files if f.endswith((".py", ".pyx"))]
+        if py_files and self.factory_creator is not None:
+            self.reload_pending = True
+            self.connection_manager.broadcast_reload(py_files)
 
     # ------------------------------------------------------------------
     # Internal callbacks
@@ -230,6 +270,68 @@ class UiPathDeveloperServer:
     def _on_state(self, state_data: StateData) -> None:
         """Broadcast state transition to subscribed WebSocket clients."""
         self.connection_manager.broadcast_state(state_data)
+
+    def _on_eval_run_created(self, run: EvalRunState) -> None:
+        """Broadcast eval run created to all connected clients."""
+        self.connection_manager.broadcast_eval_run_created(run)
+
+    def _on_eval_run_progress(
+        self,
+        run_id: str,
+        completed: int,
+        total: int,
+        item_result: EvalItemResult | None,
+    ) -> None:
+        """Broadcast eval run progress to all connected clients."""
+        self.connection_manager.broadcast_eval_run_progress(
+            run_id, completed, total, item_result
+        )
+
+    def _on_eval_run_completed(self, run: EvalRunState) -> None:
+        """Broadcast eval run completed to all connected clients."""
+        self.connection_manager.broadcast_eval_run_completed(run)
+
+    def _on_agent_status(self, session_id: str, status: str) -> None:
+        """Broadcast agent status to all connected clients."""
+        self.connection_manager.broadcast_agent_status(session_id, status)
+
+    def _on_agent_text(self, session_id: str, content: str, done: bool) -> None:
+        """Broadcast agent text to all connected clients."""
+        self.connection_manager.broadcast_agent_text(session_id, content, done)
+
+    def _on_agent_plan(self, session_id: str, items: list[dict[str, str]]) -> None:
+        """Broadcast agent plan to all connected clients."""
+        self.connection_manager.broadcast_agent_plan(session_id, items)
+
+    def _on_agent_tool_use(
+        self, session_id: str, tool: str, args: dict[str, Any]
+    ) -> None:
+        """Broadcast agent tool use to all connected clients."""
+        self.connection_manager.broadcast_agent_tool_use(session_id, tool, args)
+
+    def _on_agent_tool_result(
+        self, session_id: str, tool: str, result: str, is_error: bool
+    ) -> None:
+        """Broadcast agent tool result to all connected clients."""
+        self.connection_manager.broadcast_agent_tool_result(
+            session_id, tool, result, is_error
+        )
+
+    def _on_agent_tool_approval(
+        self,
+        session_id: str,
+        tool_call_id: str,
+        tool: str,
+        args: dict[str, Any],
+    ) -> None:
+        """Broadcast agent tool approval request to all connected clients."""
+        self.connection_manager.broadcast_agent_tool_approval(
+            session_id, tool_call_id, tool, args
+        )
+
+    def _on_agent_error(self, session_id: str, message: str) -> None:
+        """Broadcast agent error to all connected clients."""
+        self.connection_manager.broadcast_agent_error(session_id, message)
 
     @staticmethod
     def _find_free_port(host: str, start_port: int, max_attempts: int = 100) -> int:
