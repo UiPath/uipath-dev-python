@@ -7,9 +7,26 @@ Guide to creating UiPath coded functions — deterministic automation units for 
 When creating a new function:
 
 1. **Setup pyproject.toml**:
-   - Use the official `pyproject.toml` template present in skill assets if `pyproject.toml` doesn't exist in the function directory
-   - Replace `{AGENT_NAME}` with the actual function name
+   - Use the following `pyproject.toml` template if `pyproject.toml` doesn't exist in the function directory
+   - Replace `{AGENT_NAME}` with the actual function name (lowercase, hyphenated)
    - Replace `{AGENT_DESCRIPTION}` with the function description you provide
+
+   ```toml
+   [project]
+   name = "{AGENT_NAME}"
+   version = "0.1.0"
+   description = "{AGENT_DESCRIPTION}"
+   readme = "README.md"
+   requires-python = ">=3.11"
+   dependencies = [
+       "uipath",
+   ]
+
+   [dependency-groups]
+   dev = [
+       "uipath-dev",
+   ]
+   ```
 
 2. **Install dependencies**: Run `uv sync` to install dependencies and create the virtual environment.
 
