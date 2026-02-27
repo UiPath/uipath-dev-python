@@ -1,0 +1,579 @@
+"""Core agentic loop with streaming, parallel tools, retry, sub-agent dispatch."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+from collections.abc import AsyncIterator, Callable
+from typing import Any
+
+from uipath.dev.services.agent.context import maybe_compact, prune_stale_tool_results
+from uipath.dev.services.agent.events import (
+    AgentEvent,
+    ErrorOccurred,
+    PlanUpdated,
+    StatusChanged,
+    TextDelta,
+    TextGenerated,
+    ThinkingGenerated,
+    TokenUsageUpdated,
+    ToolApprovalRequired,
+    ToolCompleted,
+    ToolStarted,
+)
+from uipath.dev.services.agent.provider import ModelProvider, StreamEvent, ToolCall
+from uipath.dev.services.agent.session import AgentSession
+from uipath.dev.services.agent.tools import ToolDefinition
+
+logger = logging.getLogger(__name__)
+
+MAX_ITERATIONS = 50
+MAX_RETRIES = 3
+RETRY_BASE_DELAY = 1.0
+SUB_AGENT_MAX_ITERATIONS = 15
+
+# ---------------------------------------------------------------------------
+# System prompt
+# ---------------------------------------------------------------------------
+
+SYSTEM_PROMPT = """\
+You are a senior Python developer specializing in UiPath coded agents and automations. \
+You help users build, debug, test, and improve Python agents using the UiPath SDK.
+
+## Critical Rules
+
+### You Have a Shell — USE IT
+- You have direct access to the user's terminal via the `bash` tool.
+- NEVER tell the user to run commands themselves. ALWAYS use `bash` to execute commands directly.
+- This includes: `uv run`, `uv sync`, `uipath init`, `uipath run`, `uipath eval`, `uipath pack`, `uipath publish`, and any other CLI commands.
+- If something needs to be run, run it. Don't explain how to run it.
+- The user is already authenticated — NEVER ask them to authenticate or run `uipath auth`.
+
+### Read Before Writing
+- NEVER suggest code changes without first reading the relevant source files.
+- NEVER assume what code looks like — use `read_file`, `glob`, and `grep` to verify.
+- When asked about a function or class, read its implementation first. Do not guess signatures, return types, or behavior.
+- Before editing a file, always read it to understand context, imports, and conventions.
+
+### Evidence-Based Responses
+- Ground every suggestion in actual code you have read in the current session.
+- When explaining behavior, quote or reference specific lines from the codebase.
+- If you're unsure about something, search the code rather than speculating.
+- If you cannot find what you need, say so explicitly instead of making assumptions.
+
+### Surgical, Minimal Changes
+- Make the smallest change that solves the problem. Don't refactor adjacent code.
+- Match the existing code style — indentation, naming conventions, import patterns.
+- Only add imports, variables, or functions that your change requires.
+- Don't add error handling, type hints, or docstrings beyond what was asked.
+
+## Workflow
+
+1. **Plan first**: Call `update_plan` with your steps before doing anything else.
+2. **Explore**: Use `glob` and `grep` to find relevant files. Read them with `read_file`.
+3. **Implement**: Use `edit_file` for targeted changes, `write_file` only for new files.
+4. **Execute**: Use `bash` to run commands — installations, tests, linters, builds, `uv run` commands, etc. \
+When the user asks you to run something, always use the `bash` tool to execute it. Never tell the user to run commands themselves — you have a shell, use it.
+5. **Verify**: Read back edited files to confirm correctness. Run tests or linters via `bash`.
+6. **Update progress**: After completing each step, call `update_plan` to mark it as "completed" BEFORE moving on. \
+When starting a step, mark it as "in_progress". Always send the full plan array with all steps.
+7. **Before your final response**: Call `update_plan` one last time to mark all remaining steps as "completed". \
+NEVER give your final summary without first ensuring every plan step is marked completed.
+8. **Summarize**: When done, briefly state what you changed and why.
+
+## Full Build Cycle
+
+When building or modifying an agent or function, always complete the full cycle — don't stop at writing code:
+
+1. **Write the code** — implement the agent/function with Input/Output models and `@traced()` main function.
+2. **Generate entry points** — run `uv run uipath init` via `bash`.
+3. **Write evaluations** — create BOTH:
+   - **Evaluator files** in `evaluations/evaluators/` (e.g. `exact-match.json`, `json-similarity.json`) — these must exist first.
+   - **Eval set files** in `evaluations/eval-sets/` with test cases that reference the evaluator IDs.
+4. **Run the evaluations** — execute `uv run uipath eval` via `bash` and report results.
+5. **Pack & publish** — when the user asks to deploy, run via `bash`:
+   - `uv run uipath pack` — create a .nupkg package
+   - `uv run uipath publish -w` — publish to personal workspace (default)
+   - `uv run uipath publish -t` — publish to a specific tenant folder
+
+Never stop after just writing code. If you create an agent/function, you must also create evaluations and run them. \
+If you create eval sets, you must also create the evaluator files they reference — otherwise the eval run will fail. \
+If the user asks you to publish or deploy, use `bash` to run the commands — don't tell them to do it. \
+Default to publishing to personal workspace (`-w`) unless the user specifies a tenant folder.
+
+## Tools
+- `read_file` — Read file contents (always use before editing)
+- `write_file` — Create or overwrite a file
+- `edit_file` — Surgical string replacement (old_string must be unique)
+- `bash` — Execute a shell command (timeout: 30s). USE THIS to run commands for the user.
+- `glob` — Find files matching a pattern (e.g. `**/*.py`)
+- `grep` — Search file contents with regex
+- `update_plan` — Create or update your task plan
+- `read_reference` — Read a reference doc from the active skill (when skills are active)
+- `dispatch_agent` — Spawn a sub-agent to handle a subtask in its own context
+"""
+
+
+async def _chain_async(
+    first: StreamEvent, rest: AsyncIterator[StreamEvent]
+) -> AsyncIterator[StreamEvent]:
+    """Yield first, then yield from rest."""
+    yield first
+    async for item in rest:
+        yield item
+
+
+async def _empty_async_iter() -> AsyncIterator[StreamEvent]:
+    """Return an empty async iterator."""
+    if False:  # noqa: SIM108 — needed to make this an async generator
+        yield StreamEvent(type="done")
+
+
+SUB_AGENT_PROMPT = """\
+You are a research sub-agent. You have access to read-only tools to explore the codebase.
+Complete the task and provide a concise summary of your findings.
+Be thorough but concise — your response will be returned to the parent agent.
+"""
+
+
+class AgentLoop:
+    """The core agentic loop with all innovations."""
+
+    def __init__(  # noqa: D107
+        self,
+        *,
+        provider: ModelProvider,
+        tools: list[ToolDefinition],
+        emit: Callable[[AgentEvent], None],
+        max_iterations: int = MAX_ITERATIONS,
+        allow_dispatch: bool = True,
+        # Approval support
+        pending_approvals: dict[str, asyncio.Event] | None = None,
+        approval_results: dict[str, bool] | None = None,
+        # Skill support
+        skill_service: Any | None = None,
+    ) -> None:
+        self.provider = provider
+        self.tools = tools
+        self.emit = emit
+        self.max_iterations = max_iterations
+        self.allow_dispatch = allow_dispatch
+        self._pending_approvals = (
+            pending_approvals if pending_approvals is not None else {}
+        )
+        self._approval_results = (
+            approval_results if approval_results is not None else {}
+        )
+        self._skill_service = skill_service
+
+    async def run(self, session: AgentSession, system_prompt: str) -> None:
+        """Run the agent loop until completion or max iterations."""
+        try:
+            # Build tool schemas — sorted for stable prefix ordering (prompt caching)
+            tool_schemas = sorted(
+                [t.to_openai_schema() for t in self.tools],
+                key=lambda t: t["function"]["name"],
+            )
+
+            tool_map = {t.name: t for t in self.tools}
+
+            for iteration in range(self.max_iterations):
+                logger.info(
+                    "Loop iteration %d, messages=%d", iteration, len(session.messages)
+                )
+                if session._cancel_event.is_set():
+                    session.status = "done"
+                    self.emit(StatusChanged(session.id, status="done"))
+                    return
+
+                # Prune stale tool results before each LLM call
+                prune_stale_tool_results(session)
+
+                # Check if compaction is needed
+                await maybe_compact(session, self.provider, system_prompt)
+
+                # Build messages with stable prefix
+                llm_messages = [
+                    {"role": "system", "content": system_prompt},
+                    *session.messages,
+                ]
+
+                # Stream the response
+                accumulated_content = ""
+                accumulated_thinking = ""
+                tool_calls: list[ToolCall] = []
+                finish_reason = ""
+
+                stream = await self._call_model_with_retry(
+                    llm_messages, tool_schemas, session
+                )
+                async for event in stream:
+                    match event.type:
+                        case "text_delta":
+                            self.emit(TextDelta(session.id, delta=event.delta))
+                            accumulated_content += event.delta
+                        case "thinking_delta":
+                            self.emit(
+                                ThinkingGenerated(session.id, content=event.delta)
+                            )
+                            accumulated_thinking += event.delta
+                        case "tool_call":
+                            if event.tool_call:
+                                tool_calls.append(event.tool_call)
+                        case "done":
+                            finish_reason = event.finish_reason
+                            # Track token usage
+                            if event.usage:
+                                session.total_prompt_tokens += event.usage.prompt_tokens
+                                session.total_completion_tokens += (
+                                    event.usage.completion_tokens
+                                )
+                                session.turn_count += 1
+                                self.emit(
+                                    TokenUsageUpdated(
+                                        session.id,
+                                        prompt_tokens=event.usage.prompt_tokens,
+                                        completion_tokens=event.usage.completion_tokens,
+                                        total_session_tokens=session.total_prompt_tokens
+                                        + session.total_completion_tokens,
+                                    )
+                                )
+
+                # Build assistant message for conversation history
+                assistant_msg: dict[str, Any] = {
+                    "role": "assistant",
+                    "content": accumulated_content,
+                }
+                if tool_calls:
+                    assistant_msg["tool_calls"] = [
+                        {
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.name,
+                                "arguments": tc.arguments,
+                            },
+                        }
+                        for tc in tool_calls
+                    ]
+                session.messages.append(assistant_msg)
+
+                # If no tool calls, we're done
+                if finish_reason == "stop" or not tool_calls:
+                    # Content already streamed via TextDelta — just mark done
+                    self.emit(TextGenerated(session.id, content="", done=True))
+                    session.status = "done"
+                    self.emit(StatusChanged(session.id, status="done"))
+                    return
+
+                # Execute tool calls (parallel where possible)
+                logger.info(
+                    "Executing %d tool calls: %s",
+                    len(tool_calls),
+                    [tc.name for tc in tool_calls],
+                )
+                await self._execute_tools_parallel(tool_calls, session, tool_map)
+                logger.info("Tool execution complete, continuing loop")
+
+                # After tools, set status back to thinking
+                self.emit(StatusChanged(session.id, status="thinking"))
+
+            # Max iterations reached
+            self.emit(
+                TextGenerated(
+                    session.id,
+                    content="Reached maximum iterations. Stopping.",
+                    done=True,
+                )
+            )
+            session.status = "done"
+            self.emit(StatusChanged(session.id, status="done"))
+
+        except asyncio.CancelledError:
+            session.status = "done"
+            self.emit(StatusChanged(session.id, status="done"))
+        except Exception as e:
+            logger.exception("Agent loop error for session %s", session.id)
+            session.status = "error"
+            self.emit(ErrorOccurred(session.id, message=str(e)))
+
+    async def _call_model_with_retry(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        session: AgentSession,
+    ) -> AsyncIterator[StreamEvent]:
+        """Call the model with retry on transient errors.
+
+        Retries only apply to connection/API errors before streaming starts.
+        Once streaming begins, errors are propagated directly.
+        """
+        last_error: Exception | None = None
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                stream = self.provider.stream(
+                    messages,
+                    tools,
+                    model=session.model,
+                    max_tokens=4096,
+                    temperature=0,
+                )
+                # Try to get the first event to detect connection errors early
+                first = await stream.__anext__()
+                # Success — chain first event with the rest
+                return _chain_async(first, stream)
+            except StopAsyncIteration:
+                return _empty_async_iter()
+            except Exception as e:
+                last_error = e
+                if attempt == MAX_RETRIES or not self._is_retryable(e):
+                    raise
+                delay = RETRY_BASE_DELAY * (2**attempt)
+                logger.warning(
+                    "Retrying model call (attempt %d/%d) after %.1fs: %s",
+                    attempt + 1,
+                    MAX_RETRIES,
+                    delay,
+                    e,
+                )
+                await asyncio.sleep(delay)
+        raise last_error  # type: ignore[misc]
+
+    @staticmethod
+    def _is_retryable(error: Exception) -> bool:
+        """Check if error is transient (rate limit, timeout, 5xx)."""
+        err_str = str(error).lower()
+        return any(
+            k in err_str for k in ("rate limit", "timeout", "429", "500", "502", "503")
+        )
+
+    async def _execute_tools_parallel(
+        self,
+        tool_calls: list[ToolCall],
+        session: AgentSession,
+        tool_map: dict[str, ToolDefinition],
+    ) -> None:
+        """Execute tool calls — approval sequentially, execution in parallel."""
+        self.emit(StatusChanged(session.id, status="executing"))
+
+        # Phase 1: Handle approval + special tools; collect tasks for parallel exec
+        tasks: list[tuple[ToolCall, asyncio.Task[str] | str | None]] = []
+
+        for tc in tool_calls:
+            if session._cancel_event.is_set():
+                session.status = "done"
+                self.emit(StatusChanged(session.id, status="done"))
+                return
+
+            tool_name = tc.name
+            try:
+                tool_args = json.loads(tc.arguments)
+            except json.JSONDecodeError:
+                tool_args = {}
+
+            tool_def = tool_map.get(tool_name)
+
+            # Handle update_plan specially (no approval, immediate)
+            if tool_name == "update_plan":
+                result = self._handle_update_plan(session, tool_args)
+                tasks.append((tc, result))
+                continue
+
+            # Handle read_reference specially
+            if tool_name == "read_reference":
+                result = self._handle_read_reference(session, tool_args)
+                self.emit(ToolStarted(session.id, tool=tool_name, args=tool_args))
+                is_error = result.startswith("Error:")
+                self.emit(
+                    ToolCompleted(
+                        session.id, tool=tool_name, result=result, is_error=is_error
+                    )
+                )
+                tasks.append((tc, result))
+                continue
+
+            # Handle dispatch_agent specially
+            if tool_name == "dispatch_agent" and self.allow_dispatch:
+                self.emit(ToolStarted(session.id, tool=tool_name, args=tool_args))
+                result = await self._handle_dispatch_agent(
+                    tool_args.get("task", ""), session
+                )
+                self.emit(
+                    ToolCompleted(
+                        session.id, tool=tool_name, result=result, is_error=False
+                    )
+                )
+                tasks.append((tc, result))
+                continue
+
+            self.emit(ToolStarted(session.id, tool=tool_name, args=tool_args))
+
+            # Approval gate for destructive tools (sequential for UX clarity)
+            if tool_def and tool_def.requires_approval:
+                logger.info(
+                    "Requesting approval for tool=%s tc.id=%s", tool_name, tc.id
+                )
+                approval_event = asyncio.Event()
+                self._pending_approvals[tc.id] = approval_event
+                self.emit(
+                    ToolApprovalRequired(
+                        session.id,
+                        tool_call_id=tc.id,
+                        tool=tool_name,
+                        args=tool_args,
+                    )
+                )
+                self.emit(StatusChanged(session.id, status="awaiting_approval"))
+                await approval_event.wait()
+                approved = self._approval_results.pop(tc.id, False)
+                self._pending_approvals.pop(tc.id, None)
+                logger.info(
+                    "Approval resolved for tool=%s tc.id=%s approved=%s",
+                    tool_name,
+                    tc.id,
+                    approved,
+                )
+
+                if session._cancel_event.is_set():
+                    session.status = "done"
+                    self.emit(StatusChanged(session.id, status="done"))
+                    return
+
+                if not approved:
+                    result = "Tool execution denied by user"
+                    self.emit(StatusChanged(session.id, status="executing"))
+                    self.emit(
+                        ToolCompleted(
+                            session.id,
+                            tool=tool_name,
+                            result=result,
+                            is_error=True,
+                        )
+                    )
+                    tasks.append((tc, result))
+                    continue
+
+                self.emit(StatusChanged(session.id, status="executing"))
+
+            # Queue for parallel execution
+            tasks.append((tc, None))  # None = needs execution
+
+        # Phase 2: Execute all pending tools in parallel
+        exec_tasks: list[tuple[int, asyncio.Task[str]]] = []
+        for i, (tc_item, res_item) in enumerate(tasks):
+            if res_item is not None:
+                continue  # Already handled
+            tool_def = tool_map.get(tc_item.name)
+            if tool_def:
+                try:
+                    tool_args = json.loads(tc_item.arguments)
+                except json.JSONDecodeError:
+                    tool_args = {}
+                exec_task = asyncio.create_task(
+                    self._execute_single_tool(tool_def, tool_args)
+                )
+                exec_tasks.append((i, exec_task))
+            else:
+                tasks[i] = (tc_item, f"Error: unknown tool '{tc_item.name}'")
+
+        if exec_tasks:
+            gather_results = await asyncio.gather(
+                *[t for _, t in exec_tasks], return_exceptions=True
+            )
+            for (idx, _), gather_result in zip(exec_tasks, gather_results, strict=True):
+                tc_done = tasks[idx][0]
+                if isinstance(gather_result, BaseException):
+                    result_str = f"Error: {gather_result}"
+                    is_error = True
+                else:
+                    result_str = gather_result
+                    is_error = result_str.startswith("Error:")
+                tasks[idx] = (tc_done, result_str)
+                self.emit(
+                    ToolCompleted(
+                        session.id,
+                        tool=tc_done.name,
+                        result=result_str,
+                        is_error=is_error,
+                    )
+                )
+
+        # Phase 3: Append all tool results to session messages in order
+        for tc_final, result_final in tasks:
+            session.messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tc_final.id,
+                    "content": result_final or "",
+                }
+            )
+
+    @staticmethod
+    async def _execute_single_tool(
+        tool_def: ToolDefinition, args: dict[str, Any]
+    ) -> str:
+        """Execute a single tool in a thread executor."""
+        return await asyncio.get_event_loop().run_in_executor(
+            None, tool_def.handler, args
+        )
+
+    def _handle_update_plan(self, session: AgentSession, args: dict[str, Any]) -> str:
+        items = args.get("plan", [])
+        if not isinstance(items, list):
+            return "Error: plan must be an array"
+
+        session.plan = items
+        self.emit(PlanUpdated(session.id, items=items))
+        return "Plan updated"
+
+    def _handle_read_reference(
+        self, session: AgentSession, args: dict[str, Any]
+    ) -> str:
+        """Read a reference file using the base from active skills."""
+        from uipath.dev.services.agent.tools import MAX_FILE_CHARS
+
+        ref_path = args.get("path", "")
+        if not ref_path or not self._skill_service or not session.skill_ids:
+            return "Error: no active skills or missing path"
+        base_skill_id = session.skill_ids[0]
+        try:
+            content = self._skill_service.get_reference(base_skill_id, ref_path)
+            if len(content) > MAX_FILE_CHARS:
+                content = (
+                    content[:MAX_FILE_CHARS]
+                    + f"\n... [truncated at {MAX_FILE_CHARS} chars]"
+                )
+            return content
+        except (FileNotFoundError, PermissionError) as e:
+            return f"Error: {e}"
+
+    async def _handle_dispatch_agent(
+        self, task: str, parent_session: AgentSession
+    ) -> str:
+        """Run a sub-agent with isolated context and return its result."""
+        child_session = AgentSession(model=parent_session.model)
+        child_session.messages.append({"role": "user", "content": task})
+
+        # Read-only tools only, no dispatch_agent
+        child_tools = [
+            t
+            for t in self.tools
+            if not t.requires_approval and t.name != "dispatch_agent"
+        ]
+
+        child_loop = AgentLoop(
+            provider=self.provider,
+            tools=child_tools,
+            emit=lambda _e: None,  # Sub-agent events are silent
+            max_iterations=SUB_AGENT_MAX_ITERATIONS,
+            allow_dispatch=False,
+            skill_service=self._skill_service,
+        )
+        await child_loop.run(child_session, system_prompt=SUB_AGENT_PROMPT)
+
+        # Extract final assistant message
+        for msg in reversed(child_session.messages):
+            if msg["role"] == "assistant" and msg.get("content"):
+                return msg["content"]
+        return "Sub-agent completed without producing a response."

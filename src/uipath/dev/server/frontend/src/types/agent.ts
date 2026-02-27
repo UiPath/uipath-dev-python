@@ -14,7 +14,7 @@ export interface AgentToolCall {
 
 export interface AgentMessage {
   id: string;
-  role: "user" | "assistant" | "plan" | "tool";
+  role: "user" | "assistant" | "plan" | "tool" | "thinking";
   content: string;
   timestamp: number;
   toolCall?: AgentToolCall;

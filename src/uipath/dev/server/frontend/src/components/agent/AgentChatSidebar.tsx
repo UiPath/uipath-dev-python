@@ -85,6 +85,9 @@ export default function AgentChatSidebar() {
   });
 
   const isBusy = status === "thinking" || status === "executing" || status === "planning";
+  const lastMsg = messages[messages.length - 1];
+  const isStreaming = isBusy && lastMsg?.role === "assistant" && !lastMsg.done;
+  const showBusyIndicator = isBusy && !isStreaming;
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -191,7 +194,7 @@ export default function AgentChatSidebar() {
           {messages.map((msg) => (
             <AgentMessageComponent key={msg.id} message={msg} />
           ))}
-          {isBusy && (
+          {showBusyIndicator && (
             <div className="py-1.5">
               <div className="flex items-center gap-1.5">
                 <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: "var(--success)" }} />

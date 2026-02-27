@@ -301,6 +301,44 @@ class ConnectionManager:
         for ws in self._connections:
             self._enqueue(ws, msg)
 
+    def broadcast_agent_thinking(self, session_id: str, content: str) -> None:
+        """Broadcast agent thinking/reasoning to all connected clients."""
+        msg = server_message(
+            ServerEvent.AGENT_THINKING,
+            {"session_id": session_id, "content": content},
+        )
+        for ws in self._connections:
+            self._enqueue(ws, msg)
+
+    def broadcast_agent_text_delta(self, session_id: str, delta: str) -> None:
+        """Broadcast a streaming text token to all connected clients."""
+        msg = server_message(
+            ServerEvent.AGENT_TEXT_DELTA,
+            {"session_id": session_id, "delta": delta},
+        )
+        for ws in self._connections:
+            self._enqueue(ws, msg)
+
+    def broadcast_agent_token_usage(
+        self,
+        session_id: str,
+        prompt_tokens: int,
+        completion_tokens: int,
+        total_session_tokens: int,
+    ) -> None:
+        """Broadcast token usage stats to all connected clients."""
+        msg = server_message(
+            ServerEvent.AGENT_TOKEN_USAGE,
+            {
+                "session_id": session_id,
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_session_tokens": total_session_tokens,
+            },
+        )
+        for ws in self._connections:
+            self._enqueue(ws, msg)
+
     def _schedule_broadcast(self, run_id: str, message: dict[str, Any]) -> None:
         """Enqueue a message for all subscribers of a run."""
         subscribers = self._subscriptions.get(run_id)

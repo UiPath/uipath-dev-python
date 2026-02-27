@@ -16,7 +16,10 @@ export type ServerEventType =
   | "agent.tool_use"
   | "agent.tool_result"
   | "agent.tool_approval"
-  | "agent.error";
+  | "agent.error"
+  | "agent.thinking"
+  | "agent.text_delta"
+  | "agent.token_usage";
 
 export interface ServerMessage {
   type: ServerEventType;
