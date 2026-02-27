@@ -167,6 +167,22 @@ export function useWebSocket() {
           agent.addToolApprovalRequest(tool_call_id, tool, args);
           break;
         }
+        case "agent.thinking": {
+          const { content } = msg.payload as { session_id: string; content: string };
+          useAgentStore.getState().appendThinking(content);
+          break;
+        }
+        case "agent.text_delta": {
+          const { session_id: deltaSid, delta } = msg.payload as { session_id: string; delta: string };
+          const agentDelta = useAgentStore.getState();
+          if (!agentDelta.sessionId) agentDelta.setSessionId(deltaSid);
+          agentDelta.appendAssistantText(delta, false);
+          break;
+        }
+        case "agent.token_usage": {
+          // Token usage received — could store for display if needed
+          break;
+        }
         case "agent.error": {
           const { message: errMsg } = msg.payload as { session_id: string; message: string };
           useAgentStore.getState().addError(errMsg);

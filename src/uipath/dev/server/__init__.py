@@ -27,7 +27,7 @@ from uipath.dev.models.data import (
 from uipath.dev.models.eval_data import EvalItemResult, EvalRunState
 from uipath.dev.models.execution import ExecutionRun
 from uipath.dev.server.debug_bridge import WebDebugBridge
-from uipath.dev.services.agent_service import AgentService
+from uipath.dev.services.agent import AgentService
 from uipath.dev.services.eval_service import EvalService
 from uipath.dev.services.run_service import RunService
 from uipath.dev.services.skill_service import SkillService
@@ -102,13 +102,7 @@ class UiPathDeveloperServer:
 
         self.agent_service = AgentService(
             skill_service=self.skill_service,
-            on_status=self._on_agent_status,
-            on_text=self._on_agent_text,
-            on_plan=self._on_agent_plan,
-            on_tool_use=self._on_agent_tool_use,
-            on_tool_result=self._on_agent_tool_result,
-            on_tool_approval=self._on_agent_tool_approval,
-            on_error=self._on_agent_error,
+            on_event=self._on_agent_event,
         )
 
     def create_app(self) -> Any:
@@ -291,47 +285,52 @@ class UiPathDeveloperServer:
         """Broadcast eval run completed to all connected clients."""
         self.connection_manager.broadcast_eval_run_completed(run)
 
-    def _on_agent_status(self, session_id: str, status: str) -> None:
-        """Broadcast agent status to all connected clients."""
-        self.connection_manager.broadcast_agent_status(session_id, status)
-
-    def _on_agent_text(self, session_id: str, content: str, done: bool) -> None:
-        """Broadcast agent text to all connected clients."""
-        self.connection_manager.broadcast_agent_text(session_id, content, done)
-
-    def _on_agent_plan(self, session_id: str, items: list[dict[str, str]]) -> None:
-        """Broadcast agent plan to all connected clients."""
-        self.connection_manager.broadcast_agent_plan(session_id, items)
-
-    def _on_agent_tool_use(
-        self, session_id: str, tool: str, args: dict[str, Any]
-    ) -> None:
-        """Broadcast agent tool use to all connected clients."""
-        self.connection_manager.broadcast_agent_tool_use(session_id, tool, args)
-
-    def _on_agent_tool_result(
-        self, session_id: str, tool: str, result: str, is_error: bool
-    ) -> None:
-        """Broadcast agent tool result to all connected clients."""
-        self.connection_manager.broadcast_agent_tool_result(
-            session_id, tool, result, is_error
+    def _on_agent_event(self, event: Any) -> None:
+        """Route agent events to the appropriate broadcast method."""
+        from uipath.dev.services.agent import (
+            ErrorOccurred,
+            PlanUpdated,
+            StatusChanged,
+            TextDelta,
+            TextGenerated,
+            ThinkingGenerated,
+            TokenUsageUpdated,
+            ToolApprovalRequired,
+            ToolCompleted,
+            ToolStarted,
         )
 
-    def _on_agent_tool_approval(
-        self,
-        session_id: str,
-        tool_call_id: str,
-        tool: str,
-        args: dict[str, Any],
-    ) -> None:
-        """Broadcast agent tool approval request to all connected clients."""
-        self.connection_manager.broadcast_agent_tool_approval(
-            session_id, tool_call_id, tool, args
-        )
-
-    def _on_agent_error(self, session_id: str, message: str) -> None:
-        """Broadcast agent error to all connected clients."""
-        self.connection_manager.broadcast_agent_error(session_id, message)
+        cm = self.connection_manager
+        match event:
+            case StatusChanged(session_id=sid, status=status):
+                cm.broadcast_agent_status(sid, status)
+            case TextGenerated(session_id=sid, content=content, done=done):
+                cm.broadcast_agent_text(sid, content, done)
+            case TextDelta(session_id=sid, delta=delta):
+                cm.broadcast_agent_text_delta(sid, delta)
+            case ThinkingGenerated(session_id=sid, content=content):
+                cm.broadcast_agent_thinking(sid, content)
+            case PlanUpdated(session_id=sid, items=items):
+                cm.broadcast_agent_plan(sid, items)
+            case ToolStarted(session_id=sid, tool=tool, args=args):
+                cm.broadcast_agent_tool_use(sid, tool, args)
+            case ToolCompleted(
+                session_id=sid, tool=tool, result=result, is_error=is_error
+            ):
+                cm.broadcast_agent_tool_result(sid, tool, result, is_error)
+            case ToolApprovalRequired(
+                session_id=sid, tool_call_id=tcid, tool=tool, args=args
+            ):
+                cm.broadcast_agent_tool_approval(sid, tcid, tool, args)
+            case ErrorOccurred(session_id=sid, message=message):
+                cm.broadcast_agent_error(sid, message)
+            case TokenUsageUpdated(
+                session_id=sid,
+                prompt_tokens=pt,
+                completion_tokens=ct,
+                total_session_tokens=total,
+            ):
+                cm.broadcast_agent_token_usage(sid, pt, ct, total)
 
     @staticmethod
     def _find_free_port(host: str, start_port: int, max_attempts: int = 100) -> int:

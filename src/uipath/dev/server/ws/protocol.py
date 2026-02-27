@@ -27,6 +27,9 @@ class ServerEvent(str, Enum):
     AGENT_TOOL_RESULT = "agent.tool_result"
     AGENT_TOOL_APPROVAL = "agent.tool_approval"
     AGENT_ERROR = "agent.error"
+    AGENT_THINKING = "agent.thinking"
+    AGENT_TEXT_DELTA = "agent.text_delta"
+    AGENT_TOKEN_USAGE = "agent.token_usage"
 
 
 class ClientCommand(str, Enum):

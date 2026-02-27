@@ -15,7 +15,38 @@ const ROLE_CONFIG: Record<string, { label: string; color: string }> = {
   assistant: { label: "AI", color: "var(--success)" },
   tool: { label: "Tool", color: "var(--warning)" },
   plan: { label: "Plan", color: "var(--accent)" },
+  thinking: { label: "Reasoning", color: "var(--text-muted)" },
 };
+
+function ThinkingCard({ message }: Props) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="py-1.5">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-1.5 mb-0.5 cursor-pointer"
+        style={{ background: "none", border: "none", padding: 0 }}
+      >
+        <div className="w-2 h-2 rounded-full" style={{ background: "var(--text-muted)", opacity: 0.5 }} />
+        <span className="text-[11px] font-semibold" style={{ color: "var(--text-muted)" }}>Reasoning</span>
+        <svg
+          width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2"
+          style={{ transform: expanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s", marginLeft: 2 }}
+        >
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      {expanded && (
+        <div
+          className="text-[12px] leading-relaxed pl-2.5 max-w-prose whitespace-pre-wrap"
+          style={{ color: "var(--text-muted)", fontStyle: "italic" }}
+        >
+          {message.content}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function PlanCard({ message }: Props) {
   const items = message.planItems ?? [];
@@ -234,6 +265,7 @@ function ToolCard({ message }: Props) {
 }
 
 export default function AgentMessageComponent({ message }: Props) {
+  if (message.role === "thinking") return <ThinkingCard message={message} />;
   if (message.role === "plan") return <PlanCard message={message} />;
   if (message.role === "tool") return <ToolCard message={message} />;
 

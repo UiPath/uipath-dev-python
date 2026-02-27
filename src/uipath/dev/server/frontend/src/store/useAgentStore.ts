@@ -26,6 +26,7 @@ interface AgentStore {
   addToolResult: (tool: string, result: string, isError: boolean) => void;
   addToolApprovalRequest: (toolCallId: string, tool: string, args: Record<string, unknown>) => void;
   resolveToolApproval: (toolCallId: string, approved: boolean) => void;
+  appendThinking: (content: string) => void;
   addError: (message: string) => void;
   setSessionId: (id: string) => void;
   setModels: (models: AgentModel[]) => void;
@@ -184,6 +185,24 @@ export const useAgentStore = create<AgentStore>((set) => ({
             }
           }
         }
+      }
+      return { messages: msgs };
+    }),
+
+  appendThinking: (content) =>
+    set((state) => {
+      const msgs = [...state.messages];
+      const last = msgs[msgs.length - 1];
+      if (last && last.role === "thinking") {
+        // Append to existing thinking message
+        msgs[msgs.length - 1] = { ...last, content: last.content + content };
+      } else {
+        msgs.push({
+          id: nextId(),
+          role: "thinking",
+          content,
+          timestamp: Date.now(),
+        });
       }
       return { messages: msgs };
     }),
