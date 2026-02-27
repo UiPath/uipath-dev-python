@@ -86,6 +86,15 @@ export default function AgentChatSidebar() {
 
   const isBusy = status === "thinking" || status === "executing" || status === "planning";
 
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const resetTextareaHeight = () => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = Math.min(ta.scrollHeight, 200) + "px";
+  };
+
   const handleSend = useCallback(() => {
     const text = input.trim();
     if (!text || !selectedModel || isBusy) return;
@@ -93,6 +102,11 @@ export default function AgentChatSidebar() {
     addUserMessage(text);
     ws.sendAgentMessage(text, selectedModel, sessionId, selectedSkillIds);
     setInput("");
+    // Reset textarea height after send
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current;
+      if (ta) ta.style.height = "auto";
+    });
   }, [input, selectedModel, isBusy, sessionId, selectedSkillIds, addUserMessage, ws]);
 
   const handleStop = useCallback(() => {
@@ -164,9 +178,15 @@ export default function AgentChatSidebar() {
           className="h-full overflow-y-auto px-3 py-2 space-y-0.5"
         >
           {messages.length === 0 && (
-            <p className="text-[var(--text-muted)] text-sm text-center py-6">
-              No messages yet
-            </p>
+            <div className="flex flex-col items-center justify-center py-10 px-4 gap-3" style={{ color: "var(--text-muted)" }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              <div className="text-center space-y-1.5">
+                <p className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>Ask the agent to help you code</p>
+                <p className="text-xs leading-relaxed">Create agents, functions, evaluations,<br />or ask questions about your project.</p>
+              </div>
+            </div>
           )}
           {messages.map((msg) => (
             <AgentMessageComponent key={msg.id} message={msg} />
@@ -196,24 +216,29 @@ export default function AgentChatSidebar() {
         )}
       </div>
 
-      {/* Input — matches ChatInput from debug view */}
+      {/* Input */}
       <div
-        className="flex items-center gap-2 px-3 py-2 border-t"
+        className="flex items-end gap-2 px-3 py-2 border-t"
         style={{ borderColor: "var(--border)" }}
       >
-        <input
+        <textarea
+          ref={textareaRef}
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => {
+            setInput(e.target.value);
+            resetTextareaHeight();
+          }}
           onKeyDown={handleKeyDown}
           disabled={isBusy || !selectedModel}
           placeholder={isBusy ? "Waiting for response..." : "Message..."}
-          className="flex-1 bg-transparent text-sm py-1 disabled:opacity-40 placeholder:text-[var(--text-muted)]"
-          style={{ color: "var(--text-primary)" }}
+          rows={2}
+          className="flex-1 bg-transparent text-sm py-1 disabled:opacity-40 placeholder:text-[var(--text-muted)] resize-none"
+          style={{ color: "var(--text-primary)", maxHeight: 200, overflow: "auto" }}
         />
         <button
           onClick={handleSend}
           disabled={!canSend}
-          className="text-xs font-semibold px-3 py-1.5 rounded transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+          className="text-xs font-semibold px-3 py-1.5 rounded transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
           aria-label="Send message"
           style={{
             color: canSend ? "var(--accent)" : "var(--text-muted)",

@@ -26,7 +26,7 @@ export default function ReloadToast() {
     <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center justify-between px-5 py-2.5 rounded-lg shadow-lg min-w-[400px]"
       style={{ background: "var(--bg-secondary)", border: "1px solid var(--bg-tertiary)" }}>
       <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
-        Files changed — reload to apply
+        Files changed, reload to apply
       </span>
       <div className="flex items-center gap-2">
         <button

@@ -57,15 +57,17 @@ Evaluations assess agent performance by comparing actual outputs against expecte
 
 ## Generated File Structure
 
+**Both evaluator files and eval set files are required.** Eval sets reference evaluators by ID — if the evaluator files are missing, evaluations will fail at runtime.
+
 ```
 evaluations/
-├── eval-sets/
+├── eval-sets/                          # Test cases (reference evaluators by ID)
 │   ├── <eval-name>.json
 │   └── <another-eval>.json
-└── evaluators/
-    ├── exact-match.json
-    ├── json-similarity.json
-    └── llm-judge-semantic-similarity.json
+└── evaluators/                         # Evaluator definitions (must exist first)
+    ├── exact-match.json                # id: "ExactMatchEvaluator"
+    ├── json-similarity.json            # id: "JsonSimilarityEvaluator"
+    └── llm-judge-output.json           # id: "LLMJudgeOutputEvaluator"
 ```
 
 ## Common Patterns at a Glance
@@ -195,7 +197,92 @@ Before creating evaluations, ensure your project has:
 
 If missing, create an agent first. See the [Creating Agents](../../creating-agents.md) guide for setup instructions.
 
-### Phase 2: Define Evaluation Details
+### Phase 2: Create Evaluator Files
+
+**You must create evaluator JSON files before creating eval sets.** Eval sets reference evaluators by ID, and running evaluations will fail if the referenced evaluator files don't exist.
+
+Evaluator files go in `evaluations/evaluators/` and define how agent outputs are scored.
+
+**Example: `evaluations/evaluators/exact-match.json`**
+```json
+{
+  "version": "1.0",
+  "id": "ExactMatchEvaluator",
+  "description": "Exact string matching validator",
+  "evaluatorTypeId": "uipath-exact-match",
+  "evaluatorConfig": {
+    "name": "ExactMatchEvaluator",
+    "targetOutputKey": "*",
+    "case_sensitive": false,
+    "negated": false
+  }
+}
+```
+
+**Example: `evaluations/evaluators/json-similarity.json`**
+```json
+{
+  "version": "1.0",
+  "id": "JsonSimilarityEvaluator",
+  "description": "JSON structure similarity comparison",
+  "evaluatorTypeId": "uipath-json-similarity",
+  "evaluatorConfig": {
+    "name": "JsonSimilarityEvaluator",
+    "targetOutputKey": "*"
+  }
+}
+```
+
+**Example: `evaluations/evaluators/llm-judge-output.json`**
+```json
+{
+  "version": "1.0",
+  "id": "LLMJudgeOutputEvaluator",
+  "description": "LLM-powered semantic output evaluation",
+  "evaluatorTypeId": "uipath-llm-judge-output",
+  "evaluatorConfig": {
+    "name": "LLMJudgeOutputEvaluator",
+    "model": "gpt-4o-2024-11-20",
+    "temperature": 0.0,
+    "targetOutputKey": "*"
+  }
+}
+```
+
+**Example: `evaluations/evaluators/trajectory.json`**
+```json
+{
+  "version": "1.0",
+  "id": "TrajectoryEvaluator",
+  "description": "LLM-powered trajectory evaluation",
+  "evaluatorTypeId": "uipath-llm-judge-trajectory",
+  "evaluatorConfig": {
+    "name": "TrajectoryEvaluator",
+    "model": "gpt-4o-2024-11-20",
+    "temperature": 0.0
+  }
+}
+```
+
+**Example: `evaluations/evaluators/contains.json`**
+```json
+{
+  "version": "1.0",
+  "id": "ContainsEvaluator",
+  "description": "Substring matching validator",
+  "evaluatorTypeId": "uipath-contains",
+  "evaluatorConfig": {
+    "name": "ContainsEvaluator",
+    "targetOutputKey": "*",
+    "case_sensitive": false,
+    "negated": false
+  }
+}
+```
+
+The `id` field in each evaluator file is what you reference in `evaluatorRefs` in your eval sets. See the [Evaluators Guide](evaluators.md) for all evaluator types and configuration options.
+
+### Phase 3: Define Evaluation Details
 
 You'll be asked for:
 
@@ -204,7 +291,7 @@ You'll be asked for:
 - **Target Agent** - Which agent to test
 - **Number of Test Cases** - How many tests to create
 
-### Phase 3: Collect Test Cases
+### Phase 4: Collect Test Cases
 
 For each test case, you'll guide through:
 
@@ -361,10 +448,10 @@ evaluations/
 └── evaluators/
     ├── exact-match.json
     ├── json-similarity.json
-    └── llm-judge-semantic-similarity.json
+    └── llm-judge-output.json
 ```
 
-Evaluators are reusable across multiple evaluation sets. Reference them by their ID in your eval sets.
+**Important:** Evaluator files must be created before (or alongside) eval sets. Every evaluator ID referenced in an eval set's `evaluatorRefs` must have a corresponding JSON file in `evaluations/evaluators/`. Evaluators are reusable across multiple evaluation sets.
 
 ## Schema Validation
 
@@ -433,10 +520,10 @@ Mock LLM interactions for testing without API calls:
 
 After creating evaluation sets, you can:
 
-1. **Run Evaluations** - Execute tests to see how your agent performs
-2. **Create More Sets** - Add additional test scenarios
-3. **View Details** - Examine specific test results
-4. **Export Results** - Save results for analysis
+1. **Verify evaluator files exist** - Ensure every ID in `evaluatorRefs` has a corresponding file in `evaluations/evaluators/`
+2. **Run Evaluations** - Execute tests to see how your agent performs
+3. **Create More Sets** - Add additional test scenarios
+4. **View Details** - Examine specific test results
 
 See [Running Evaluations](running-evaluations.md) for execution details.
 
@@ -534,12 +621,16 @@ Example: `"Tests basic calculator operations with standard inputs"`
 
 Array of evaluator IDs that this eval set uses.
 
-These must match the `id` field of evaluators in `evaluations/evaluators/`.
+**Important:** These must match the `id` field of evaluator JSON files in `evaluations/evaluators/`. The evaluator files must exist before running the evaluation — if a referenced evaluator is missing, the eval run will fail with a `Could not find the following evaluators` error.
 
 Example:
 ```json
 "evaluatorRefs": ["ExactMatchEvaluator", "JsonSimilarityEvaluator"]
 ```
+
+This requires two evaluator files to exist:
+- `evaluations/evaluators/exact-match.json` (with `"id": "ExactMatchEvaluator"`)
+- `evaluations/evaluators/json-similarity.json` (with `"id": "JsonSimilarityEvaluator"`)
 
 ### evaluations
 

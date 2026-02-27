@@ -191,5 +191,8 @@ async def save_file(path: str, body: SaveFileBody) -> dict[str, str]:
     """Save file content. Creates parent dirs if needed."""
     target = _resolve_safe(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(body.content, encoding="utf-8")
+    # Write bytes directly to avoid Python text-mode converting \n → \r\n on
+    # Windows, which would add extra carriage returns on every save since
+    # Monaco normalizes line endings to \n.
+    target.write_bytes(body.content.encode("utf-8"))
     return {"status": "ok"}

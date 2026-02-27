@@ -1,19 +1,24 @@
 ---
-description: UiPath Coded Agents assistant - Create, run, and evaluate coded agents
+description: UiPath Coded Agents & Functions assistant - Create, run, and evaluate coded agents and functions
 allowed-tools: Bash, Read, Write, Glob, Grep
 ---
 
-# UiPath Coded Agents Assistant
+# UiPath Coded Agents & Functions Assistant
 
-Welcome to the UiPath Coded Agents Assistant! This comprehensive guide helps you create, run, and evaluate UiPath coded agents using the UiPath Python SDK.
+Welcome to the UiPath Coded Agents & Functions Assistant! This comprehensive guide helps you create, run, and evaluate UiPath coded agents and coded functions using the UiPath Python SDK.
 
 ## Overview
 
-The UiPath Coded Agents enables you to build intelligent automation agents with:
-- **Type-safe agent definitions** using Pydantic models
+The UiPath Python SDK enables you to build two types of coded automations:
+- **Coded Agents** — AI-powered automation agents with LLM-driven decision-making
+- **Coded Functions** — Simpler, deterministic automation units for predictable tasks
+
+Both share:
+- **Type-safe definitions** using Pydantic models
 - **Automatic tracing** for monitoring and debugging
 - **Comprehensive testing** through evaluations
 - **Cloud integration** with UiPath Orchestrator
+- **Pack & publish** workflow for deployment
 
 ## Documentation
 
@@ -32,10 +37,24 @@ Begin your agent development journey with these foundational topics:
 Develop new agents with monitoring and observability built-in:
 
 - **[Creating Agents](references/creating-agents.md)** - Build new agents
-  - Project setup with pyproject.toml
+  - Project setup with pyproject.toml and uipath.json
   - Schema definition with Pydantic models
   - Agent implementation
   - Entry point generation
+  - Pack & publish
+
+### Building Functions
+
+Develop deterministic coded functions:
+
+- **[Creating Functions](references/creating-functions.md)** - Build coded functions
+  - Project setup with pyproject.toml and uipath.json
+  - Schema definition with Pydantic models
+  - Function implementation
+  - Entry point generation
+  - Pack & publish
+
+### Observability
 
 - **[Tracing](references/tracing.md)** - Add monitoring and debugging
   - Basic tracing with `@traced()` decorator
@@ -45,15 +64,22 @@ Develop new agents with monitoring and observability built-in:
   - Common use cases
   - Viewing traces in Orchestrator
 
-### Running Agents
+### Running Agents & Functions
 
-Execute and test your agents:
+Execute and test your agents and functions:
 
-- **[Running Agents](references/running-agents.md)** - Execute your agents
-  - Agent discovery and selection
+- **[Running Agents](references/running-agents.md)** - Execute your agents and functions
+  - Agent/function discovery and selection
   - Interactive input collection
   - Execution and result display
   - Error handling
+
+### Deploying
+
+Package and publish your agents and functions to UiPath Orchestrator:
+- `uv run uipath pack` — Create a deployable package (.nupkg)
+- `uv run uipath publish -w` — Publish to personal workspace
+- `uv run uipath publish -t` — Publish to a specific tenant folder
 
 ### Testing & Evaluation
 
@@ -117,21 +143,31 @@ See [Best Practices - Orchestration Pattern](references/evaluations/best-practic
 Mix JsonSimilarity and ExactMatch for API response validation.
 See [Best Practices - API Integration Pattern](references/evaluations/best-practices.md#pattern-4-api-integration-agents)
 
-## Coded Agents Features
+## Features
 
-- **Type Safety**: Pydantic models ensure type-safe agent definitions
-- **Automatic Tracing**: Monitor agent execution with `@traced()` decorator
+- **Type Safety**: Pydantic models ensure type-safe definitions for agents and functions
+- **Automatic Tracing**: Monitor execution with `@traced()` decorator
 - **Schema-Driven**: JSON schemas automatically generated from Pydantic models
 - **Cloud Integration**: Seamless integration with UiPath Cloud Platform
 - **Evaluation Framework**: Comprehensive testing with multiple evaluator types
+- **Pack & Publish**: Deploy agents and functions to Orchestrator
 - **Privacy**: Data redaction and sensitive field hiding
 
 ## Key Concepts
 
 ### Agents
-Agents are reusable automation components that:
+Agents are AI-powered automation components that:
 - Have well-defined input and output schemas
-- Execute in the UiPath cloud or on-premise
+- Use LLMs for decision-making and orchestration
+- Are configured via `uipath.json` (`"agents"` key) or framework config files (e.g., `langgraph.json`)
+- Are monitored and traced automatically
+- Can be tested with evaluations
+
+### Functions
+Functions are deterministic automation units that:
+- Have well-defined input and output schemas
+- Execute predictable, rule-based logic without LLMs
+- Are configured via `uipath.json` (`"functions"` key)
 - Are monitored and traced automatically
 - Can be tested with evaluations
 
@@ -164,7 +200,11 @@ Evaluations are test suites that:
    - Learn about [Tracing](references/tracing.md) to add monitoring
    - Then run your first agent using [Running Agents](references/running-agents.md)
 
-3. **Testing your agents?**
+3. **Building your first function?**
+   - Start with [Creating Functions](references/creating-functions.md)
+   - Then run it using [Running Agents](references/running-agents.md) (same workflow)
+
+4. **Testing your agents?**
    - Start with [Creating Evaluations](references/evaluations/creating-evaluations.md)
    - Review [Best Practices](references/evaluations/best-practices.md) for your agent type
    - Run evaluations with [Running Evaluations](references/evaluations/running-evaluations.md)
