@@ -7,9 +7,34 @@ Guide to creating new UiPath agents with AI-powered business logic implementatio
 When creating a new agent:
 
 1. **Setup pyproject.toml**:
-   - Use the official `pyproject.toml` template present in skill assets if `pyproject.toml` doesn't exist in the agent directory
-   - Replace `{AGENT_NAME}` with the actual agent name
+   - Use the following `pyproject.toml` template if `pyproject.toml` doesn't exist in the agent directory
+   - Replace `{AGENT_NAME}` with the actual agent name (lowercase, hyphenated)
    - Replace `{AGENT_DESCRIPTION}` with the agent description you provide
+   - Add the appropriate framework dependency based on the agentic framework being used:
+     - LangChain/LangGraph: add `"uipath-langchain"` to dependencies
+     - LlamaIndex: add `"uipath-llamaindex"` to dependencies
+     - OpenAI Agents SDK: add `"uipath-openai-agents"` to dependencies
+
+   ```toml
+   [project]
+   name = "{AGENT_NAME}"
+   version = "0.1.0"
+   description = "{AGENT_DESCRIPTION}"
+   readme = "README.md"
+   requires-python = ">=3.11"
+   dependencies = [
+       "uipath",
+       # Add the framework dependency based on the agentic framework:
+       # "uipath-langchain",      # for LangChain / LangGraph agents
+       # "uipath-llamaindex",     # for LlamaIndex agents
+       # "uipath-openai-agents",  # for OpenAI Agents SDK agents
+   ]
+
+   [dependency-groups]
+   dev = [
+       "uipath-dev",
+   ]
+   ```
 
 2. **Install dependencies**: Run `uv sync` to install dependencies and create the virtual environment.
 
