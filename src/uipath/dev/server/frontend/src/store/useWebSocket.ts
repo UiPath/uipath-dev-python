@@ -4,7 +4,7 @@ import { useRunStore } from "./useRunStore";
 import { useEvalStore } from "./useEvalStore";
 import { useAgentStore } from "./useAgentStore";
 import { useExplorerStore } from "./useExplorerStore";
-import { readFile } from "../api/explorer-client";
+import { readFile, listDirectory } from "../api/explorer-client";
 import type { RunSummary, TraceSpan, LogEntry, InterruptEvent } from "../types/run";
 import type { EvalRunSummary, EvalItemResult } from "../types/eval";
 import type { AgentPlanItem, AgentStatus } from "../types/agent";
@@ -72,6 +72,7 @@ export function useWebSocket() {
           const changedFiles = msg.payload.files as string[];
           const changedSet = new Set(changedFiles);
           const explorer = useExplorerStore.getState();
+          // Refresh open tab contents
           for (const tab of explorer.openTabs) {
             if (explorer.dirty[tab] || !changedSet.has(tab)) continue;
             readFile(tab).then((fc) => {
@@ -80,6 +81,20 @@ export function useWebSocket() {
               if (s.fileCache[tab]?.content === fc.content) return;
               s.setFileContent(tab, fc);
             }).catch(() => {});
+          }
+          // Refresh directory listings for already-loaded parent dirs
+          const dirsToRefresh = new Set<string>();
+          for (const filePath of changedFiles) {
+            const lastSlash = filePath.lastIndexOf("/");
+            const parentDir = lastSlash === -1 ? "" : filePath.substring(0, lastSlash);
+            if (parentDir in explorer.children) {
+              dirsToRefresh.add(parentDir);
+            }
+          }
+          for (const dir of dirsToRefresh) {
+            listDirectory(dir)
+              .then((entries) => useExplorerStore.getState().setChildren(dir, entries))
+              .catch(() => {});
           }
           break;
         }

@@ -1,6 +1,8 @@
-# Run Agents
+# Run Agents & Functions
 
-Execute your UiPath agent with interactive, schema-driven input collection.
+Execute your UiPath agent or function with interactive, schema-driven input collection.
+
+> **Note:** The `uv run uipath run` workflow is identical for both agents and functions. Everything below applies to both.
 
 ## Project Verification
 

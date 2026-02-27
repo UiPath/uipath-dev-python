@@ -189,9 +189,16 @@ function SingleToolCall({ tc }: { tc: AgentToolCall }) {
   );
 }
 
+const VISIBLE_TOOL_CALLS = 3;
+
 function ToolCard({ message }: Props) {
   const calls = message.toolCalls ?? (message.toolCall ? [message.toolCall] : []);
+  const [showAll, setShowAll] = useState(false);
   if (calls.length === 0) return null;
+
+  const hiddenCount = calls.length - VISIBLE_TOOL_CALLS;
+  const shouldCollapse = hiddenCount > 0 && !showAll;
+  const visibleCalls = shouldCollapse ? calls.slice(-VISIBLE_TOOL_CALLS) : calls;
 
   return (
     <div className="py-1.5">
@@ -202,8 +209,24 @@ function ToolCard({ message }: Props) {
         </span>
       </div>
       <div className="space-y-1">
-        {calls.map((tc, i) => (
-          <SingleToolCall key={i} tc={tc} />
+        {shouldCollapse && (
+          <button
+            onClick={() => setShowAll(true)}
+            className="ml-2.5 inline-flex items-center gap-1 text-[11px] font-mono px-2 py-1 rounded cursor-pointer hover:brightness-125"
+            style={{
+              background: "var(--bg-primary)",
+              border: "1px solid var(--border)",
+              color: "var(--text-muted)",
+            }}
+          >
+            {hiddenCount} more tool {hiddenCount === 1 ? "call" : "calls"}
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginLeft: 2 }}>
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
+        )}
+        {visibleCalls.map((tc, i) => (
+          <SingleToolCall key={shouldCollapse ? i + hiddenCount : i} tc={tc} />
         ))}
       </div>
     </div>

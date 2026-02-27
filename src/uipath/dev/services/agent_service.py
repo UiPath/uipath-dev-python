@@ -8,7 +8,9 @@ import json
 import logging
 import os
 import re
+import signal
 import subprocess
+import sys
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -27,6 +29,10 @@ MAX_GREP_MATCHES = 100
 BASH_TIMEOUT = 30
 TOOLS_REQUIRING_APPROVAL = {"write_file", "edit_file", "bash"}
 
+# Matches standard ANSI CSI sequences, OSC sequences (e.g. hyperlinks), and
+# carriage returns used by spinners to overwrite lines.
+_ANSI_RE = re.compile(r"\x1b\][^\x1b]*(?:\x1b\\|\x07)|\x1b\[[0-9;]*[A-Za-z]|\r")
+
 # ---------------------------------------------------------------------------
 # System prompt
 # ---------------------------------------------------------------------------
@@ -35,7 +41,14 @@ SYSTEM_PROMPT = """\
 You are a senior Python developer specializing in UiPath coded agents and automations. \
 You help users build, debug, test, and improve Python agents using the UiPath SDK.
 
-## Core Principles
+## Critical Rules
+
+### You Have a Shell — USE IT
+- You have direct access to the user's terminal via the `bash` tool.
+- NEVER tell the user to run commands themselves. ALWAYS use `bash` to execute commands directly.
+- This includes: `uv run`, `uv sync`, `uipath init`, `uipath run`, `uipath eval`, `uipath pack`, `uipath publish`, and any other CLI commands.
+- If something needs to be run, run it. Don't explain how to run it.
+- The user is already authenticated — NEVER ask them to authenticate or run `uipath auth`.
 
 ### Read Before Writing
 - NEVER suggest code changes without first reading the relevant source files.
@@ -60,15 +73,37 @@ You help users build, debug, test, and improve Python agents using the UiPath SD
 1. **Plan first**: Call `update_plan` with your steps before doing anything else.
 2. **Explore**: Use `glob` and `grep` to find relevant files. Read them with `read_file`.
 3. **Implement**: Use `edit_file` for targeted changes, `write_file` only for new files.
-4. **Verify**: Read back edited files to confirm correctness. Run tests or linters via `bash` when appropriate.
-5. **Update progress**: Mark plan steps as "completed" as you go, add new steps if scope expands.
-6. **Summarize**: When done, briefly state what you changed and why.
+4. **Execute**: Use `bash` to run commands — installations, tests, linters, builds, `uv run` commands, etc. \
+When the user asks you to run something, always use the `bash` tool to execute it. Never tell the user to run commands themselves — you have a shell, use it.
+5. **Verify**: Read back edited files to confirm correctness. Run tests or linters via `bash`.
+6. **Update progress**: Mark plan steps as "completed" as you go, add new steps if scope expands.
+7. **Summarize**: When done, briefly state what you changed and why.
+
+## Full Build Cycle
+
+When building or modifying an agent or function, always complete the full cycle — don't stop at writing code:
+
+1. **Write the code** — implement the agent/function with Input/Output models and `@traced()` main function.
+2. **Generate entry points** — run `uv run uipath init` via `bash`.
+3. **Write evaluations** — create BOTH:
+   - **Evaluator files** in `evaluations/evaluators/` (e.g. `exact-match.json`, `json-similarity.json`) — these must exist first.
+   - **Eval set files** in `evaluations/eval-sets/` with test cases that reference the evaluator IDs.
+4. **Run the evaluations** — execute `uv run uipath eval` via `bash` and report results.
+5. **Pack & publish** — when the user asks to deploy, run via `bash`:
+   - `uv run uipath pack` — create a .nupkg package
+   - `uv run uipath publish -w` — publish to personal workspace (default)
+   - `uv run uipath publish -t` — publish to a specific tenant folder
+
+Never stop after just writing code. If you create an agent/function, you must also create evaluations and run them. \
+If you create eval sets, you must also create the evaluator files they reference — otherwise the eval run will fail. \
+If the user asks you to publish or deploy, use `bash` to run the commands — don't tell them to do it. \
+Default to publishing to personal workspace (`-w`) unless the user specifies a tenant folder.
 
 ## Tools
 - `read_file` — Read file contents (always use before editing)
 - `write_file` — Create or overwrite a file
 - `edit_file` — Surgical string replacement (old_string must be unique)
-- `bash` — Execute a shell command (timeout: 30s)
+- `bash` — Execute a shell command (timeout: 30s). USE THIS to run commands for the user — never tell the user to run commands manually when you can run them yourself.
 - `glob` — Find files matching a pattern (e.g. `**/*.py`)
 - `grep` — Search file contents with regex
 - `update_plan` — Create or update your task plan
@@ -147,14 +182,19 @@ TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "bash",
-            "description": "Execute a shell command and return stdout/stderr. Timeout: 30s.",
+            "description": "Execute a shell command and return stdout/stderr. Timeout: 30s. "
+            "For commands that prompt for input, provide the expected input via the stdin parameter.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "command": {
                         "type": "string",
                         "description": "The shell command to execute.",
-                    }
+                    },
+                    "stdin": {
+                        "type": "string",
+                        "description": "Optional input to feed to the command's stdin. Use this for commands that prompt for input (e.g. confirmations, selections). Use newlines to separate multiple inputs.",
+                    },
                 },
                 "required": ["command"],
             },
@@ -322,24 +362,69 @@ def _tool_edit_file(args: dict[str, Any]) -> str:
     return "Edit applied successfully"
 
 
+def _kill_process_tree(proc: subprocess.Popen[str]) -> None:
+    """Kill a process and all its children."""
+    try:
+        if sys.platform == "win32":
+            # taskkill /T kills the entire process tree on Windows
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                capture_output=True,
+            )
+        else:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except (ProcessLookupError, OSError):
+        pass
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+
+
 def _tool_bash(args: dict[str, Any]) -> str:
     command = args["command"]
+    stdin_input = args.get("stdin")
     try:
-        result = subprocess.run(
-            command,
+        env = os.environ.copy()
+        env["PYTHONUTF8"] = "1"
+        env["NO_COLOR"] = "1"
+        env["TERM"] = "dumb"
+        popen_kwargs: dict[str, Any] = dict(
             shell=True,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=BASH_TIMEOUT,
+            encoding="utf-8",
+            errors="replace",
             cwd=str(_PROJECT_ROOT),
+            env=env,
         )
+        # DEVNULL prevents hanging on interactive prompts when no input given.
+        # PIPE is used only when the agent explicitly provides stdin input.
+        if stdin_input is not None:
+            popen_kwargs["stdin"] = subprocess.PIPE
+        else:
+            popen_kwargs["stdin"] = subprocess.DEVNULL
+        # On Unix, create a new process group so we can kill the whole tree.
+        if sys.platform != "win32":
+            popen_kwargs["start_new_session"] = True
+
+        proc = subprocess.Popen(command, **popen_kwargs)
+        try:
+            stdout, stderr = proc.communicate(input=stdin_input, timeout=BASH_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            _kill_process_tree(proc)
+            return f"Error: command timed out after {BASH_TIMEOUT}s"
+
         output = ""
-        if result.stdout:
-            output += result.stdout
-        if result.stderr:
-            output += ("\n" if output else "") + result.stderr
-        if result.returncode != 0:
-            output += f"\n[exit code: {result.returncode}]"
+        if stdout:
+            output += stdout
+        if stderr:
+            output += ("\n" if output else "") + stderr
+        # Strip ANSI escape sequences and spinner artifacts
+        output = _ANSI_RE.sub("", output)
+        if proc.returncode != 0:
+            output += f"\n[exit code: {proc.returncode}]"
         if not output:
             output = "[no output]"
         if len(output) > MAX_OUTPUT_CHARS:
@@ -348,8 +433,6 @@ def _tool_bash(args: dict[str, Any]) -> str:
                 + f"\n... [truncated at {MAX_OUTPUT_CHARS} chars]"
             )
         return output
-    except subprocess.TimeoutExpired:
-        return f"Error: command timed out after {BASH_TIMEOUT}s"
     except Exception as e:
         return f"Error: {e}"
 
