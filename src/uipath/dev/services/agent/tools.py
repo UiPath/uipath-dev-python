@@ -96,7 +96,22 @@ def _make_read_file(project_root: Path) -> Callable[[dict[str, Any]], str]:
         if not path.is_file():
             return f"Error: file not found: {args['path']}"
         content = path.read_text(encoding="utf-8", errors="replace")
-        if len(content) > MAX_FILE_CHARS:
+
+        offset = args.get("offset")
+        limit = args.get("limit")
+
+        if offset is not None or limit is not None:
+            lines = content.splitlines(keepends=True)
+            total = len(lines)
+            start = max(0, (int(offset) - 1)) if offset else 0
+            end = start + int(limit) if limit else total
+            selected = lines[start:end]
+            content = "".join(selected)
+            if start > 0 or end < total:
+                content += (
+                    f"\n[showing lines {start + 1}-{min(end, total)} of {total} total]"
+                )
+        elif len(content) > MAX_FILE_CHARS:
             content = (
                 content[:MAX_FILE_CHARS]
                 + f"\n... [truncated at {MAX_FILE_CHARS} chars]"
@@ -275,7 +290,15 @@ def _make_grep(project_root: Path) -> Callable[[dict[str, Any]], str]:
 _READ_FILE_PARAMS: dict[str, Any] = {
     "type": "object",
     "properties": {
-        "path": {"type": "string", "description": "Relative or absolute file path."}
+        "path": {"type": "string", "description": "Relative or absolute file path."},
+        "offset": {
+            "type": "integer",
+            "description": "1-based line number to start reading from. Defaults to 1.",
+        },
+        "limit": {
+            "type": "integer",
+            "description": "Maximum number of lines to return. Defaults to all lines.",
+        },
     },
     "required": ["path"],
 }
@@ -348,27 +371,51 @@ _GREP_PARAMS: dict[str, Any] = {
     "required": ["pattern"],
 }
 
-_UPDATE_PLAN_PARAMS: dict[str, Any] = {
+_CREATE_TASK_PARAMS: dict[str, Any] = {
     "type": "object",
     "properties": {
-        "plan": {
-            "type": "array",
-            "description": "The full plan with updated statuses. Always send the complete plan, not just changed items.",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "title": {"type": "string", "description": "Step title"},
-                    "status": {
-                        "type": "string",
-                        "enum": ["pending", "in_progress", "completed"],
-                        "description": "Step status",
-                    },
-                },
-                "required": ["title", "status"],
-            },
-        }
+        "title": {"type": "string", "description": "Short title describing the task."},
+        "description": {
+            "type": "string",
+            "description": "Optional longer description with details or acceptance criteria.",
+        },
     },
-    "required": ["plan"],
+    "required": ["title"],
+}
+
+_UPDATE_TASK_PARAMS: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "task_id": {"type": "string", "description": "The ID of the task to update."},
+        "status": {
+            "type": "string",
+            "enum": ["pending", "in_progress", "completed"],
+            "description": "New status for the task.",
+        },
+        "title": {
+            "type": "string",
+            "description": "Optional new title for the task.",
+        },
+    },
+    "required": ["task_id", "status"],
+}
+
+_LIST_TASKS_PARAMS: dict[str, Any] = {
+    "type": "object",
+    "properties": {},
+}
+
+_ASK_USER_PARAMS: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "question": {"type": "string", "description": "The question to ask the user."},
+        "options": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Optional list of choices for the user to pick from.",
+        },
+    },
+    "required": ["question"],
 }
 
 _READ_REFERENCE_PARAMS: dict[str, Any] = {
@@ -404,20 +451,34 @@ def create_default_tools(project_root: Path) -> list[ToolDefinition]:
     return [
         ToolDefinition(
             name="read_file",
-            description="Read the contents of a file at the given path.",
+            description=(
+                "Read the contents of a file at the given path. Always use this before editing a file "
+                "to understand its current content, imports, and conventions. Supports optional offset "
+                "(1-based line number) and limit (max lines) for reading specific sections of large files. "
+                "Returns up to 100K chars; larger files are truncated. Accepts relative or absolute paths."
+            ),
             parameters=_READ_FILE_PARAMS,
             handler=_make_read_file(project_root),
         ),
         ToolDefinition(
             name="write_file",
-            description="Create or overwrite a file with the given content.",
+            description=(
+                "Create a new file or completely overwrite an existing file with the given content. "
+                "Use this only for new files — prefer edit_file for modifying existing files. "
+                "Parent directories are created automatically. Requires user approval."
+            ),
             parameters=_WRITE_FILE_PARAMS,
             handler=_make_write_file(project_root),
             requires_approval=True,
         ),
         ToolDefinition(
             name="edit_file",
-            description="Replace an exact string in a file with a new string. The old_string must appear exactly once.",
+            description=(
+                "Replace an exact string in a file with a new string. The old_string must appear "
+                "exactly once in the file (to prevent ambiguous edits). Use this for targeted, "
+                "surgical changes to existing files. Always read_file first to get the exact string "
+                "to match. Requires user approval."
+            ),
             parameters=_EDIT_FILE_PARAMS,
             handler=_make_edit_file(project_root),
             requires_approval=True,
@@ -425,8 +486,10 @@ def create_default_tools(project_root: Path) -> list[ToolDefinition]:
         ToolDefinition(
             name="bash",
             description=(
-                "Execute a shell command and return stdout/stderr. Timeout: 30s. "
-                "For commands that prompt for input, provide the expected input via the stdin parameter."
+                "Execute a shell command and return stdout + stderr. Timeout: 30 seconds. "
+                "Use this for running CLI tools (uv run, uipath init, pytest, ruff, etc.), "
+                "installing dependencies, and any terminal operations. For commands that need "
+                "interactive input, provide it via the stdin parameter. Requires user approval."
             ),
             parameters=_BASH_PARAMS,
             handler=_make_bash(project_root),
@@ -434,20 +497,59 @@ def create_default_tools(project_root: Path) -> list[ToolDefinition]:
         ),
         ToolDefinition(
             name="glob",
-            description="Find files matching a glob pattern. Returns up to 200 results.",
+            description=(
+                "Find files matching a glob pattern (e.g. '**/*.py', 'src/**/*.ts'). "
+                "Use this to discover files by name or extension before reading them. "
+                "Returns up to 200 file paths relative to the project root, sorted alphabetically. "
+                "For searching file *contents*, use grep instead."
+            ),
             parameters=_GLOB_PARAMS,
             handler=_make_glob(project_root),
         ),
         ToolDefinition(
             name="grep",
-            description="Search file contents with a regex pattern. Returns up to 100 matches.",
+            description=(
+                "Search file contents using a regex pattern. Returns matching lines with "
+                "file path, line number, and content (up to 100 matches). Skips hidden dirs, "
+                "node_modules, and __pycache__. Use the 'include' filter for specific file types "
+                "(e.g. '*.py'). For finding files by name, use glob instead."
+            ),
             parameters=_GREP_PARAMS,
             handler=_make_grep(project_root),
         ),
+    ]
+
+
+def create_task_tools() -> list[ToolDefinition]:
+    """Create the task management tools (create_task, update_task, list_tasks)."""
+    return [
         ToolDefinition(
-            name="update_plan",
-            description="Update the task plan. Call this first to outline steps, then update as you complete them.",
-            parameters=_UPDATE_PLAN_PARAMS,
+            name="create_task",
+            description=(
+                "Create a new task in your plan. Call this at the start to break your work into "
+                "trackable steps. Each task gets a unique ID. Returns the task ID. "
+                "Use this instead of sending the full plan — add tasks one at a time."
+            ),
+            parameters=_CREATE_TASK_PARAMS,
+            handler=lambda args: "",  # Handled specially in the loop
+        ),
+        ToolDefinition(
+            name="update_task",
+            description=(
+                "Update a task's status or title. Set status to 'in_progress' when starting a step, "
+                "'completed' when done. You can also update the title if the scope changed. "
+                "Only sends the fields you want to change — no need to resend the full plan."
+            ),
+            parameters=_UPDATE_TASK_PARAMS,
+            handler=lambda args: "",  # Handled specially in the loop
+        ),
+        ToolDefinition(
+            name="list_tasks",
+            description=(
+                "List all tasks with their IDs, titles, and statuses. Use this to review your "
+                "current plan progress or to find task IDs for updating."
+            ),
+            parameters=_LIST_TASKS_PARAMS,
             handler=lambda args: "",  # Handled specially in the loop
         ),
     ]
@@ -457,7 +559,12 @@ def create_read_reference_tool() -> ToolDefinition:
     """Create the read_reference tool (added when skills are active)."""
     return ToolDefinition(
         name="read_reference",
-        description="Read a reference document from the skill's references directory.",
+        description=(
+            "Read a reference document from the active skill's references directory. "
+            "Use this to get detailed information about a topic listed in the skill's table of "
+            "contents. Pass the relative path as shown in the skill summary (e.g. 'authentication.md'). "
+            "The skill summary gives you section headings — use read_reference to dive deeper."
+        ),
         parameters=_READ_REFERENCE_PARAMS,
         handler=lambda args: "",  # Handled specially in the loop
     )
@@ -468,11 +575,27 @@ def create_dispatch_agent_tool() -> ToolDefinition:
     return ToolDefinition(
         name="dispatch_agent",
         description=(
-            "Spawn a sub-agent to handle a complex subtask in its own context. "
-            "The sub-agent has access to read_file, glob, grep, and bash (read-only). "
-            "Use this for research tasks, large file analysis, or multi-file searches "
-            "that would fill up the main context."
+            "Spawn a sub-agent to handle a research subtask in its own isolated context. "
+            "The sub-agent has read-only access (read_file, glob, grep, bash). Use this for "
+            "multi-file analysis, large codebase exploration, or any research that would "
+            "fill up the main context window. The sub-agent returns a concise summary of findings. "
+            "Don't use this for quick single-file lookups — use read_file or grep directly."
         ),
         parameters=_DISPATCH_AGENT_PARAMS,
+        handler=lambda args: "",  # Handled specially in the loop
+    )
+
+
+def create_ask_user_tool() -> ToolDefinition:
+    """Create the ask_user tool for structured elicitation."""
+    return ToolDefinition(
+        name="ask_user",
+        description=(
+            "Ask the user a question and wait for their answer. Use this when you need "
+            "clarification, a decision between options, or confirmation before proceeding. "
+            "Optionally provide a list of options for the user to choose from. "
+            "The loop will pause until the user responds. Returns the user's answer as text."
+        ),
+        parameters=_ASK_USER_PARAMS,
         handler=lambda args: "",  # Handled specially in the loop
     )

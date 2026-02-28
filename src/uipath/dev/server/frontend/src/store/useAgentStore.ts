@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { AgentMessage, AgentPlanItem, AgentStatus, AgentModel, AgentSkill, AgentToolCall } from "../types/agent";
+import type { AgentMessage, AgentPlanItem, AgentQuestion, AgentSessionState, AgentStatus, AgentModel, AgentSkill, AgentToolCall } from "../types/agent";
 
 let msgCounter = 0;
 function nextId() {
@@ -11,6 +11,7 @@ interface AgentStore {
   status: AgentStatus;
   messages: AgentMessage[];
   plan: AgentPlanItem[];
+  activeQuestion: AgentQuestion | null;
   models: AgentModel[];
   selectedModel: string | null;
   modelsLoading: boolean;
@@ -28,6 +29,7 @@ interface AgentStore {
   resolveToolApproval: (toolCallId: string, approved: boolean) => void;
   appendThinking: (content: string) => void;
   addError: (message: string) => void;
+  setActiveQuestion: (q: AgentQuestion | null) => void;
   setSessionId: (id: string) => void;
   setModels: (models: AgentModel[]) => void;
   setSelectedModel: (model: string) => void;
@@ -36,6 +38,7 @@ interface AgentStore {
   setSelectedSkillIds: (ids: string[]) => void;
   toggleSkill: (id: string) => void;
   setSkillsLoading: (loading: boolean) => void;
+  hydrateSession: (state: AgentSessionState) => void;
   clearSession: () => void;
 }
 
@@ -44,6 +47,7 @@ export const useAgentStore = create<AgentStore>((set) => ({
   status: "idle",
   messages: [],
   plan: [],
+  activeQuestion: null,
   models: [],
   selectedModel: null,
   modelsLoading: false,
@@ -151,6 +155,24 @@ export const useAgentStore = create<AgentStore>((set) => ({
   addToolApprovalRequest: (toolCallId, tool, args) =>
     set((state) => {
       const msgs = [...state.messages];
+      // ToolStarted fires before ToolApprovalRequired, so an existing
+      // chip (same tool, no status, no result) may already be present.
+      // Upgrade it in-place instead of adding a duplicate.
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        const msg = msgs[i];
+        if (msg.role === "tool" && msg.toolCalls) {
+          const calls = [...msg.toolCalls];
+          for (let j = calls.length - 1; j >= 0; j--) {
+            if (calls[j].tool === tool && !calls[j].status && calls[j].result === undefined) {
+              calls[j] = { ...calls[j], tool_call_id: toolCallId, status: "pending" };
+              msgs[i] = { ...msg, toolCalls: calls };
+              return { messages: msgs };
+            }
+          }
+        }
+        if (msg.role !== "tool") break;
+      }
+      // No existing chip found — create new
       const newCall: AgentToolCall = { tool, args, tool_call_id: toolCallId, status: "pending" };
       const last = msgs[msgs.length - 1];
       if (last && last.role === "tool" && last.toolCalls) {
@@ -222,7 +244,11 @@ export const useAgentStore = create<AgentStore>((set) => ({
       ],
     })),
 
-  setSessionId: (id) => set({ sessionId: id }),
+  setActiveQuestion: (q) => set({ activeQuestion: q }),
+  setSessionId: (id) => {
+    sessionStorage.setItem("agent_session_id", id);
+    set({ sessionId: id });
+  },
   setModels: (models) => set({ models }),
   setSelectedModel: (model) => set({ selectedModel: model }),
   setModelsLoading: (loading) => set({ modelsLoading: loading }),
@@ -237,11 +263,23 @@ export const useAgentStore = create<AgentStore>((set) => ({
     }),
   setSkillsLoading: (loading) => set({ skillsLoading: loading }),
 
-  clearSession: () =>
+  hydrateSession: (state: AgentSessionState) =>
+    set({
+      sessionId: state.session_id,
+      status: (state.status as AgentStatus) || "done",
+      messages: state.messages,
+      plan: state.plan,
+      selectedModel: state.model || null,
+    }),
+
+  clearSession: () => {
+    sessionStorage.removeItem("agent_session_id");
     set({
       sessionId: null,
       status: "idle",
       messages: [],
       plan: [],
-    }),
+      activeQuestion: null,
+    });
+  },
 }));

@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-import logging
 import os
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
-
-logger = logging.getLogger(__name__)
-
 
 # ---------------------------------------------------------------------------
 # Data classes
@@ -119,10 +115,8 @@ def _make_rewrite_transport(gateway_completions_url: str) -> Any:
 
     class _RewriteTransport(httpx.AsyncHTTPTransport):
         async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
-            original = str(request.url)
             params = request.url.params
             request.url = httpx.URL(gateway_completions_url, params=params)
-            logger.info("URL rewrite: %s -> %s", original, str(request.url))
             return await super().handle_async_request(request)
 
     return _RewriteTransport()
@@ -210,13 +204,30 @@ class OpenAIProvider:
         temperature: float = 0,
     ) -> ModelResponse:
         """Non-streaming completion (used for compaction)."""
+        if _is_reasoning_model(model):
+            return await self._complete_responses(
+                messages, tools, model=model, max_tokens=max_tokens
+            )
+        return await self._complete_chat(
+            messages, tools, model=model, max_tokens=max_tokens, temperature=temperature
+        )
+
+    async def _complete_chat(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        *,
+        model: str,
+        max_tokens: int = 4096,
+        temperature: float = 0,
+    ) -> ModelResponse:
+        """Non-streaming completion via Chat Completions API."""
         kwargs: dict[str, Any] = {
             "model": model,
             "messages": messages,
             "max_completion_tokens": max_tokens,
+            "temperature": temperature,
         }
-        if not _is_reasoning_model(model):
-            kwargs["temperature"] = temperature
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
@@ -248,6 +259,60 @@ class OpenAIProvider:
             tool_calls=tool_calls,
             thinking=None,
             finish_reason=choice.finish_reason or "",
+            usage=usage,
+        )
+
+    async def _complete_responses(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        *,
+        model: str,
+        max_tokens: int = 4096,
+    ) -> ModelResponse:
+        """Non-streaming completion via Responses API (reasoning models)."""
+        client = self._get_responses_client()
+        input_items = self._convert_messages_to_input(messages)
+
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "input": input_items,
+            "max_output_tokens": max_tokens,
+        }
+        if tools:
+            kwargs["tools"] = self._convert_tools_to_responses(tools)
+
+        response = await client.responses.create(**kwargs)
+
+        content = ""
+        tool_calls = []
+        for item in response.output:
+            if item.type == "message":
+                for part in item.content:
+                    if hasattr(part, "text"):
+                        content += part.text
+            elif item.type == "function_call":
+                tool_calls.append(
+                    ToolCall(
+                        id=item.call_id,
+                        name=item.name,
+                        arguments=item.arguments,
+                    )
+                )
+
+        usage = None
+        if response.usage:
+            usage = Usage(
+                prompt_tokens=response.usage.input_tokens,
+                completion_tokens=response.usage.output_tokens,
+            )
+
+        finish = "tool_calls" if tool_calls else "stop"
+        return ModelResponse(
+            content=content,
+            tool_calls=tool_calls,
+            thinking=None,
+            finish_reason=finish,
             usage=usage,
         )
 

@@ -62,6 +62,48 @@ class SkillService:
             raise FileNotFoundError(f"Skill not found: {skill_id}")
         return path.read_text(encoding="utf-8")
 
+    def get_skill_summary(self, skill_id: str) -> str:
+        """Return a compact summary: title + section headings + reference files.
+
+        This is injected into the system prompt instead of the full content,
+        so the model can use ``read_reference`` to drill into details.
+        """
+        path = self._resolve_skill_file(skill_id)
+        if not path.is_file():
+            raise FileNotFoundError(f"Skill not found: {skill_id}")
+        text = path.read_text(encoding="utf-8")
+
+        title = ""
+        headings: list[str] = []
+        for line in text.splitlines():
+            stripped = line.strip()
+            if (
+                stripped.startswith("# ")
+                and not stripped.startswith("##")
+                and not title
+            ):
+                title = stripped
+            elif stripped.startswith("## "):
+                headings.append(stripped)
+
+        # List sibling reference files the model can read_reference into
+        refs_dir = path.parent
+        ref_files = sorted(
+            f.name for f in refs_dir.iterdir() if f.is_file() and f.suffix == ".md"
+        )
+
+        parts = [title or f"# {skill_id}"]
+        if headings:
+            parts.append("\nSections:")
+            parts.extend(f"  - {h.lstrip('#').strip()}" for h in headings)
+        if ref_files:
+            parts.append("\nAvailable reference files (use read_reference to view):")
+            parts.extend(f"  - {f}" for f in ref_files)
+        parts.append(
+            "\nUse read_reference with the filename above to get full details."
+        )
+        return "\n".join(parts)
+
     def get_reference(self, skill_id: str, ref_path: str) -> str:
         """Read a reference file relative to the skill's parent references dir."""
         # Skill ID is like "uipath/authentication" — base dir is "uipath"

@@ -89,3 +89,12 @@ class TokenUsageUpdated(AgentEvent):
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_session_tokens: int = 0
+
+
+@dataclass
+class UserQuestionAsked(AgentEvent):
+    """Agent is asking the user a question and waiting for an answer."""
+
+    question_id: str = ""
+    question: str = ""
+    options: list[str] = field(default_factory=list)

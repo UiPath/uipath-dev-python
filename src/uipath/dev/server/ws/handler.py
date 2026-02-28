@@ -116,6 +116,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         tool_call_id, bool(approved)
                     )
 
+            elif command == ClientCommand.AGENT_QUESTION_RESPONSE.value:
+                question_id = payload.get("question_id", "")
+                answer = payload.get("answer", "")
+                if question_id:
+                    server.agent_service.resolve_question(question_id, str(answer))
+
     except WebSocketDisconnect:
         manager.disconnect(websocket)
     except Exception:

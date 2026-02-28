@@ -144,4 +144,12 @@ export class WsClient {
       approved,
     });
   }
+
+  sendQuestionResponse(sessionId: string, questionId: string, answer: string): void {
+    this.send("agent.question_response", {
+      session_id: sessionId,
+      question_id: questionId,
+      answer,
+    });
+  }
 }

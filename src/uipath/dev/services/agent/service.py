@@ -3,24 +3,33 @@
 from __future__ import annotations
 
 import asyncio
-import logging
+import json
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from uipath.dev.services.agent.events import AgentEvent, StatusChanged
 from uipath.dev.services.agent.loop import SYSTEM_PROMPT, AgentLoop
 from uipath.dev.services.agent.provider import create_provider
 from uipath.dev.services.agent.session import AgentSession
 from uipath.dev.services.agent.tools import (
+    create_ask_user_tool,
     create_default_tools,
     create_dispatch_agent_tool,
     create_read_reference_tool,
+    create_task_tools,
 )
 from uipath.dev.services.skill_service import SkillService
 
-logger = logging.getLogger(__name__)
-
 _PROJECT_ROOT = Path.cwd().resolve()
+
+
+def _safe_parse_json(s: str) -> dict[str, Any]:
+    """Parse JSON string, returning empty dict on failure."""
+    try:
+        return json.loads(s)
+    except (json.JSONDecodeError, TypeError):
+        return {}
 
 
 class AgentService:
@@ -37,6 +46,8 @@ class AgentService:
         self._on_event = on_event
         self._pending_approvals: dict[str, asyncio.Event] = {}
         self._approval_results: dict[str, bool] = {}
+        self._pending_questions: dict[str, asyncio.Event] = {}
+        self._question_results: dict[str, str] = {}
 
     def _emit(self, event: AgentEvent) -> None:
         if self._on_event:
@@ -67,7 +78,12 @@ class AgentService:
             session.skill_ids = skill_ids
 
         # If already running, ignore
-        if session.status in ("thinking", "executing", "awaiting_approval"):
+        if session.status in (
+            "thinking",
+            "executing",
+            "awaiting_approval",
+            "awaiting_input",
+        ):
             return
 
         session.messages.append({"role": "user", "content": text})
@@ -88,40 +104,257 @@ class AgentService:
 
     def resolve_tool_approval(self, tool_call_id: str, approved: bool) -> None:
         """Resolve a pending tool approval request."""
-        logger.info(
-            "resolve_tool_approval: tool_call_id=%s approved=%s pending_keys=%s",
-            tool_call_id,
-            approved,
-            list(self._pending_approvals.keys()),
-        )
         self._approval_results[tool_call_id] = approved
         event = self._pending_approvals.get(tool_call_id)
         if event:
-            logger.info("resolve_tool_approval: signaling event for %s", tool_call_id)
             event.set()
-        else:
-            logger.info(
-                "resolve_tool_approval: no pending event for tool_call_id=%s",
-                tool_call_id,
+
+    def resolve_question(self, question_id: str, answer: str) -> None:
+        """Resolve a pending agent question with the user's answer."""
+        self._question_results[question_id] = answer
+        event = self._pending_questions.get(question_id)
+        if event:
+            event.set()
+
+    def get_session_state(self, session_id: str) -> dict[str, Any] | None:
+        """Return the full session state converted to frontend message format."""
+        session = self._sessions.get(session_id)
+        if session is None:
+            return None
+
+        frontend_messages = self._convert_messages(session)
+        tasks = [
+            {"title": t["title"], "status": t["status"]} for t in session.tasks.values()
+        ]
+
+        return {
+            "session_id": session.id,
+            "status": "done" if session.status == "idle" else session.status,
+            "model": session.model,
+            "messages": frontend_messages,
+            "plan": tasks,
+            "total_prompt_tokens": session.total_prompt_tokens,
+            "total_completion_tokens": session.total_completion_tokens,
+            "turn_count": session.turn_count,
+            "compaction_count": session.compaction_count,
+        }
+
+    @staticmethod
+    def _convert_messages(session: AgentSession) -> list[dict[str, Any]]:
+        """Convert OpenAI-format messages to frontend AgentMessage[] format."""
+        result: list[dict[str, Any]] = []
+        msg_counter = 0
+        hidden_tool_call_ids: set[str] = set()
+
+        def next_id() -> str:
+            nonlocal msg_counter
+            msg_counter += 1
+            return f"restored-msg-{msg_counter}"
+
+        # Task management tools are internal — don't show in restored chat
+        _HIDDEN_TOOLS = {
+            "create_task",
+            "update_task",
+            "list_tasks",
+            "dispatch_agent",
+            "ask_user",
+            "read_reference",
+        }
+
+        # Walk messages sequentially, collecting tool groups
+        pending_tool_calls: list[dict[str, Any]] = []
+
+        for msg in session.messages:
+            role = msg.get("role")
+
+            if role == "user":
+                # Flush any pending tool group
+                if pending_tool_calls:
+                    result.append(
+                        {
+                            "id": next_id(),
+                            "role": "tool",
+                            "content": "",
+                            "timestamp": 0,
+                            "toolCalls": pending_tool_calls,
+                        }
+                    )
+                    pending_tool_calls = []
+
+                result.append(
+                    {
+                        "id": next_id(),
+                        "role": "user",
+                        "content": msg.get("content", ""),
+                        "timestamp": 0,
+                    }
+                )
+
+            elif role == "assistant":
+                content = msg.get("content", "") or ""
+                # Only flush pending tool group when the model actually
+                # spoke between tool rounds (text content present).
+                # Back-to-back tool rounds stay in one group.
+                if content and pending_tool_calls:
+                    result.append(
+                        {
+                            "id": next_id(),
+                            "role": "tool",
+                            "content": "",
+                            "timestamp": 0,
+                            "toolCalls": pending_tool_calls,
+                        }
+                    )
+                    pending_tool_calls = []
+
+                if content:
+                    result.append(
+                        {
+                            "id": next_id(),
+                            "role": "assistant",
+                            "content": content,
+                            "timestamp": 0,
+                            "done": True,
+                        }
+                    )
+
+                # Start collecting tool calls if present
+                tool_calls = msg.get("tool_calls", [])
+                for tc in tool_calls:
+                    func = tc.get("function", {})
+                    name = func.get("name", "unknown")
+                    tc_id = tc.get("id", "")
+                    if name in _HIDDEN_TOOLS:
+                        hidden_tool_call_ids.add(tc_id)
+                        continue
+                    pending_tool_calls.append(
+                        {
+                            "tool": name,
+                            "args": _safe_parse_json(func.get("arguments", "{}")),
+                            "_tool_call_id": tc_id,
+                        }
+                    )
+
+            elif role == "tool":
+                tool_call_id = msg.get("tool_call_id", "")
+                if tool_call_id in hidden_tool_call_ids:
+                    continue
+                # Match to pending tool call by tool_call_id
+                content = msg.get("content", "")
+                is_error = content.startswith("Error:")
+                for tc in pending_tool_calls:
+                    if tc.get("_tool_call_id") == tool_call_id:
+                        tc["result"] = content
+                        tc["is_error"] = is_error
+                        break
+
+        # Flush remaining tool group
+        if pending_tool_calls:
+            result.append(
+                {
+                    "id": next_id(),
+                    "role": "tool",
+                    "content": "",
+                    "timestamp": 0,
+                    "toolCalls": pending_tool_calls,
+                }
             )
+
+        # Clean up internal _tool_call_id from tool calls
+        for msg_item in result:
+            if msg_item.get("toolCalls"):
+                for tc in msg_item["toolCalls"]:
+                    tc.pop("_tool_call_id", None)
+
+        return result
+
+    def get_session_diagnostics(self, session_id: str) -> dict[str, Any] | None:
+        """Return structured diagnostics for a session."""
+        session = self._sessions.get(session_id)
+        if session is None:
+            return None
+
+        # Tool call summary: count calls and errors per tool name
+        tool_counts: dict[str, int] = {}
+        tool_errors: dict[str, int] = {}
+        for msg in session.messages:
+            if msg.get("role") == "assistant" and msg.get("tool_calls"):
+                for tc in msg["tool_calls"]:
+                    name = tc.get("function", {}).get("name", "unknown")
+                    tool_counts[name] = tool_counts.get(name, 0) + 1
+            if msg.get("role") == "tool":
+                content = msg.get("content", "")
+                # Find matching tool name from preceding assistant message
+                tool_call_id = msg.get("tool_call_id", "")
+                tool_name = self._resolve_tool_name(session, tool_call_id)
+                if content.startswith("Error:"):
+                    tool_errors[tool_name] = tool_errors.get(tool_name, 0) + 1
+
+        tool_summary = []
+        for name, count in sorted(tool_counts.items()):
+            entry: dict[str, Any] = {"tool": name, "calls": count}
+            if name in tool_errors:
+                entry["errors"] = tool_errors[name]
+            tool_summary.append(entry)
+
+        # Last 10 messages condensed
+        last_messages = []
+        for msg in session.messages[-10:]:
+            role = msg.get("role", "")
+            entry_msg: dict[str, Any] = {"role": role}
+            if role == "tool":
+                tool_call_id = msg.get("tool_call_id", "")
+                entry_msg["tool"] = self._resolve_tool_name(session, tool_call_id)
+            content = msg.get("content", "")
+            if content:
+                entry_msg["content"] = content[:200]
+            last_messages.append(entry_msg)
+
+        # Tasks
+        tasks = [
+            {"title": t["title"], "status": t["status"]} for t in session.tasks.values()
+        ]
+
+        return {
+            "model": session.model,
+            "turn_count": session.turn_count,
+            "total_prompt_tokens": session.total_prompt_tokens,
+            "total_completion_tokens": session.total_completion_tokens,
+            "compaction_count": session.compaction_count,
+            "tasks": tasks,
+            "tool_summary": tool_summary,
+            "last_messages": last_messages,
+        }
+
+    @staticmethod
+    def _resolve_tool_name(session: AgentSession, tool_call_id: str) -> str:
+        """Find the tool name for a given tool_call_id from assistant messages."""
+        for msg in session.messages:
+            if msg.get("role") == "assistant" and msg.get("tool_calls"):
+                for tc in msg["tool_calls"]:
+                    if tc.get("id") == tool_call_id:
+                        return tc.get("function", {}).get("name", "unknown")
+        return "unknown"
 
     async def _run_agent_loop(self, session: AgentSession) -> None:
         """Create provider, build tools, and run the loop."""
         provider = create_provider(session.model)
 
-        # Build system prompt (inject skill content for active skills)
+        # Build system prompt (inject skill summaries for active skills)
         system_prompt = SYSTEM_PROMPT
         if session.skill_ids and self._skill_service:
             for sid in session.skill_ids:
                 try:
-                    skill_body = self._skill_service.get_skill_content(sid)
-                    system_prompt += f"\n\n## Active Skill: {sid}\n\n{skill_body}"
+                    summary = self._skill_service.get_skill_summary(sid)
+                    system_prompt += f"\n\n## Active Skill: {sid}\n\n{summary}"
                 except FileNotFoundError:
                     pass
 
         # Build tools list
         tools = create_default_tools(_PROJECT_ROOT)
+        tools.extend(create_task_tools())
         tools.append(create_dispatch_agent_tool())
+        tools.append(create_ask_user_tool())
         if session.skill_ids and self._skill_service:
             tools.append(create_read_reference_tool())
 
@@ -131,6 +364,8 @@ class AgentService:
             emit=self._emit,
             pending_approvals=self._pending_approvals,
             approval_results=self._approval_results,
+            pending_questions=self._pending_questions,
+            question_results=self._question_results,
             skill_service=self._skill_service,
         )
 

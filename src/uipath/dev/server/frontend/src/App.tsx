@@ -315,7 +315,7 @@ export default function App() {
     const onMove = (ev: MouseEvent | TouchEvent) => {
       const clientX = "touches" in ev ? ev.touches[0].clientX : ev.clientX;
       // Dragging left increases width (panel is on the right)
-      const newW = Math.max(280, Math.min(500, startW - (clientX - startX)));
+      const newW = Math.max(280, Math.min(700, startW - (clientX - startX)));
       setAgentWidth(newW);
     };
 

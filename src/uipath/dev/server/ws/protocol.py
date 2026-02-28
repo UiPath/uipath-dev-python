@@ -30,6 +30,7 @@ class ServerEvent(str, Enum):
     AGENT_THINKING = "agent.thinking"
     AGENT_TEXT_DELTA = "agent.text_delta"
     AGENT_TOKEN_USAGE = "agent.token_usage"
+    AGENT_QUESTION = "agent.question"
 
 
 class ClientCommand(str, Enum):
@@ -46,6 +47,7 @@ class ClientCommand(str, Enum):
     AGENT_MESSAGE = "agent.message"
     AGENT_STOP = "agent.stop"
     AGENT_TOOL_RESPONSE = "agent.tool_response"
+    AGENT_QUESTION_RESPONSE = "agent.question_response"
 
 
 def server_message(event: ServerEvent, payload: dict[str, Any]) -> dict[str, Any]:

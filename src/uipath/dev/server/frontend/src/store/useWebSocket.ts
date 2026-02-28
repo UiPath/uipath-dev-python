@@ -127,6 +127,10 @@ export function useWebSocket() {
           const agent = useAgentStore.getState();
           if (!agent.sessionId) agent.setSessionId(session_id);
           agent.setStatus(status);
+          // Clear pending question when agent finishes or errors
+          if (status === "done" || status === "error" || status === "idle") {
+            agent.setActiveQuestion(null);
+          }
           break;
         }
         case "agent.text": {
@@ -177,6 +181,18 @@ export function useWebSocket() {
           const agentDelta = useAgentStore.getState();
           if (!agentDelta.sessionId) agentDelta.setSessionId(deltaSid);
           agentDelta.appendAssistantText(delta, false);
+          break;
+        }
+        case "agent.question": {
+          const { session_id: qSid, question_id, question, options } = msg.payload as {
+            session_id: string;
+            question_id: string;
+            question: string;
+            options: string[];
+          };
+          const agentQ = useAgentStore.getState();
+          if (!agentQ.sessionId) agentQ.setSessionId(qSid);
+          agentQ.setActiveQuestion({ question_id, question, options });
           break;
         }
         case "agent.token_usage": {
