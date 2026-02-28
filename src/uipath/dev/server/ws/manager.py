@@ -319,6 +319,26 @@ class ConnectionManager:
         for ws in self._connections:
             self._enqueue(ws, msg)
 
+    def broadcast_agent_question(
+        self,
+        session_id: str,
+        question_id: str,
+        question: str,
+        options: list[str],
+    ) -> None:
+        """Broadcast agent question to all connected clients."""
+        msg = server_message(
+            ServerEvent.AGENT_QUESTION,
+            {
+                "session_id": session_id,
+                "question_id": question_id,
+                "question": question,
+                "options": options,
+            },
+        )
+        for ws in self._connections:
+            self._enqueue(ws, msg)
+
     def broadcast_agent_token_usage(
         self,
         session_id: str,

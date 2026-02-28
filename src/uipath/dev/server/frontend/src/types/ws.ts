@@ -19,7 +19,8 @@ export type ServerEventType =
   | "agent.error"
   | "agent.thinking"
   | "agent.text_delta"
-  | "agent.token_usage";
+  | "agent.token_usage"
+  | "agent.question";
 
 export interface ServerMessage {
   type: ServerEventType;
@@ -37,7 +38,8 @@ export type ClientCommandType =
   | "debug.set_breakpoints"
   | "agent.message"
   | "agent.stop"
-  | "agent.tool_response";
+  | "agent.tool_response"
+  | "agent.question_response";
 
 export interface ClientMessage {
   type: ClientCommandType;

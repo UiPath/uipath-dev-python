@@ -55,6 +55,30 @@ async def list_agent_models() -> list[dict[str, Any]]:
     ]
 
 
+@router.get("/agent/session/{session_id}/diagnostics")
+async def get_session_diagnostics(session_id: str, request: Request) -> dict[str, Any]:
+    """Return structured diagnostics for an agent session."""
+    from uipath.dev.services.agent import AgentService
+
+    agent_service: AgentService = request.app.state.server.agent_service
+    result = agent_service.get_session_diagnostics(session_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return result
+
+
+@router.get("/agent/session/{session_id}/state")
+async def get_session_state(session_id: str, request: Request) -> dict[str, Any]:
+    """Return the full session state for hydrating the frontend after refresh."""
+    from uipath.dev.services.agent import AgentService
+
+    agent_service: AgentService = request.app.state.server.agent_service
+    result = agent_service.get_session_state(session_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return result
+
+
 @router.get("/agent/skills")
 async def list_agent_skills(request: Request) -> list[dict[str, str]]:
     """List available built-in skills."""

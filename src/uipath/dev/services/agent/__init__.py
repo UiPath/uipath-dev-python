@@ -12,6 +12,7 @@ from uipath.dev.services.agent.events import (
     ToolApprovalRequired,
     ToolCompleted,
     ToolStarted,
+    UserQuestionAsked,
 )
 from uipath.dev.services.agent.service import AgentService
 from uipath.dev.services.agent.session import AgentSession
@@ -30,4 +31,5 @@ __all__ = [
     "ToolApprovalRequired",
     "ToolCompleted",
     "ToolStarted",
+    "UserQuestionAsked",
 ]

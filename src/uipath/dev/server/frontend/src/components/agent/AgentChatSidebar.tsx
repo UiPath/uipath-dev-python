@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAgentStore } from "../../store/useAgentStore";
 import { useAuthStore } from "../../store/useAuthStore";
-import { listAgentModels, listAgentSkills } from "../../api/agent-client";
+import { getAgentSessionState, listAgentModels, listAgentSkills } from "../../api/agent-client";
 import { getWs } from "../../store/useWebSocket";
 import AgentMessageComponent from "./AgentMessage";
-import type { AgentSkill } from "../../types/agent";
+import QuestionCard from "./QuestionCard";
+import type { AgentPlanItem, AgentSkill } from "../../types/agent";
 
 export default function AgentChatSidebar() {
   const ws = useRef(getWs()).current;
@@ -20,6 +21,7 @@ export default function AgentChatSidebar() {
     sessionId,
     status,
     messages,
+    plan,
     models,
     selectedModel,
     modelsLoading,
@@ -34,6 +36,7 @@ export default function AgentChatSidebar() {
     toggleSkill,
     setSkillsLoading,
     addUserMessage,
+    hydrateSession,
     clearSession,
   } = useAgentStore();
 
@@ -67,6 +70,24 @@ export default function AgentChatSidebar() {
       .finally(() => setSkillsLoading(false));
   }, [skills.length, setSkills, setSelectedSkillIds, setSkillsLoading]);
 
+  // Hydrate session from sessionStorage on mount
+  useEffect(() => {
+    if (sessionId) return; // Already have a session
+    const storedId = sessionStorage.getItem("agent_session_id");
+    if (!storedId) return;
+    getAgentSessionState(storedId)
+      .then((state) => {
+        if (state) {
+          hydrateSession(state);
+        } else {
+          sessionStorage.removeItem("agent_session_id");
+        }
+      })
+      .catch(() => {
+        sessionStorage.removeItem("agent_session_id");
+      });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [showScrollTop, setShowScrollTop] = useState(false);
 
   const handleScroll = () => {
@@ -84,7 +105,7 @@ export default function AgentChatSidebar() {
     }
   });
 
-  const isBusy = status === "thinking" || status === "executing" || status === "planning";
+  const isBusy = status === "thinking" || status === "executing" || status === "planning" || status === "awaiting_input";
   const lastMsg = messages[messages.length - 1];
   const isStreaming = isBusy && lastMsg?.role === "assistant" && !lastMsg.done;
   const showBusyIndicator = isBusy && !isStreaming;
@@ -173,6 +194,9 @@ export default function AgentChatSidebar() {
         isBusy={isBusy}
       />
 
+      {/* Sticky Plan */}
+      <StickyPlan plan={plan} />
+
       {/* Messages */}
       <div className="relative flex-1 overflow-hidden">
         <div
@@ -191,7 +215,7 @@ export default function AgentChatSidebar() {
               </div>
             </div>
           )}
-          {messages.map((msg) => (
+          {messages.filter((msg) => msg.role !== "plan").map((msg) => (
             <AgentMessageComponent key={msg.id} message={msg} />
           ))}
           {showBusyIndicator && (
@@ -199,7 +223,7 @@ export default function AgentChatSidebar() {
               <div className="flex items-center gap-1.5">
                 <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: "var(--success)" }} />
                 <span className="text-[11px] font-semibold" style={{ color: "var(--success)" }}>
-                  {status === "thinking" ? "Thinking..." : status === "executing" ? "Executing..." : "Planning..."}
+                  {status === "thinking" ? "Thinking..." : status === "executing" ? "Executing..." : status === "awaiting_input" ? "Waiting for answer..." : "Planning..."}
                 </span>
               </div>
             </div>
@@ -218,6 +242,9 @@ export default function AgentChatSidebar() {
           </button>
         )}
       </div>
+
+      {/* Question card */}
+      <QuestionCard />
 
       {/* Input */}
       <div
@@ -410,6 +437,91 @@ function Header({
             <polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
           </svg>
         </button>
+      )}
+    </div>
+  );
+}
+
+const MAX_VISIBLE_PLAN_ITEMS = 10;
+
+function StickyPlan({ plan }: { plan: AgentPlanItem[] }) {
+  const completed = plan.filter((t) => t.status === "completed").length;
+  const uncompleted = plan.filter((t) => t.status !== "completed");
+  const allDone = plan.length > 0 && completed === plan.length;
+  const [collapsed, setCollapsed] = useState(false);
+  const prevUncompletedCount = useRef(uncompleted.length);
+
+  // Auto-collapse when all tasks complete
+  useEffect(() => {
+    if (allDone) setCollapsed(true);
+  }, [allDone]);
+
+  // Auto-expand when new uncompleted items appear
+  useEffect(() => {
+    if (uncompleted.length > prevUncompletedCount.current) {
+      setCollapsed(false);
+    }
+    prevUncompletedCount.current = uncompleted.length;
+  }, [uncompleted.length]);
+
+  if (plan.length === 0) return null;
+
+  // Show all uncompleted + fill remaining slots with most recent completed
+  const completedItems = plan.filter((t) => t.status === "completed");
+  const remainingSlots = Math.max(0, MAX_VISIBLE_PLAN_ITEMS - uncompleted.length);
+  const recentCompleted = completedItems.slice(-remainingSlots);
+  // Preserve original order: show recent completed first, then uncompleted
+  const visibleItems = [...recentCompleted, ...uncompleted];
+  const hiddenCount = plan.length - visibleItems.length;
+
+  return (
+    <div
+      className="shrink-0 border-b"
+      style={{ borderColor: "var(--border)", background: "var(--bg-secondary)" }}
+    >
+      <button
+        onClick={() => setCollapsed(!collapsed)}
+        className="w-full flex items-center gap-2 px-3 py-1.5 cursor-pointer"
+        style={{ background: "none", border: "none" }}
+      >
+        <div className="w-2 h-2 rounded-full" style={{ background: "var(--accent)" }} />
+        <span className="text-[11px] font-semibold" style={{ color: "var(--accent)" }}>
+          Plan ({completed}/{plan.length} completed)
+        </span>
+        <svg
+          width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2"
+          className="ml-auto"
+          style={{ transform: collapsed ? "rotate(0deg)" : "rotate(180deg)", transition: "transform 0.15s" }}
+        >
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      {!collapsed && (
+        <div className="px-3 pb-2 space-y-1">
+          {hiddenCount > 0 && (
+            <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+              {hiddenCount} earlier completed task{hiddenCount !== 1 ? "s" : ""} hidden
+            </div>
+          )}
+          {visibleItems.map((item, i) => (
+            <div key={i} className="flex items-center gap-2 text-sm">
+              {item.status === "completed" ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5" /></svg>
+              ) : item.status === "in_progress" ? (
+                <span className="w-3.5 h-3.5 flex items-center justify-center">
+                  <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: "var(--accent)" }} />
+                </span>
+              ) : (
+                <span className="w-3.5 h-3.5 flex items-center justify-center">
+                  <span className="w-2 h-2 rounded-full" style={{ background: "var(--text-muted)", opacity: 0.4 }} />
+                </span>
+              )}
+              <span style={{ color: item.status === "completed" ? "var(--text-muted)" : "var(--text-primary)", textDecoration: item.status === "completed" ? "line-through" : "none" }}>
+                {item.title}
+              </span>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

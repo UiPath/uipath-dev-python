@@ -23,7 +23,13 @@ export interface AgentMessage {
   done?: boolean;
 }
 
-export type AgentStatus = "idle" | "thinking" | "planning" | "executing" | "awaiting_approval" | "done" | "error";
+export interface AgentQuestion {
+  question_id: string;
+  question: string;
+  options: string[];
+}
+
+export type AgentStatus = "idle" | "thinking" | "planning" | "executing" | "awaiting_approval" | "awaiting_input" | "done" | "error";
 
 export interface AgentModel {
   model_name: string;
@@ -34,4 +40,16 @@ export interface AgentSkill {
   id: string;
   name: string;
   description: string;
+}
+
+export interface AgentSessionState {
+  session_id: string;
+  status: string;
+  model: string;
+  messages: AgentMessage[];
+  plan: AgentPlanItem[];
+  total_prompt_tokens: number;
+  total_completion_tokens: number;
+  turn_count: number;
+  compaction_count: number;
 }

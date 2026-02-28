@@ -298,6 +298,7 @@ class UiPathDeveloperServer:
             ToolApprovalRequired,
             ToolCompleted,
             ToolStarted,
+            UserQuestionAsked,
         )
 
         cm = self.connection_manager
@@ -322,6 +323,10 @@ class UiPathDeveloperServer:
                 session_id=sid, tool_call_id=tcid, tool=tool, args=args
             ):
                 cm.broadcast_agent_tool_approval(sid, tcid, tool, args)
+            case UserQuestionAsked(
+                session_id=sid, question_id=qid, question=q, options=opts
+            ):
+                cm.broadcast_agent_question(sid, qid, q, opts)
             case ErrorOccurred(session_id=sid, message=message):
                 cm.broadcast_agent_error(sid, message)
             case TokenUsageUpdated(

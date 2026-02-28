@@ -2266,7 +2266,7 @@ wheels = [
 
 [[package]]
 name = "uipath-dev"
-version = "0.0.64"
+version = "0.0.65"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },

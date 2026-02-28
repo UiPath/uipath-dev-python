@@ -32,8 +32,8 @@ def get_context_window(model: str) -> int:
     return _DEFAULT_CONTEXT_WINDOW
 
 
-MAX_TOOL_RESULTS_KEPT = 10
-MIN_RESULT_SIZE_TO_CLEAR = 500
+MAX_TOOL_RESULTS_KEPT = 6
+MIN_RESULT_SIZE_TO_CLEAR = 200
 
 
 async def maybe_compact(
@@ -49,6 +49,14 @@ async def maybe_compact(
     if session.total_prompt_tokens < window_size * COMPACTION_TRIGGER_RATIO:
         return False
 
+    # Build task state string for preservation
+    task_state = ""
+    if session.tasks:
+        task_lines = []
+        for tid, task in session.tasks.items():
+            task_lines.append(f"  [{tid}] ({task['status']}) {task['title']}")
+        task_state = "\n## Current Task State\n" + "\n".join(task_lines)
+
     summary_prompt = (
         "Summarize the conversation so far. Preserve:\n"
         "- The user's original request and any clarifications\n"
@@ -57,6 +65,7 @@ async def maybe_compact(
         "- File paths and code patterns that were discovered\n"
         "- Any errors encountered and how they were resolved\n"
         "Be concise but don't lose critical context."
+        + (f"\n\n{task_state}" if task_state else "")
     )
 
     summary_response = await provider.complete(
@@ -72,11 +81,12 @@ async def maybe_compact(
     recent = (
         session.messages[-KEEP_RECENT:] if len(session.messages) > KEEP_RECENT else []
     )
+    summary_content = f"[Conversation Summary]\n{summary_response.content}"
+    if task_state:
+        summary_content += f"\n\n{task_state}"
+
     session.messages = [
-        {
-            "role": "assistant",
-            "content": f"[Conversation Summary]\n{summary_response.content}",
-        },
+        {"role": "assistant", "content": summary_content},
         *recent,
     ]
     session.compaction_count += 1

@@ -5,6 +5,7 @@ import remarkGfm from "remark-gfm";
 import type { AgentMessage as AgentMessageType, AgentToolCall } from "../../types/agent";
 import { useAgentStore } from "../../store/useAgentStore";
 import { getWs } from "../../store/useWebSocket";
+import { getAgentSessionDiagnostics } from "../../api/agent-client";
 
 interface Props {
   message: AgentMessageType;
@@ -80,12 +81,7 @@ function PlanCard({ message }: Props) {
   );
 }
 
-function SingleToolCall({ tc }: { tc: AgentToolCall }) {
-  const isPending = tc.status === "pending";
-  const isDenied = tc.status === "denied";
-  const [expanded, setExpanded] = useState(false);
-  const hasResult = tc.result !== undefined;
-
+function ToolApprovalCard({ tc }: { tc: AgentToolCall }) {
   const handleApproval = (approved: boolean) => {
     if (!tc.tool_call_id) return;
     const sessionId = useAgentStore.getState().sessionId;
@@ -94,128 +90,150 @@ function SingleToolCall({ tc }: { tc: AgentToolCall }) {
     getWs().sendToolApproval(sessionId, tc.tool_call_id, approved);
   };
 
-  /* ── Pending: card layout matching ChatInterrupt ── */
-  if (isPending) {
-    return (
+  return (
+    <div
+      className="rounded-lg overflow-hidden"
+      style={{ border: "1px solid color-mix(in srgb, var(--warning) 40%, var(--border))" }}
+    >
       <div
-        className="ml-2.5 rounded-lg overflow-hidden"
-        style={{ border: "1px solid color-mix(in srgb, var(--warning) 40%, var(--border))" }}
+        className="px-3 py-2 flex items-center gap-2"
+        style={{ background: "color-mix(in srgb, var(--warning) 10%, var(--bg-secondary))" }}
       >
-        <div
-          className="px-3 py-2 flex items-center gap-2"
-          style={{ background: "color-mix(in srgb, var(--warning) 10%, var(--bg-secondary))" }}
+        <span className="text-[11px] font-semibold" style={{ color: "var(--warning)" }}>
+          Action Required
+        </span>
+        <span
+          className="text-[11px] font-mono px-1.5 py-0.5 rounded"
+          style={{
+            background: "color-mix(in srgb, var(--warning) 15%, var(--bg-secondary))",
+            color: "var(--text-primary)",
+          }}
         >
-          <span className="text-[11px] font-semibold" style={{ color: "var(--warning)" }}>
-            Action Required
-          </span>
-          <span
-            className="text-[11px] font-mono px-1.5 py-0.5 rounded"
-            style={{
-              background: "color-mix(in srgb, var(--warning) 15%, var(--bg-secondary))",
-              color: "var(--text-primary)",
-            }}
-          >
-            {tc.tool}
-          </span>
-        </div>
-
-        {tc.args != null && (
-          <pre
-            className="px-3 py-2 text-[11px] font-mono whitespace-pre-wrap break-words overflow-y-auto leading-normal"
-            style={{ background: "var(--bg-secondary)", color: "var(--text-secondary)", maxHeight: 200 }}
-          >
-            {JSON.stringify(tc.args, null, 2)}
-          </pre>
-        )}
-
-        <div
-          className="flex items-center gap-2 px-3 py-2"
-          style={{ background: "var(--bg-secondary)", borderTop: "1px solid var(--border)" }}
-        >
-          <button
-            onClick={() => handleApproval(true)}
-            className="text-xs font-semibold px-3 py-1.5 rounded cursor-pointer transition-colors"
-            style={{
-              background: "color-mix(in srgb, var(--success) 15%, var(--bg-secondary))",
-              color: "var(--success)",
-              border: "1px solid color-mix(in srgb, var(--success) 30%, var(--border))",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "color-mix(in srgb, var(--success) 25%, var(--bg-secondary))"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "color-mix(in srgb, var(--success) 15%, var(--bg-secondary))"; }}
-          >
-            Approve
-          </button>
-          <button
-            onClick={() => handleApproval(false)}
-            className="text-xs font-semibold px-3 py-1.5 rounded cursor-pointer transition-colors"
-            style={{
-              background: "color-mix(in srgb, var(--error) 15%, var(--bg-secondary))",
-              color: "var(--error)",
-              border: "1px solid color-mix(in srgb, var(--error) 30%, var(--border))",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "color-mix(in srgb, var(--error) 25%, var(--bg-secondary))"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "color-mix(in srgb, var(--error) 15%, var(--bg-secondary))"; }}
-          >
-            Reject
-          </button>
-        </div>
+          {tc.tool}
+        </span>
       </div>
-    );
-  }
 
-  /* ── Resolved / completed: compact inline style ── */
+      {tc.args != null && (
+        <pre
+          className="px-3 py-2 text-[11px] font-mono whitespace-pre-wrap break-words overflow-y-auto leading-normal"
+          style={{ background: "var(--bg-secondary)", color: "var(--text-secondary)", maxHeight: 200 }}
+        >
+          {JSON.stringify(tc.args, null, 2)}
+        </pre>
+      )}
+
+      <div
+        className="flex items-center gap-2 px-3 py-2"
+        style={{ background: "var(--bg-secondary)", borderTop: "1px solid var(--border)" }}
+      >
+        <button
+          onClick={() => handleApproval(true)}
+          className="text-xs font-semibold px-3 py-1.5 rounded cursor-pointer transition-colors"
+          style={{
+            background: "color-mix(in srgb, var(--success) 15%, var(--bg-secondary))",
+            color: "var(--success)",
+            border: "1px solid color-mix(in srgb, var(--success) 30%, var(--border))",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "color-mix(in srgb, var(--success) 25%, var(--bg-secondary))"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "color-mix(in srgb, var(--success) 15%, var(--bg-secondary))"; }}
+        >
+          Approve
+        </button>
+        <button
+          onClick={() => handleApproval(false)}
+          className="text-xs font-semibold px-3 py-1.5 rounded cursor-pointer transition-colors"
+          style={{
+            background: "color-mix(in srgb, var(--error) 15%, var(--bg-secondary))",
+            color: "var(--error)",
+            border: "1px solid color-mix(in srgb, var(--error) 30%, var(--border))",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "color-mix(in srgb, var(--error) 25%, var(--bg-secondary))"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "color-mix(in srgb, var(--error) 15%, var(--bg-secondary))"; }}
+        >
+          Reject
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ToolChip({ tc, active, onClick }: { tc: AgentToolCall; active: boolean; onClick: () => void }) {
+  const isDenied = tc.status === "denied";
+  const hasResult = tc.result !== undefined;
+
   const statusColor = isDenied
     ? "var(--error)"
     : hasResult
-      ? tc.is_error
-        ? "var(--error)"
-        : "var(--success)"
+      ? tc.is_error ? "var(--error)" : "var(--success)"
       : "var(--text-muted)";
 
   const statusIcon = isDenied ? "\u2717" : hasResult ? (tc.is_error ? "\u2717" : "\u2713") : "\u2022";
 
   return (
-    <div className="pl-2.5">
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="inline-flex items-center gap-1 text-[11px] font-mono px-2 py-1 rounded cursor-pointer hover:brightness-125"
-          style={{
-            background: "var(--bg-primary)",
-            border: "1px solid var(--border)",
-            color: statusColor,
-          }}
-        >
-          {statusIcon} {tc.tool}
-          {isDenied && <span className="ml-1 text-[10px] uppercase">Denied</span>}
-          <svg
-            width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-            style={{ transform: expanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s", marginLeft: 2 }}
-          >
-            <path d="M6 9l6 6 6-6" />
-          </svg>
-        </button>
+    <button
+      onClick={onClick}
+      className="inline-flex items-center gap-1 text-[11px] font-mono px-2 py-1 rounded cursor-pointer transition-all"
+      style={{
+        background: active ? "var(--bg-secondary)" : "var(--bg-primary)",
+        border: active ? "1px solid var(--text-muted)" : "1px solid var(--border)",
+        color: statusColor,
+      }}
+    >
+      {statusIcon} {tc.tool}
+      {isDenied && <span className="ml-1 text-[10px] uppercase">Denied</span>}
+    </button>
+  );
+}
+
+function ToolDetailPanel({ tc }: { tc: AgentToolCall }) {
+  const hasResult = tc.result !== undefined;
+  const hasArgs = tc.args != null && Object.keys(tc.args).length > 0;
+
+  return (
+    <div
+      className="rounded-lg overflow-hidden"
+      style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)" }}
+    >
+      {/* Header */}
+      <div
+        className="flex items-center gap-2 px-3 py-1.5"
+        style={{ borderBottom: "1px solid var(--border)" }}
+      >
+        <span className="text-[11px] font-mono font-semibold" style={{ color: "var(--text-primary)" }}>
+          {tc.tool}
+        </span>
+        {tc.is_error && (
+          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ background: "color-mix(in srgb, var(--error) 15%, transparent)", color: "var(--error)" }}>
+            Error
+          </span>
+        )}
       </div>
-      {expanded && (
-        <div className="mt-1.5 space-y-2">
-          <div>
-            <div className="text-[10px] uppercase tracking-wider mb-1 font-semibold" style={{ color: "var(--text-muted)" }}>Arguments</div>
-            <pre className="text-[11px] font-mono p-2 rounded overflow-x-auto whitespace-pre-wrap" style={{ background: "var(--bg-primary)", color: "var(--text-secondary)" }}>
+
+      {/* Args + Result side by side (or stacked) */}
+      <div className="flex flex-col gap-0">
+        {hasArgs && (
+          <div style={{ borderBottom: hasResult ? "1px solid var(--border)" : "none" }}>
+            <div className="px-3 pt-1.5 pb-0.5">
+              <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: "var(--text-muted)" }}>Input</span>
+            </div>
+            <pre className="px-3 pb-2 text-[11px] font-mono whitespace-pre-wrap break-words overflow-y-auto leading-relaxed" style={{ color: "var(--text-secondary)", maxHeight: 160 }}>
               {JSON.stringify(tc.args, null, 2)}
             </pre>
           </div>
-          {hasResult && (
-            <div>
-              <div className="text-[10px] uppercase tracking-wider mb-1 font-semibold" style={{ color: tc.is_error ? "var(--error)" : "var(--text-muted)" }}>
-                {tc.is_error ? "Error" : "Result"}
-              </div>
-              <pre className="text-[11px] font-mono p-2 rounded overflow-x-auto whitespace-pre-wrap max-h-48 overflow-y-auto" style={{ background: "var(--bg-primary)", color: tc.is_error ? "var(--error)" : "var(--text-secondary)" }}>
-                {tc.result}
-              </pre>
+        )}
+        {hasResult && (
+          <div>
+            <div className="px-3 pt-1.5 pb-0.5">
+              <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: tc.is_error ? "var(--error)" : "var(--text-muted)" }}>
+                Output
+              </span>
             </div>
-          )}
-        </div>
-      )}
+            <pre className="px-3 pb-2 text-[11px] font-mono whitespace-pre-wrap break-words overflow-y-auto leading-relaxed" style={{ color: tc.is_error ? "var(--error)" : "var(--text-secondary)", maxHeight: 240 }}>
+              {tc.result}
+            </pre>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -225,11 +243,23 @@ const VISIBLE_TOOL_CALLS = 3;
 function ToolCard({ message }: Props) {
   const calls = message.toolCalls ?? (message.toolCall ? [message.toolCall] : []);
   const [showAll, setShowAll] = useState(false);
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
   if (calls.length === 0) return null;
+
+  // Check if any call is pending approval — show approval card instead
+  const pendingCall = calls.find((tc) => tc.status === "pending");
+  if (pendingCall) {
+    return (
+      <div className="py-1.5 pl-2.5">
+        <ToolApprovalCard tc={pendingCall} />
+      </div>
+    );
+  }
 
   const hiddenCount = calls.length - VISIBLE_TOOL_CALLS;
   const shouldCollapse = hiddenCount > 0 && !showAll;
   const visibleCalls = shouldCollapse ? calls.slice(-VISIBLE_TOOL_CALLS) : calls;
+  const indexOffset = shouldCollapse ? hiddenCount : 0;
 
   return (
     <div className="py-1.5">
@@ -239,28 +269,112 @@ function ToolCard({ message }: Props) {
           {calls.length === 1 ? "Tool" : `Tools (${calls.length})`}
         </span>
       </div>
-      <div className="space-y-1">
-        {shouldCollapse && (
-          <button
-            onClick={() => setShowAll(true)}
-            className="ml-2.5 inline-flex items-center gap-1 text-[11px] font-mono px-2 py-1 rounded cursor-pointer hover:brightness-125"
-            style={{
-              background: "var(--bg-primary)",
-              border: "1px solid var(--border)",
-              color: "var(--text-muted)",
-            }}
-          >
-            {hiddenCount} more tool {hiddenCount === 1 ? "call" : "calls"}
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginLeft: 2 }}>
-              <path d="M6 9l6 6 6-6" />
-            </svg>
-          </button>
+      <div className="pl-2.5 space-y-1.5">
+        {/* Chip row */}
+        <div className="flex flex-wrap gap-1">
+          {shouldCollapse && (
+            <button
+              onClick={() => setShowAll(true)}
+              className="inline-flex items-center gap-1 text-[11px] font-mono px-2 py-1 rounded cursor-pointer hover:brightness-125"
+              style={{
+                background: "var(--bg-primary)",
+                border: "1px solid var(--border)",
+                color: "var(--text-muted)",
+              }}
+            >
+              +{hiddenCount} more
+            </button>
+          )}
+          {visibleCalls.map((tc, i) => {
+            const realIdx = i + indexOffset;
+            return (
+              <ToolChip
+                key={realIdx}
+                tc={tc}
+                active={expandedIdx === realIdx}
+                onClick={() => setExpandedIdx(expandedIdx === realIdx ? null : realIdx)}
+              />
+            );
+          })}
+        </div>
+        {/* Detail panel below chips */}
+        {expandedIdx !== null && calls[expandedIdx] && (
+          <ToolDetailPanel tc={calls[expandedIdx]} />
         )}
-        {visibleCalls.map((tc, i) => (
-          <SingleToolCall key={shouldCollapse ? i + hiddenCount : i} tc={tc} />
-        ))}
       </div>
     </div>
+  );
+}
+
+function formatDiagnostics(d: Record<string, unknown>): string {
+  const total = (d.total_prompt_tokens as number) + (d.total_completion_tokens as number);
+  let text = `## Agent Diagnostics
+- Model: ${d.model}
+- Turns: ${d.turn_count}/50 (max reached)
+- Tokens: ${d.total_prompt_tokens} prompt + ${d.total_completion_tokens} completion = ${total} total
+- Compactions: ${d.compaction_count}`;
+
+  const tools = d.tool_summary as Array<{ tool: string; calls: number; errors?: number }>;
+  if (tools && tools.length > 0) {
+    text += "\n\n## Tool Usage";
+    for (const t of tools) {
+      text += `\n- ${t.tool}: ${t.calls} call${t.calls !== 1 ? "s" : ""}`;
+      if (t.errors) text += ` (${t.errors} error${t.errors !== 1 ? "s" : ""})`;
+    }
+  }
+
+  const tasks = d.tasks as Array<{ title: string; status: string }>;
+  if (tasks && tasks.length > 0) {
+    text += "\n\n## Tasks";
+    for (const t of tasks) {
+      text += `\n- [${t.status}] ${t.title}`;
+    }
+  }
+
+  const msgs = d.last_messages as Array<{ role: string; tool?: string; content?: string }>;
+  if (msgs && msgs.length > 0) {
+    text += "\n\n## Last Messages";
+    msgs.forEach((m, i) => {
+      const label = m.tool ? `${m.role}:${m.tool}` : m.role;
+      const content = m.content ? m.content.replace(/\n/g, " ") : "";
+      text += `\n${i + 1}. [${label}] ${content}`;
+    });
+  }
+
+  return text;
+}
+
+function CopyDiagnosticsButton() {
+  const [state, setState] = useState<"idle" | "loading" | "copied">("idle");
+
+  const handleClick = async () => {
+    const sessionId = useAgentStore.getState().sessionId;
+    if (!sessionId) return;
+    setState("loading");
+    try {
+      const data = await getAgentSessionDiagnostics(sessionId);
+      const text = formatDiagnostics(data);
+      await navigator.clipboard.writeText(text);
+      setState("copied");
+      setTimeout(() => setState("idle"), 2000);
+    } catch {
+      setState("idle");
+    }
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={state === "loading"}
+      className="inline-flex items-center gap-1 text-[11px] font-mono px-2 py-1 rounded cursor-pointer hover:brightness-125 mt-1"
+      style={{
+        background: "var(--bg-primary)",
+        border: "1px solid var(--border)",
+        color: state === "copied" ? "var(--success)" : "var(--text-muted)",
+      }}
+    >
+      {state === "copied" ? "Copied!" : state === "loading" ? "Loading..." : "Copy Diagnostics"}
+    </button>
   );
 }
 
@@ -294,6 +408,9 @@ export default function AgentMessageComponent({ message }: Props) {
             style={{ color: "var(--text-secondary)" }}
           >
             <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>{message.content}</Markdown>
+            {message.content.includes("Reached maximum iterations") && (
+              <CopyDiagnosticsButton />
+            )}
           </div>
         )
       )}

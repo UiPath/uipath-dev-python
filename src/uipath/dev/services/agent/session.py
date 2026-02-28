@@ -17,6 +17,8 @@ class AgentSession:
     skill_ids: list[str] = field(default_factory=list)
     messages: list[dict[str, Any]] = field(default_factory=list)
     plan: list[dict[str, str]] = field(default_factory=list)
+    tasks: dict[str, dict[str, str]] = field(default_factory=dict)
+    _next_task_id: int = field(default=1, repr=False)
     status: str = "idle"
     # Token tracking
     total_prompt_tokens: int = 0
