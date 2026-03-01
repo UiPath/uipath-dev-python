@@ -992,9 +992,14 @@ def select_tenant(tenant_name: str) -> dict[str, Any]:
 def _finalize_tenant(auth: AuthState, tenant_name: str) -> None:
     """Write .env and os.environ with the resolved credentials."""
     org_name = auth.organization.get("name", "")
+    org_id = auth.organization.get("id", "")
     domain = f"https://{auth.environment}.uipath.com"
     uipath_url = f"{domain}/{org_name}/{tenant_name}"
     access_token = auth.token_data.get("access_token", "")
+
+    # Resolve tenant ID from the tenants list
+    tenant = next((t for t in auth.tenants if t["name"] == tenant_name), None)
+    tenant_id = tenant["id"] if tenant else ""
 
     auth.uipath_url = uipath_url
     auth.status = "authenticated"
@@ -1007,12 +1012,19 @@ def _finalize_tenant(auth: AuthState, tenant_name: str) -> None:
     # Update os.environ
     os.environ["UIPATH_ACCESS_TOKEN"] = access_token
     os.environ["UIPATH_URL"] = uipath_url
+    os.environ["UIPATH_TENANT_ID"] = tenant_id
+    os.environ["UIPATH_ORGANIZATION_ID"] = org_id
 
     # Write/update .env file (preserving comments, blank lines, and ordering)
     env_path = Path.cwd() / ".env"
     lines: list[str] = []
     updated_keys: set[str] = set()
-    new_values = {"UIPATH_ACCESS_TOKEN": access_token, "UIPATH_URL": uipath_url}
+    new_values = {
+        "UIPATH_ACCESS_TOKEN": access_token,
+        "UIPATH_URL": uipath_url,
+        "UIPATH_TENANT_ID": tenant_id,
+        "UIPATH_ORGANIZATION_ID": org_id,
+    }
 
     if env_path.exists():
         with open(env_path) as f:
@@ -1043,6 +1055,8 @@ def logout() -> None:
 
     os.environ.pop("UIPATH_ACCESS_TOKEN", None)
     os.environ.pop("UIPATH_URL", None)
+    os.environ.pop("UIPATH_TENANT_ID", None)
+    os.environ.pop("UIPATH_ORGANIZATION_ID", None)
 
     reset_auth_state()
 
