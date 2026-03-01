@@ -24,6 +24,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 import httpx
+from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
@@ -1045,6 +1046,9 @@ def _finalize_tenant(auth: AuthState, tenant_name: str) -> None:
 
     with open(env_path, "w") as f:
         f.writelines(lines)
+
+    # Reload all .env variables into os.environ
+    load_dotenv(override=True)
 
 
 def logout() -> None:
