@@ -49,8 +49,10 @@ Enter description (string) - Optional agent description [press Enter to skip]:
 
 Your agent runs with:
 ```bash
-uv run uipath run <entrypoint> '<json-input>'
+uv run uipath run <name> '<json-input>'
 ```
+
+Where `<name>` is the key from `uipath.json` (e.g., `"main"` from `"agents": {"main": "main.py:main"}`), or the equivalent key from framework config files like `langgraph.json` or `llama-index.json`. It is **not** the file path — use the short name, not `main.py`.
 
 The agent runs with your provided inputs and returns structured output.
 
@@ -87,11 +89,13 @@ The skill supports all JSON schema types:
 
 ## Error Handling
 
-If execution fails, you'll see:
-- Error message from the agent
-- Stack trace for debugging
-- Suggestions for fixing the issue
-- Option to re-run with modified inputs
+If execution fails, check the traceback for these common errors:
+
+- **`ModuleNotFoundError`**: A dependency is missing. Add it to `pyproject.toml` under `[project.dependencies]` and run `uv sync`.
+- **`entry point not found`**: `entry-points.json` is stale or missing. Run `uv run uipath init` to regenerate it.
+- **`ValidationError` (Pydantic)**: The input doesn't match the expected schema. Check your Input model fields and types against the JSON you're passing.
+- **Type errors with `from __future__ import annotations`**: This stringifies all annotations and breaks runtime type detection. Remove it if your Input/Output models aren't being recognized.
+- **Missing environment variables**: Check that required variables (e.g., `OPENAI_API_KEY`) are set. The error will typically say `KeyError` or `EnvironmentError` with the variable name.
 
 ## Integration
 

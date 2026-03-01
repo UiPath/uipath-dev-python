@@ -9,6 +9,7 @@ function nextId() {
 interface AgentStore {
   sessionId: string | null;
   status: AgentStatus;
+  _lastActiveAt: number | null;
   messages: AgentMessage[];
   plan: AgentPlanItem[];
   activeQuestion: AgentQuestion | null;
@@ -45,6 +46,7 @@ interface AgentStore {
 export const useAgentStore = create<AgentStore>((set) => ({
   sessionId: null,
   status: "idle",
+  _lastActiveAt: null,
   messages: [],
   plan: [],
   activeQuestion: null,
@@ -55,7 +57,15 @@ export const useAgentStore = create<AgentStore>((set) => ({
   selectedSkillIds: [],
   skillsLoading: false,
 
-  setStatus: (status) => set({ status }),
+  setStatus: (status) =>
+    set((state) => {
+      const wasActive = state.status === "thinking" || state.status === "planning" || state.status === "executing" || state.status === "awaiting_approval";
+      const isActive = status === "thinking" || status === "planning" || status === "executing" || status === "awaiting_approval";
+      return {
+        status,
+        _lastActiveAt: wasActive && !isActive ? Date.now() : state._lastActiveAt,
+      };
+    }),
 
   addUserMessage: (text) =>
     set((state) => ({
@@ -277,6 +287,7 @@ export const useAgentStore = create<AgentStore>((set) => ({
     set({
       sessionId: null,
       status: "idle",
+      _lastActiveAt: null,
       messages: [],
       plan: [],
       activeQuestion: null,

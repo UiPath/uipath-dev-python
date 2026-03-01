@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useRef } from "react";
-import Editor, { type OnMount, type BeforeMount } from "@monaco-editor/react";
+import Editor, { DiffEditor, type OnMount, type BeforeMount } from "@monaco-editor/react";
 import { useExplorerStore } from "../../store/useExplorerStore";
 import { useTheme } from "../../store/useTheme";
 import { useHashRoute } from "../../hooks/useHashRoute";
@@ -95,7 +95,9 @@ export default function FileEditor() {
   const buffer = useExplorerStore((s) => (filePath ? s.buffers[filePath] : undefined));
   const loadingFile = useExplorerStore((s) => s.loadingFile);
   const dirty = useExplorerStore((s) => s.dirty);
-  const { setFileContent, updateBuffer, markClean, setLoadingFile, openTab, closeTab } =
+  const diffView = useExplorerStore((s) => s.diffView);
+  const isAgentChanged = useExplorerStore((s) => (filePath ? !!s.agentChangedFiles[filePath] : false));
+  const { setFileContent, updateBuffer, markClean, setLoadingFile, openTab, closeTab, setDiffView } =
     useExplorerStore();
   const { navigate } = useHashRoute();
   const theme = useTheme((s) => s.theme);
@@ -319,6 +321,8 @@ export default function FileEditor() {
     );
   }
 
+  const showDiff = diffView && diffView.path === filePath;
+
   return (
     <div className="flex flex-col h-full">
       {tabBar}
@@ -336,6 +340,14 @@ export default function FileEditor() {
           </span>
         )}
         <span style={{ color: "var(--text-muted)" }}>{formatSize(fileContent.size)}</span>
+        {isAgentChanged && (
+          <span
+            className="px-1.5 py-0.5 rounded text-[10px] font-medium"
+            style={{ background: "color-mix(in srgb, var(--info) 20%, transparent)", color: "var(--info)" }}
+          >
+            Agent modified
+          </span>
+        )}
         <div className="flex-1" />
         {isDirty && (
           <span className="text-[10px] font-medium" style={{ color: "var(--accent)" }}>
@@ -354,27 +366,69 @@ export default function FileEditor() {
           Save
         </button>
       </div>
-      {/* Editor */}
+      {/* Diff banner */}
+      {showDiff && (
+        <div
+          className="h-8 flex items-center px-3 gap-2 text-xs shrink-0 border-b"
+          style={{ borderColor: "var(--border)", background: "color-mix(in srgb, var(--info) 10%, var(--bg-secondary))" }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--info)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="16" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12.01" y2="8" />
+          </svg>
+          <span style={{ color: "var(--info)" }}>Agent modified this file</span>
+          <div className="flex-1" />
+          <button
+            onClick={() => setDiffView(null)}
+            className="px-2 py-0.5 rounded text-[11px] font-medium cursor-pointer transition-colors"
+            style={{ background: "var(--bg-hover)", color: "var(--text-secondary)", border: "none" }}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+      {/* Editor or DiffEditor */}
       <div className="flex-1 overflow-hidden">
-        <Editor
-          key={filePath}
-          language={fileContent.language ?? "plaintext"}
-          theme={theme === "dark" ? "uipath-dark" : "uipath-light"}
-          value={buffer ?? fileContent.content ?? ""}
-          onChange={handleChange}
-          beforeMount={handleBeforeMount}
-          onMount={handleEditorMount}
-          options={{
-            minimap: { enabled: false },
-            fontSize: 13,
-            lineNumbersMinChars: 4,
-            scrollBeyondLastLine: false,
-            wordWrap: "on",
-            automaticLayout: true,
-            tabSize: 2,
-            renderWhitespace: "selection",
-          }}
-        />
+        {showDiff ? (
+          <DiffEditor
+            key={`diff-${filePath}`}
+            original={diffView.original}
+            modified={diffView.modified}
+            language={diffView.language ?? "plaintext"}
+            theme={theme === "dark" ? "uipath-dark" : "uipath-light"}
+            beforeMount={handleBeforeMount}
+            options={{
+              readOnly: true,
+              minimap: { enabled: false },
+              fontSize: 13,
+              lineNumbersMinChars: 4,
+              scrollBeyondLastLine: false,
+              automaticLayout: true,
+              renderSideBySide: true,
+            }}
+          />
+        ) : (
+          <Editor
+            key={filePath}
+            language={fileContent.language ?? "plaintext"}
+            theme={theme === "dark" ? "uipath-dark" : "uipath-light"}
+            value={buffer ?? fileContent.content ?? ""}
+            onChange={handleChange}
+            beforeMount={handleBeforeMount}
+            onMount={handleEditorMount}
+            options={{
+              minimap: { enabled: false },
+              fontSize: 13,
+              lineNumbersMinChars: 4,
+              scrollBeyondLastLine: false,
+              wordWrap: "on",
+              automaticLayout: true,
+              tabSize: 2,
+              renderWhitespace: "selection",
+            }}
+          />
+        )}
       </div>
     </div>
   );

@@ -20,6 +20,16 @@ MAX_GREP_MATCHES = 100
 BASH_TIMEOUT = 30
 TOOLS_REQUIRING_APPROVAL = {"write_file", "edit_file", "bash"}
 
+# Directories to exclude from glob/grep results.
+# All dot-prefixed directories (e.g. .git, .venv, .claude) are already
+# filtered via `startswith(".")` checks. This set covers non-dot dirs
+# that should also be excluded.
+EXCLUDED_DIRS = {
+    "node_modules",
+    "__pycache__",
+    "__uipath",
+}
+
 # Matches standard ANSI CSI sequences, OSC sequences, and carriage returns.
 _ANSI_RE = re.compile(r"\x1b\][^\x1b]*(?:\x1b\\|\x07)|\x1b\[[0-9;]*[A-Za-z]|\r")
 
@@ -215,7 +225,15 @@ def _make_glob(project_root: Path) -> Callable[[dict[str, Any]], str]:
         if not base.is_dir():
             return f"Error: directory not found: {args.get('path', '.')}"
         matches = sorted(base.glob(pattern))
-        matches = [m for m in matches if str(m.resolve()).startswith(str(project_root))]
+        matches = [
+            m
+            for m in matches
+            if str(m.resolve()).startswith(str(project_root))
+            and not any(
+                p.startswith(".") or p in EXCLUDED_DIRS
+                for p in m.relative_to(project_root).parts
+            )
+        ]
         if len(matches) > MAX_GLOB_RESULTS:
             matches = matches[:MAX_GLOB_RESULTS]
             truncated = True
@@ -246,14 +264,12 @@ def _make_grep(project_root: Path) -> Callable[[dict[str, Any]], str]:
         if base.is_file():
             files_to_search = [base]
         elif base.is_dir():
-            for root, _dirs, filenames in os.walk(base):
+            for root, dirs, filenames in os.walk(base):
+                # Prune excluded directories in-place to prevent traversal
+                dirs[:] = [
+                    d for d in dirs if not d.startswith(".") and d not in EXCLUDED_DIRS
+                ]
                 root_path = Path(root)
-                parts = root_path.relative_to(base).parts
-                if any(
-                    p.startswith(".") or p in ("node_modules", "__pycache__", ".venv")
-                    for p in parts
-                ):
-                    continue
                 for fname in filenames:
                     if include and not fnmatch.fnmatch(fname, include):
                         continue
@@ -489,7 +505,15 @@ def create_default_tools(project_root: Path) -> list[ToolDefinition]:
                 "Execute a shell command and return stdout + stderr. Timeout: 30 seconds. "
                 "Use this for running CLI tools (uv run, uipath init, pytest, ruff, etc.), "
                 "installing dependencies, and any terminal operations. For commands that need "
-                "interactive input, provide it via the stdin parameter. Requires user approval."
+                "interactive input, provide it via the stdin parameter. Requires user approval. "
+                "Common UiPath commands: `uv run uipath init`, `uv run uipath run <name> '<json>'`, "
+                "`uv run uipath eval`, `uv run uipath pack`, `uv run uipath publish -w`. "
+                + (
+                    "The user is on Windows — use Windows-compatible commands "
+                    "(e.g., `dir` instead of `ls`, `type` instead of `cat`)."
+                    if sys.platform == "win32"
+                    else "The user is on Unix — standard shell commands (ls, cat, etc.) are available."
+                )
             ),
             parameters=_BASH_PARAMS,
             handler=_make_bash(project_root),
@@ -501,6 +525,7 @@ def create_default_tools(project_root: Path) -> list[ToolDefinition]:
                 "Find files matching a glob pattern (e.g. '**/*.py', 'src/**/*.ts'). "
                 "Use this to discover files by name or extension before reading them. "
                 "Returns up to 200 file paths relative to the project root, sorted alphabetically. "
+                "Automatically excludes .venv, node_modules, __pycache__, .git and other non-source directories. "
                 "For searching file *contents*, use grep instead."
             ),
             parameters=_GLOB_PARAMS,
@@ -510,9 +535,10 @@ def create_default_tools(project_root: Path) -> list[ToolDefinition]:
             name="grep",
             description=(
                 "Search file contents using a regex pattern. Returns matching lines with "
-                "file path, line number, and content (up to 100 matches). Skips hidden dirs, "
-                "node_modules, and __pycache__. Use the 'include' filter for specific file types "
-                "(e.g. '*.py'). For finding files by name, use glob instead."
+                "file path, line number, and content (up to 100 matches). "
+                "Skips .venv, .git, node_modules, __pycache__, and other non-source directories. "
+                "Use the 'include' filter for specific file types (e.g. '*.py'). "
+                "For finding files by name, use glob instead."
             ),
             parameters=_GREP_PARAMS,
             handler=_make_grep(project_root),

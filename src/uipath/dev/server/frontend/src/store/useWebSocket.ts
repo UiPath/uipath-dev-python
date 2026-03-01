@@ -72,17 +72,95 @@ export function useWebSocket() {
           const changedFiles = msg.payload.files as string[];
           const changedSet = new Set(changedFiles);
           const explorer = useExplorerStore.getState();
-          // Refresh open tab contents
-          for (const tab of explorer.openTabs) {
-            if (explorer.dirty[tab] || !changedSet.has(tab)) continue;
-            readFile(tab).then((fc) => {
-              const s = useExplorerStore.getState();
-              if (s.dirty[tab]) return;
-              if (s.fileCache[tab]?.content === fc.content) return;
-              s.setFileContent(tab, fc);
-            }).catch(() => {});
+          const agentState = useAgentStore.getState();
+          const agentStatus = agentState.status;
+          const agentIsActive = agentStatus === "thinking" || agentStatus === "planning" || agentStatus === "executing" || agentStatus === "awaiting_approval";
+          // Grace period: treat changes within 3s of agent finishing as agent-driven
+          // (file watcher debounce can delay files.changed past agent.status:done)
+          const recentlyActive = !agentIsActive && agentState._lastActiveAt != null && (Date.now() - agentState._lastActiveAt) < 3000;
+
+          // Filter out directory paths — file watcher reports both files and dirs.
+          // A path with a dot in the last segment is likely a file; no dot = likely a directory.
+          // Also skip paths already known as directories in the tree.
+          const fileChanges = changedFiles.filter((p) => {
+            if (p in explorer.children) return false; // known directory
+            const lastSegment = p.split("/").pop() ?? "";
+            return lastSegment.includes(".");
+          });
+
+          console.log("[files.changed]", { all: changedFiles, files: fileChanges, agentStatus, agentIsActive, recentlyActive });
+
+          if (agentIsActive || recentlyActive) {
+            // Agent is running (or just finished) — treat file changes as agent-driven
+            // We track diff candidate across async calls; first file to resolve wins
+            let diffShown = false;
+
+            for (const filePath of fileChanges) {
+              // Skip dirty files (user is editing)
+              if (explorer.dirty[filePath]) continue;
+
+              // Snapshot old content before fetching new (for diff)
+              const oldContent = explorer.fileCache[filePath]?.content ?? null;
+              const oldLanguage = explorer.fileCache[filePath]?.language ?? null;
+
+              // Fetch new content — this also validates the file still exists
+              readFile(filePath).then((fc) => {
+                const s = useExplorerStore.getState();
+                if (s.dirty[filePath]) return;
+                s.setFileContent(filePath, fc);
+
+                // Expand tree to reveal the file (but don't auto-open a new tab)
+                s.expandPath(filePath);
+
+                // Load unloaded parent directories so tree reveals the file
+                const parts = filePath.split("/");
+                for (let j = 1; j < parts.length; j++) {
+                  const dir = parts.slice(0, j).join("/");
+                  if (!(dir in useExplorerStore.getState().children)) {
+                    listDirectory(dir)
+                      .then((entries) => useExplorerStore.getState().setChildren(dir, entries))
+                      .catch(() => {});
+                  }
+                }
+
+                // Show diff for the first eligible file (only if already open in a tab)
+                const isOpenInTab = useExplorerStore.getState().openTabs.includes(filePath);
+                if (!diffShown && isOpenInTab && oldContent !== null && fc.content !== null && oldContent !== fc.content) {
+                  diffShown = true;
+                  useExplorerStore.getState().setSelectedFile(filePath);
+                  s.setDiffView({ path: filePath, original: oldContent, modified: fc.content, language: oldLanguage });
+                  setTimeout(() => {
+                    const cur = useExplorerStore.getState().diffView;
+                    if (cur && cur.path === filePath && cur.original === oldContent) {
+                      useExplorerStore.getState().setDiffView(null);
+                    }
+                  }, 5000);
+                }
+
+                s.markAgentChanged(filePath);
+                setTimeout(() => useExplorerStore.getState().clearAgentChanged(filePath), 10000);
+              }).catch(() => {
+                // File doesn't exist (deleted) — close tab if it was open
+                const s = useExplorerStore.getState();
+                if (s.openTabs.includes(filePath)) {
+                  s.closeTab(filePath);
+                }
+              });
+            }
+          } else {
+            // No agent running — regular refresh logic
+            for (const tab of explorer.openTabs) {
+              if (explorer.dirty[tab] || !changedSet.has(tab)) continue;
+              readFile(tab).then((fc) => {
+                const s = useExplorerStore.getState();
+                if (s.dirty[tab]) return;
+                if (s.fileCache[tab]?.content === fc.content) return;
+                s.setFileContent(tab, fc);
+              }).catch(() => {});
+            }
           }
-          // Refresh directory listings for already-loaded parent dirs
+
+          // Refresh directory listings for already-loaded parent dirs (always)
           const dirsToRefresh = new Set<string>();
           for (const filePath of changedFiles) {
             const lastSlash = filePath.lastIndexOf("/");

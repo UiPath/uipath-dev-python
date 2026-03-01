@@ -63,7 +63,7 @@ class SkillService:
         return path.read_text(encoding="utf-8")
 
     def get_skill_summary(self, skill_id: str) -> str:
-        """Return a compact summary: title + section headings + reference files.
+        """Return a compact summary: title + description + section headings + reference files.
 
         This is injected into the system prompt instead of the full content,
         so the model can use ``read_reference`` to drill into details.
@@ -74,17 +74,29 @@ class SkillService:
         text = path.read_text(encoding="utf-8")
 
         title = ""
+        first_paragraph = ""
         headings: list[str] = []
+        in_frontmatter = False
+        past_title = False
         for line in text.splitlines():
             stripped = line.strip()
+            # Skip YAML frontmatter
+            if stripped == "---":
+                in_frontmatter = not in_frontmatter
+                continue
+            if in_frontmatter:
+                continue
             if (
                 stripped.startswith("# ")
                 and not stripped.startswith("##")
                 and not title
             ):
                 title = stripped
+                past_title = True
             elif stripped.startswith("## "):
                 headings.append(stripped)
+            elif past_title and not first_paragraph and stripped:
+                first_paragraph = stripped
 
         # List sibling reference files the model can read_reference into
         refs_dir = path.parent
@@ -93,15 +105,18 @@ class SkillService:
         )
 
         parts = [title or f"# {skill_id}"]
+        if first_paragraph:
+            parts.append(first_paragraph)
+        parts.append(
+            "\nTo use this skill: read the sections below, then call `read_reference` "
+            "with a filename to get full details on any topic."
+        )
         if headings:
             parts.append("\nSections:")
             parts.extend(f"  - {h.lstrip('#').strip()}" for h in headings)
         if ref_files:
             parts.append("\nAvailable reference files (use read_reference to view):")
             parts.extend(f"  - {f}" for f in ref_files)
-        parts.append(
-            "\nUse read_reference with the filename above to get full details."
-        )
         return "\n".join(parts)
 
     def get_reference(self, skill_id: str, ref_path: str) -> str:
