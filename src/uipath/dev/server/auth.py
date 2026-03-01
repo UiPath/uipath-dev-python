@@ -18,6 +18,7 @@ import os
 import socketserver
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -109,6 +110,8 @@ class AuthState:
     _last_tenant: str | None = None
     _last_org: dict[str, str] = field(default_factory=dict)
     _last_environment: str | None = None
+    # Callback invoked after successful authentication
+    _on_authenticated: Callable[[], None] | None = None
     # internal
     _code_verifier: str | None = None
     _state: str | None = None
@@ -128,9 +131,30 @@ def get_auth_state() -> AuthState:
 
 
 def reset_auth_state() -> None:
-    """Reset the auth state to its initial (unauthenticated) values."""
-    global _auth
-    _auth = AuthState()
+    """Reset the auth state to its initial (unauthenticated) values.
+
+    Preserves registered callbacks (e.g. ``_on_authenticated``).
+    """
+    _auth.status = "unauthenticated"
+    _auth.environment = "cloud"
+    _auth.token_data = {}
+    _auth.tenants = []
+    _auth.organization = {}
+    _auth.uipath_url = None
+    _auth._last_tenant = None
+    _auth._last_org = {}
+    _auth._last_environment = None
+    _auth._code_verifier = None
+    _auth._state = None
+    _auth._port = None
+    _auth._callback_server = None
+    if _auth._wait_task and not _auth._wait_task.done():
+        _auth._wait_task.cancel()
+    _auth._wait_task = None
+    if _auth._token_event:
+        _auth._token_event.set()
+    _auth._token_event = None
+    _auth._loop = None
 
 
 # ---------------------------------------------------------------------------
@@ -990,6 +1014,40 @@ def select_tenant(tenant_name: str) -> dict[str, Any]:
     return {"status": "authenticated", "uipath_url": auth.uipath_url}
 
 
+def _update_env_file(env_contents: dict[str, str]) -> None:
+    """Merge *env_contents* into the CWD ``.env`` file.
+
+    New keys take priority; existing keys not in *env_contents* are preserved.
+    Comments and blank lines are kept as-is.
+    """
+    env_path = Path.cwd() / ".env"
+    lines: list[str] = []
+    seen_keys: set[str] = set()
+
+    if env_path.exists():
+        with open(env_path) as f:
+            for raw_line in f:
+                stripped = raw_line.strip()
+                if stripped.startswith("#") or "=" not in stripped:
+                    # Preserve comments and blank lines
+                    lines.append(raw_line)
+                    continue
+                key = stripped.split("=", 1)[0]
+                if key in env_contents:
+                    lines.append(f"{key}={env_contents[key]}\n")
+                else:
+                    lines.append(raw_line)
+                seen_keys.add(key)
+
+    # Append new keys that weren't already in the file
+    for key, value in env_contents.items():
+        if key not in seen_keys:
+            lines.append(f"{key}={value}\n")
+
+    with open(env_path, "w") as f:
+        f.writelines(lines)
+
+
 def _finalize_tenant(auth: AuthState, tenant_name: str) -> None:
     """Write .env and os.environ with the resolved credentials."""
     org_name = auth.organization.get("name", "")
@@ -1010,45 +1068,27 @@ def _finalize_tenant(auth: AuthState, tenant_name: str) -> None:
     auth._last_org = dict(auth.organization)
     auth._last_environment = auth.environment
 
-    # Update os.environ
-    os.environ["UIPATH_ACCESS_TOKEN"] = access_token
-    os.environ["UIPATH_URL"] = uipath_url
-    os.environ["UIPATH_TENANT_ID"] = tenant_id
-    os.environ["UIPATH_ORGANIZATION_ID"] = org_id
+    # Write .env using the same approach as `uipath auth`
+    _update_env_file(
+        {
+            "UIPATH_ACCESS_TOKEN": access_token,
+            "UIPATH_URL": uipath_url,
+            "UIPATH_TENANT_ID": tenant_id,
+            "UIPATH_ORGANIZATION_ID": org_id,
+        }
+    )
 
-    # Write/update .env file (preserving comments, blank lines, and ordering)
-    env_path = Path.cwd() / ".env"
-    lines: list[str] = []
-    updated_keys: set[str] = set()
-    new_values = {
-        "UIPATH_ACCESS_TOKEN": access_token,
-        "UIPATH_URL": uipath_url,
-        "UIPATH_TENANT_ID": tenant_id,
-        "UIPATH_ORGANIZATION_ID": org_id,
-    }
+    # Reload .env into os.environ (same as CLI root: cwd + override)
+    load_dotenv(
+        dotenv_path=os.path.join(os.getcwd(), ".env"),
+        override=True,
+    )
 
-    if env_path.exists():
-        with open(env_path) as f:
-            for raw_line in f:
-                stripped = raw_line.strip()
-                if "=" in stripped and not stripped.startswith("#"):
-                    key = stripped.split("=", 1)[0]
-                    if key in new_values:
-                        lines.append(f"{key}={new_values[key]}\n")
-                        updated_keys.add(key)
-                        continue
-                lines.append(raw_line)
-
-    # Append any keys that weren't already in the file
-    for key, value in new_values.items():
-        if key not in updated_keys:
-            lines.append(f"{key}={value}\n")
-
-    with open(env_path, "w") as f:
-        f.writelines(lines)
-
-    # Reload all .env variables into os.environ
-    load_dotenv(override=True)
+    if auth._on_authenticated:
+        try:
+            auth._on_authenticated()
+        except Exception:
+            logger.exception("Error in post-authentication callback")
 
 
 def logout() -> None:
