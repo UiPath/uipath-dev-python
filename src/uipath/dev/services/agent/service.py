@@ -13,6 +13,7 @@ from uipath.dev.services.agent.loop import SYSTEM_PROMPT, AgentLoop
 from uipath.dev.services.agent.provider import create_provider
 from uipath.dev.services.agent.session import AgentSession
 from uipath.dev.services.agent.tools import (
+    EXCLUDED_DIRS,
     create_ask_user_tool,
     create_default_tools,
     create_dispatch_agent_tool,
@@ -22,6 +23,138 @@ from uipath.dev.services.agent.tools import (
 from uipath.dev.services.skill_service import SkillService
 
 _PROJECT_ROOT = Path.cwd().resolve()
+
+
+def _detect_project_context(project_root: Path) -> str:
+    """Detect project files and return a context string for the system prompt."""
+    parts: list[str] = []
+
+    pyproject = project_root / "pyproject.toml"
+    if pyproject.is_file():
+        try:
+            text = pyproject.read_text(encoding="utf-8")
+            for line in text.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("name"):
+                    # Extract name = "value" from TOML
+                    _, _, value = stripped.partition("=")
+                    name = value.strip().strip('"').strip("'")
+                    if name:
+                        parts.append(f"Project: {name}")
+                    break
+        except Exception:
+            pass
+
+    uipath_json = project_root / "uipath.json"
+    if uipath_json.is_file():
+        try:
+            parts.append(
+                f"uipath.json: {uipath_json.read_text(encoding='utf-8').strip()}"
+            )
+        except Exception:
+            pass
+
+    langgraph_json = project_root / "langgraph.json"
+    if langgraph_json.is_file():
+        try:
+            parts.append(
+                f"langgraph.json: {langgraph_json.read_text(encoding='utf-8').strip()}"
+            )
+        except Exception:
+            pass
+
+    evals_dir = project_root / "evaluations"
+    if evals_dir.is_dir():
+        eval_set_dir = evals_dir / "eval-sets"
+        evaluator_dir = evals_dir / "evaluators"
+        eval_sets = list(eval_set_dir.glob("*.json")) if eval_set_dir.is_dir() else []
+        evaluators = (
+            list(evaluator_dir.glob("*.json")) if evaluator_dir.is_dir() else []
+        )
+        sub: list[str] = []
+        if eval_sets:
+            sub.append(
+                f"{len(eval_sets)} eval sets: {', '.join(f.stem for f in eval_sets[:5])}"
+            )
+        if evaluators:
+            sub.append(
+                f"{len(evaluators)} evaluators: {', '.join(f.stem for f in evaluators[:5])}"
+            )
+        if sub:
+            parts.append(f"Evaluations dir: {'; '.join(sub)}")
+
+    # List Python source files at root and in src/
+    py_files = [f.name for f in project_root.glob("*.py")]
+    src_dir = project_root / "src"
+    if src_dir.is_dir():
+        src_py = [
+            str(f.relative_to(project_root))
+            for f in src_dir.rglob("*.py")
+            if not any(
+                p.startswith(".") or p in EXCLUDED_DIRS
+                for p in f.relative_to(project_root).parts
+            )
+        ][:10]
+        py_files.extend(src_py)
+    if py_files:
+        parts.append(f"Python files: {', '.join(py_files[:10])}")
+
+    if not parts:
+        return ""
+    return "\n\n## Current Project\n" + "\n".join(f"- {p}" for p in parts)
+
+
+def _repair_orphaned_tool_calls(session: AgentSession) -> None:
+    """Fix conversation history after a cancelled turn.
+
+    If the last assistant message has tool_calls but some/all tool results
+    are missing, the API will reject the next request. Patch by adding
+    stub tool results for any missing call IDs.
+    """
+    if not session.messages:
+        return
+
+    # Find the last assistant message with tool_calls
+    last_asst_idx = None
+    for i in range(len(session.messages) - 1, -1, -1):
+        msg = session.messages[i]
+        if msg.get("role") == "assistant" and msg.get("tool_calls"):
+            last_asst_idx = i
+            break
+
+    if last_asst_idx is None:
+        return
+
+    expected_ids = {tc["id"] for tc in session.messages[last_asst_idx]["tool_calls"]}
+
+    # Collect tool result IDs that follow this assistant message
+    present_ids: set[str] = set()
+    for msg in session.messages[last_asst_idx + 1 :]:
+        if msg.get("role") == "tool" and msg.get("tool_call_id"):
+            present_ids.add(msg["tool_call_id"])
+
+    missing = expected_ids - present_ids
+    if not missing:
+        return
+
+    # Insert stub results right after the last existing tool result (or after assistant msg)
+    insert_at = last_asst_idx + 1
+    for j in range(last_asst_idx + 1, len(session.messages)):
+        if session.messages[j].get("role") == "tool":
+            insert_at = j + 1
+        else:
+            break
+
+    for call_id in missing:
+        session.messages.insert(
+            insert_at,
+            {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "content": "[cancelled by user]",
+            },
+        )
+        insert_at += 1
 
 
 def _safe_parse_json(s: str) -> dict[str, Any]:
@@ -86,6 +219,7 @@ class AgentService:
         ):
             return
 
+        _repair_orphaned_tool_calls(session)
         session.messages.append({"role": "user", "content": text})
         session.status = "thinking"
         session._cancel_event.clear()
@@ -349,6 +483,9 @@ class AgentService:
                     system_prompt += f"\n\n## Active Skill: {sid}\n\n{summary}"
                 except FileNotFoundError:
                     pass
+
+        # Inject dynamic project context
+        system_prompt += _detect_project_context(_PROJECT_ROOT)
 
         # Build tools list
         tools = create_default_tools(_PROJECT_ROOT)

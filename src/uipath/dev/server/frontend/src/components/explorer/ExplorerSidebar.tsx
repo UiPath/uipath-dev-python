@@ -13,6 +13,7 @@ function FileTreeNode({ path, name, type, depth }: {
   const isExpanded = useExplorerStore((s) => !!s.expanded[path]);
   const isLoading = useExplorerStore((s) => !!s.loadingDirs[path]);
   const isDirty = useExplorerStore((s) => !!s.dirty[path]);
+  const isAgentChanged = useExplorerStore((s) => !!s.agentChangedFiles[path]);
   const selectedFile = useExplorerStore((s) => s.selectedFile);
   const { setChildren, toggleExpanded, setLoadingDir, openTab } = useExplorerStore();
   const { navigate } = useHashRoute();
@@ -40,7 +41,7 @@ function FileTreeNode({ path, name, type, depth }: {
     <>
       <button
         onClick={handleClick}
-        className="w-full text-left flex items-center gap-1 py-[3px] text-[13px] cursor-pointer transition-colors group"
+        className={`w-full text-left flex items-center gap-1 py-[3px] text-[13px] cursor-pointer transition-colors group${isAgentChanged ? " agent-changed-file" : ""}`}
         style={{
           paddingLeft: `${12 + depth * 16}px`,
           paddingRight: "8px",

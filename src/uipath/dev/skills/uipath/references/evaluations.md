@@ -1099,15 +1099,15 @@ Before running, you'll be asked for:
 ### Command
 
 ```bash
-uv run uipath eval <entrypoint> <eval-file> \
+uv run uipath eval <name> <eval-file> \
   --workers 4 \
   --no-report \
   --output-file eval-results.json
 ```
 
 **Parameters:**
-- `<entrypoint>` - Agent entry point name from `entry-points.json`
-- `<eval-file>` - Path to evaluation set file
+- `<name>` - Agent/function name — the key from `uipath.json` (e.g., `"main"`), or from framework config files like `langgraph.json` / `llama-index.json`. This is the short name, **not** the file path.
+- `<eval-file>` - Relative path to the evaluation set file (e.g., `evaluations/eval-sets/my-tests.json`). Required when the project has more than one eval set; can be omitted if there is only one.
 - `--workers` - Number of parallel workers (1-8)
 - `--no-report` - Don't report to UiPath Cloud
 - `--output-file` - Save results to JSON file
@@ -1398,7 +1398,7 @@ Results can be:
 Set `--report` flag to send results to your UiPath Cloud account:
 
 ```bash
-uv run uipath eval <entrypoint> <eval-file> \
+uv run uipath eval <name> <eval-file> \
   --report \
   --workers 4
 ```
@@ -1410,7 +1410,7 @@ uv run uipath eval <entrypoint> <eval-file> \
 Run tests in parallel for faster execution:
 
 ```bash
-uv run uipath eval <entrypoint> <eval-file> \
+uv run uipath eval <name> <eval-file> \
   --workers 8
 ```
 
@@ -1424,7 +1424,7 @@ uv run uipath eval <entrypoint> <eval-file> \
 For evaluators using LLMs (LLMJudge, Trajectory), enable mocker cache:
 
 ```bash
-uv run uipath eval <entrypoint> <eval-file> \
+uv run uipath eval <name> <eval-file> \
   --mocker-cache
 ```
 
@@ -1436,19 +1436,42 @@ Benefits:
 
 ## Troubleshooting
 
+### All Tests Score 0.0 or Error
+
+This almost always means the **function crashed** — it's not a logic problem, it's a runtime error. The evaluator received `{}` because the function errored out before producing output.
+
+**How to diagnose:**
+1. Pick one test case input from your eval set
+2. Run the function standalone: `uv run uipath run <name> '<json-input>'`
+3. Read the traceback — the last exception is the root cause
+
+### KeyError or Empty Output in Evaluator
+
+If the evaluator reports `KeyError` or the output is `{}`, the function errored silently. The evaluator is working correctly — it just received empty output because the function crashed.
+
+Run the function standalone with `uv run uipath run` to see the actual error.
+
+### ModuleNotFoundError
+
+A dependency is missing from the project. Fix:
+1. Add the package to `pyproject.toml` under `[project.dependencies]`
+2. Run `uv sync` to install it
+3. Re-run the evaluation
+
+### Schema Mismatch / Wrong Input Shape
+
+The function received unexpected input (e.g., raw dict instead of a Pydantic model). This usually means `entry-points.json` is stale.
+
+Fix: run `uv run uipath init` to regenerate entry points, then re-run the evaluation.
+
+Also check for `from __future__ import annotations` in the function file — this stringifies all annotations and breaks runtime type detection. Remove it if Input/Output models aren't being recognized.
+
 ### Test Passes but Score Seems Wrong
 
 - Check evaluator configuration
 - Review evaluation criteria
 - Verify expected output format
 - Look at justification in detailed results
-
-### All Tests Fail
-
-- Verify agent is working correctly
-- Check evaluation set references correct agent
-- Ensure evaluator files exist and are valid
-- Review agent input/output schemas
 
 ### Performance Issues
 
@@ -1986,7 +2009,7 @@ eval-sets/
 
 - **Enable caching for LLM evaluators**
   ```bash
-  uv run uipath eval <agent> <eval-file> --mocker-cache
+  uv run uipath eval <name> <eval-file> --mocker-cache
   ```
   - Faster re-runs
   - Lower API costs
@@ -2037,7 +2060,7 @@ eval-sets/
 
 - **Run evaluations in CI/CD**
   ```bash
-  uv run uipath eval <agent> evaluations/eval-sets/smoke-tests.json \
+  uv run uipath eval <name> evaluations/eval-sets/smoke-tests.json \
     --workers 4 \
     --mocker-cache \
     --output-file eval-results.json
