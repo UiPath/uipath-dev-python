@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from pathlib import Path
@@ -160,11 +161,36 @@ def create_app(server: UiPathDeveloperServer) -> FastAPI:
     from uipath.dev.server.ws.handler import router as ws_router
 
     if auth_enabled:
-        from uipath.dev.server.auth import restore_session
+        from uipath.dev.server.auth import get_auth_state, restore_session
         from uipath.dev.server.routes.auth import router as auth_router
 
         app.include_router(auth_router, prefix="/api")
         restore_session()
+
+        # Reload the runtime factory when authentication completes so the
+        # newly-written credentials are picked up by subsequent runs.
+        def _on_authenticated() -> None:
+            async def _safe_reload() -> None:
+                # Wait for active runs to finish before reloading
+                while any(
+                    r.status in ("pending", "running")
+                    for r in server.run_service.runs.values()
+                ):
+                    await asyncio.sleep(1)
+                await server.reload_factory()
+
+            def _on_reload_done(t: asyncio.Task[None]) -> None:
+                try:
+                    t.result()
+                except asyncio.CancelledError:
+                    pass
+                except Exception:
+                    logger.exception("Factory reload after login failed")
+
+            task = asyncio.create_task(_safe_reload())
+            task.add_done_callback(_on_reload_done)
+
+        get_auth_state()._on_authenticated = _on_authenticated
 
     app.include_router(entrypoints_router, prefix="/api")
     app.include_router(runs_router, prefix="/api")
