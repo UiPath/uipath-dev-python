@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { WsClient } from "../api/websocket";
+import { listEntrypoints } from "../api/client";
 import { useRunStore } from "./useRunStore";
 import { useEvalStore } from "./useEvalStore";
 import { useAgentStore } from "./useAgentStore";
@@ -21,7 +22,7 @@ export function getWs(): WsClient {
 
 export function useWebSocket() {
   const ws = useRef(getWs());
-  const { upsertRun, addTrace, addLog, addChatEvent, setActiveInterrupt, setActiveNode, removeActiveNode, resetRunGraphState, addStateEvent, setReloadPending } = useRunStore();
+  const { upsertRun, addTrace, addLog, addChatEvent, setActiveInterrupt, setActiveNode, removeActiveNode, resetRunGraphState, addStateEvent } = useRunStore();
   const { upsertEvalRun, updateEvalRunProgress, completeEvalRun } = useEvalStore();
 
   useEffect(() => {
@@ -65,9 +66,23 @@ export function useWebSocket() {
           addStateEvent(runId, nodeName, payload, qualifiedNodeName, phase);
           break;
         }
-        case "reload":
-          setReloadPending(true);
+        case "reload": {
+          const alreadyReloaded = msg.payload.reloaded as boolean | undefined;
+          if (alreadyReloaded) {
+            // Server already reloaded the factory — just refresh entrypoints
+            listEntrypoints()
+              .then((eps) => {
+                const store = useRunStore.getState();
+                store.setEntrypoints(eps.map((e) => e.name));
+                store.setReloadPending(false);
+              })
+              .catch((err) => console.error("Failed to refresh entrypoints:", err));
+          } else {
+            // Runs active or reload failed — show manual reload prompt
+            useRunStore.getState().setReloadPending(true);
+          }
           break;
+        }
         case "files.changed": {
           const changedFiles = msg.payload.files as string[];
           const changedSet = new Set(changedFiles);
@@ -286,7 +301,7 @@ export function useWebSocket() {
     });
 
     return unsub;
-  }, [upsertRun, addTrace, addLog, addChatEvent, setActiveInterrupt, setActiveNode, removeActiveNode, resetRunGraphState, addStateEvent, setReloadPending, upsertEvalRun, updateEvalRunProgress, completeEvalRun]);
+  }, [upsertRun, addTrace, addLog, addChatEvent, setActiveInterrupt, setActiveNode, removeActiveNode, resetRunGraphState, addStateEvent, upsertEvalRun, updateEvalRunProgress, completeEvalRun]);
 
   return ws.current;
 }

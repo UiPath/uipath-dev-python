@@ -45,21 +45,30 @@ def _detect_project_context(project_root: Path) -> str:
         except Exception:
             pass
 
-    uipath_json = project_root / "uipath.json"
-    if uipath_json.is_file():
+    # Detect agentic framework config files — only show configs that define
+    # agents or functions so the model knows which framework is active.
+    framework_configs = [
+        "uipath.json",
+        "langgraph.json",
+        "llama_index.json",
+        "agent_framework.json",
+        "google_adk.json",
+        "pydantic_ai.json",
+        "openai_agents.json",
+    ]
+    for config_name in framework_configs:
+        config_path = project_root / config_name
+        if not config_path.is_file():
+            continue
         try:
-            parts.append(
-                f"uipath.json: {uipath_json.read_text(encoding='utf-8').strip()}"
-            )
-        except Exception:
-            pass
-
-    langgraph_json = project_root / "langgraph.json"
-    if langgraph_json.is_file():
-        try:
-            parts.append(
-                f"langgraph.json: {langgraph_json.read_text(encoding='utf-8').strip()}"
-            )
+            raw = config_path.read_text(encoding="utf-8").strip()
+            data = json.loads(raw)
+            # Skip configs that have no agents or functions defined
+            has_agents = bool(data.get("agents"))
+            has_functions = bool(data.get("functions"))
+            if not has_agents and not has_functions:
+                continue
+            parts.append(f"{config_name}: {raw}")
         except Exception:
             pass
 
@@ -460,6 +469,24 @@ class AgentService:
             "last_messages": last_messages,
         }
 
+    def get_session_raw_state(self, session_id: str) -> dict[str, Any] | None:
+        """Return raw trace data for the agent trace inspector."""
+        session = self._sessions.get(session_id)
+        if session is None:
+            return None
+
+        return {
+            "session_id": session.id,
+            "model": session.model,
+            "status": session.status,
+            "turn_count": session.turn_count,
+            "total_prompt_tokens": session.total_prompt_tokens,
+            "total_completion_tokens": session.total_completion_tokens,
+            "system_prompt": session.last_system_prompt,
+            "tool_schemas": session.last_tool_schemas,
+            "traces": session.traces,
+        }
+
     @staticmethod
     def _resolve_tool_name(session: AgentSession, tool_call_id: str) -> str:
         """Find the tool name for a given tool_call_id from assistant messages."""
@@ -483,6 +510,14 @@ class AgentService:
                     system_prompt += f"\n\n## Active Skill: {sid}\n\n{summary}"
                 except FileNotFoundError:
                     pass
+            # Append reference file list once (shared across all skills)
+            ref_files = self._skill_service.get_reference_files()
+            if ref_files:
+                system_prompt += (
+                    "\n\n## Reference Files\n"
+                    "Use `read_reference` with a filename to view:\n"
+                    + "\n".join(f"  - {f}" for f in ref_files)
+                )
 
         # Inject dynamic project context
         system_prompt += _detect_project_context(_PROJECT_ROOT)
@@ -494,6 +529,13 @@ class AgentService:
         tools.append(create_ask_user_tool())
         if session.skill_ids and self._skill_service:
             tools.append(create_read_reference_tool())
+
+        # Persist system prompt + tool schemas on session for trace inspection
+        session.last_system_prompt = system_prompt
+        session.last_tool_schemas = sorted(
+            [t.to_openai_schema() for t in tools],
+            key=lambda s: s["function"]["name"],
+        )
 
         loop = AgentLoop(
             provider=provider,

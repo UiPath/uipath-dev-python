@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAgentStore } from "../../store/useAgentStore";
 import { useAuthStore } from "../../store/useAuthStore";
+import { useExplorerStore } from "../../store/useExplorerStore";
 import { getAgentSessionState, listAgentModels, listAgentSkills } from "../../api/agent-client";
 import { getWs } from "../../store/useWebSocket";
 import AgentMessageComponent from "./AgentMessage";
@@ -411,6 +412,18 @@ function Header({
             </div>
           )}
         </div>
+      )}
+      {hasMessages && (
+        <button
+          onClick={() => useExplorerStore.getState().openTab("__agent_state__")}
+          className="shrink-0 text-[11px] font-semibold px-2 py-1 rounded cursor-pointer"
+          style={{ background: "transparent", border: "1px solid var(--border)", color: "var(--text-muted)" }}
+          title="Open agent trace inspector"
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-muted)"; }}
+        >
+          Trace
+        </button>
       )}
       {isBusy && (
         <button

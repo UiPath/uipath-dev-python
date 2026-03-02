@@ -6,6 +6,7 @@ import type { AgentMessage as AgentMessageType, AgentToolCall } from "../../type
 import { useAgentStore } from "../../store/useAgentStore";
 import { getWs } from "../../store/useWebSocket";
 import { getAgentSessionDiagnostics } from "../../api/agent-client";
+import { DiffView } from "./DiffView";
 
 interface Props {
   message: AgentMessageType;
@@ -81,6 +82,15 @@ function PlanCard({ message }: Props) {
   );
 }
 
+function isEditFileDiff(tc: AgentToolCall): { path?: string; old_string: string; new_string: string } | null {
+  if (tc.tool !== "edit_file" || !tc.args) return null;
+  const a = tc.args as Record<string, unknown>;
+  if (typeof a.old_string === "string" && typeof a.new_string === "string") {
+    return { path: a.file_path as string | undefined, old_string: a.old_string, new_string: a.new_string };
+  }
+  return null;
+}
+
 function ToolApprovalCard({ tc }: { tc: AgentToolCall }) {
   const handleApproval = (approved: boolean) => {
     if (!tc.tool_call_id) return;
@@ -89,6 +99,8 @@ function ToolApprovalCard({ tc }: { tc: AgentToolCall }) {
     useAgentStore.getState().resolveToolApproval(tc.tool_call_id, approved);
     getWs().sendToolApproval(sessionId, tc.tool_call_id, approved);
   };
+
+  const diff = isEditFileDiff(tc);
 
   return (
     <div
@@ -111,16 +123,25 @@ function ToolApprovalCard({ tc }: { tc: AgentToolCall }) {
         >
           {tc.tool}
         </span>
+        {diff?.path && (
+          <span className="text-[11px] font-mono truncate" style={{ color: "var(--text-muted)" }}>
+            {diff.path}
+          </span>
+        )}
       </div>
 
-      {tc.args != null && (
+      {diff ? (
+        <div className="px-3 py-2" style={{ background: "var(--bg-secondary)" }}>
+          <DiffView path={diff.path} oldStr={diff.old_string} newStr={diff.new_string} />
+        </div>
+      ) : tc.args != null ? (
         <pre
           className="px-3 py-2 text-[11px] font-mono whitespace-pre-wrap break-words overflow-y-auto leading-normal"
           style={{ background: "var(--bg-secondary)", color: "var(--text-secondary)", maxHeight: 200 }}
         >
           {JSON.stringify(tc.args, null, 2)}
         </pre>
-      )}
+      ) : null}
 
       <div
         className="flex items-center gap-2 px-3 py-2"
@@ -188,6 +209,7 @@ function ToolChip({ tc, active, onClick }: { tc: AgentToolCall; active: boolean;
 function ToolDetailPanel({ tc }: { tc: AgentToolCall }) {
   const hasResult = tc.result !== undefined;
   const hasArgs = tc.args != null && Object.keys(tc.args).length > 0;
+  const diff = isEditFileDiff(tc);
 
   return (
     <div
@@ -202,6 +224,9 @@ function ToolDetailPanel({ tc }: { tc: AgentToolCall }) {
         <span className="text-[11px] font-mono font-semibold" style={{ color: "var(--text-primary)" }}>
           {tc.tool}
         </span>
+        {diff?.path && (
+          <span className="text-[11px] font-mono truncate" style={{ color: "var(--text-muted)" }}>{diff.path}</span>
+        )}
         {tc.is_error && (
           <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ background: "color-mix(in srgb, var(--error) 15%, transparent)", color: "var(--error)" }}>
             Error
@@ -209,9 +234,13 @@ function ToolDetailPanel({ tc }: { tc: AgentToolCall }) {
         )}
       </div>
 
-      {/* Args + Result side by side (or stacked) */}
+      {/* Args + Result stacked */}
       <div className="flex flex-col gap-0">
-        {hasArgs && (
+        {diff ? (
+          <div className="px-3 py-2" style={{ borderBottom: hasResult ? "1px solid var(--border)" : "none" }}>
+            <DiffView path={diff.path} oldStr={diff.old_string} newStr={diff.new_string} />
+          </div>
+        ) : hasArgs ? (
           <div style={{ borderBottom: hasResult ? "1px solid var(--border)" : "none" }}>
             <div className="px-3 pt-1.5 pb-0.5">
               <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: "var(--text-muted)" }}>Input</span>
@@ -220,7 +249,7 @@ function ToolDetailPanel({ tc }: { tc: AgentToolCall }) {
               {JSON.stringify(tc.args, null, 2)}
             </pre>
           </div>
-        )}
+        ) : null}
         {hasResult && (
           <div>
             <div className="px-3 pt-1.5 pb-0.5">

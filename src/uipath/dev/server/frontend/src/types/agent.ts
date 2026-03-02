@@ -53,3 +53,36 @@ export interface AgentSessionState {
   turn_count: number;
   compaction_count: number;
 }
+
+export interface TraceMessage {
+  role: string;
+  content: string;
+  tool_calls?: { name: string; arguments: string }[];
+  tool_call_id?: string;
+}
+
+export interface AgentTraceSpan {
+  turn_index: number;
+  input_messages: TraceMessage[];
+  output_content: string;
+  output_thinking?: string;
+  output_tool_calls: { name: string; arguments: string }[];
+  tool_results?: { tool_call_id: string; name: string; result: string }[];
+  prompt_tokens: number;
+  completion_tokens: number;
+  duration_ms: number;
+  model: string;
+  status: string;
+}
+
+export interface AgentRawState {
+  session_id: string;
+  model: string;
+  status: string;
+  turn_count: number;
+  total_prompt_tokens: number;
+  total_completion_tokens: number;
+  system_prompt: string;
+  tool_schemas: { function: { name: string; description?: string; parameters?: unknown } }[];
+  traces: AgentTraceSpan[];
+}

@@ -1,4 +1,4 @@
-import type { AgentModel, AgentSessionState, AgentSkill } from "../types/agent";
+import type { AgentModel, AgentRawState, AgentSessionState, AgentSkill } from "../types/agent";
 
 const BASE = "/api";
 
@@ -21,6 +21,13 @@ export async function getAgentSessionDiagnostics(sessionId: string): Promise<Rec
 
 export async function getAgentSessionState(sessionId: string): Promise<AgentSessionState | null> {
   const res = await fetch(`${BASE}/agent/session/${sessionId}/state`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function getAgentSessionRawState(sessionId: string): Promise<AgentRawState | null> {
+  const res = await fetch(`${BASE}/agent/session/${sessionId}/raw-state`);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();

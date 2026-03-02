@@ -29,9 +29,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
     await manager.connect(websocket)
 
-    # If a reload is pending (file changed before this client connected), notify immediately
+    # If a reload is pending (deferred because runs were active), notify the client
     if server.reload_pending:
-        await websocket.send_json(server_message(ServerEvent.RELOAD, {"files": []}))
+        await websocket.send_json(
+            server_message(ServerEvent.RELOAD, {"files": [], "reloaded": False})
+        )
 
     try:
         while True:

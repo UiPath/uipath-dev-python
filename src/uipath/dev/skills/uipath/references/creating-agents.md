@@ -44,19 +44,27 @@ All subsequent commands will be executed using `uv run` to ensure they run withi
 
 ## Project Configuration
 
-### `uipath.json`
+### Framework Config File
 
-Create a `uipath.json` file in the project root to register your agent entry points:
+Register your agent entry points in the appropriate framework config file. The project may already have one — check which file has a non-empty `"agents"` key:
 
+- `uipath.json` — default UiPath agents
+- `pydantic_ai.json` — PydanticAI agents
+- `langgraph.json` — LangGraph agents
+- `llama_index.json` — LlamaIndex agents
+- `google_adk.json` — Google ADK agents
+- `openai_agents.json` — OpenAI Agents SDK agents
+
+Format (all frameworks use the same structure):
 ```json
 {
   "agents": {
-    "main": "main.py:main"
+    "agent_name": "main.py:agent"
   }
 }
 ```
 
-The `"agents"` key maps agent names to their entry points in `file:function` format. For agent frameworks (e.g., LangGraph), use the framework's own config file (e.g., `langgraph.json`) instead.
+The `"agents"` key maps agent names to their entry points in `file:variable_or_function` format. **IMPORTANT**: If a config file already exists with agents defined, use that one — do NOT create a new config or add agents to a different config file.
 
 ### `bindings.json`
 

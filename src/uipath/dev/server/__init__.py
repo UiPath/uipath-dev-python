@@ -196,6 +196,31 @@ class UiPathDeveloperServer:
         self.reload_pending = False
         logger.debug("Factory reloaded successfully")
 
+    async def _auto_reload(self, py_files: list[str]) -> None:
+        """Auto-reload factory when Python files change.
+
+        If runs are active, broadcast reload event so the frontend shows a
+        manual-reload prompt instead.
+        """
+        active = [
+            r
+            for r in self.run_service.runs.values()
+            if r.status in ("pending", "running")
+        ]
+        if active:
+            logger.debug("Runs in progress — deferring reload to user")
+            self.reload_pending = True
+            self.connection_manager.broadcast_reload(py_files)
+            return
+
+        try:
+            await self.reload_factory()
+            self.connection_manager.broadcast_reload(py_files, reloaded=True)
+        except Exception:
+            logger.warning("Auto-reload failed", exc_info=True)
+            self.reload_pending = True
+            self.connection_manager.broadcast_reload(py_files)
+
     def _start_watcher(self) -> None:
         """Start the file watcher background task."""
         from uipath.dev.server.watcher import watch_project_files
@@ -231,11 +256,15 @@ class UiPathDeveloperServer:
         if relative_files:
             self.connection_manager.broadcast_files_changed(relative_files)
 
-        # Factory hot-reload for Python files only
-        py_files = [f for f in changed_files if f.endswith((".py", ".pyx"))]
+        # Factory hot-reload for Python files only (use normalized relative paths)
+        py_files = [f for f in relative_files if f.endswith((".py", ".pyx"))]
         if py_files and self.factory_creator is not None:
-            self.reload_pending = True
-            self.connection_manager.broadcast_reload(py_files)
+            loop = self.connection_manager._get_loop()
+
+            def _schedule_reload(files: list[str] = py_files) -> None:
+                asyncio.ensure_future(self._auto_reload(files))
+
+            loop.call_soon_threadsafe(_schedule_reload)
 
     # ------------------------------------------------------------------
     # Internal callbacks
