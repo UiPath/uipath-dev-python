@@ -20,6 +20,10 @@ class AgentSession:
     tasks: dict[str, dict[str, str]] = field(default_factory=dict)
     _next_task_id: int = field(default=1, repr=False)
     status: str = "idle"
+    # Trace spans (one per LLM call)
+    traces: list[dict[str, Any]] = field(default_factory=list)
+    last_system_prompt: str = ""
+    last_tool_schemas: list[dict[str, Any]] = field(default_factory=list)
     # Token tracking
     total_prompt_tokens: int = 0
     total_completion_tokens: int = 0

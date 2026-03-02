@@ -17,7 +17,7 @@ MAX_OUTPUT_CHARS = 50_000
 MAX_FILE_CHARS = 100_000
 MAX_GLOB_RESULTS = 200
 MAX_GREP_MATCHES = 100
-BASH_TIMEOUT = 30
+BASH_TIMEOUT = 120
 TOOLS_REQUIRING_APPROVAL = {"write_file", "edit_file", "bash"}
 
 # Directories to exclude from glob/grep results.
@@ -72,7 +72,9 @@ def _resolve_safe(project_root: Path, path_str: str) -> Path:
     if not p.is_absolute():
         p = project_root / p
     resolved = p.resolve()
-    if not str(resolved).startswith(str(project_root)):
+    if not os.path.normcase(str(resolved)).startswith(
+        os.path.normcase(str(project_root))
+    ):
         raise PermissionError(f"Path escapes project root: {path_str}")
     return resolved
 
@@ -225,21 +227,30 @@ def _make_glob(project_root: Path) -> Callable[[dict[str, Any]], str]:
         if not base.is_dir():
             return f"Error: directory not found: {args.get('path', '.')}"
         matches = sorted(base.glob(pattern))
-        matches = [
-            m
-            for m in matches
-            if str(m.resolve()).startswith(str(project_root))
-            and not any(
-                p.startswith(".") or p in EXCLUDED_DIRS
-                for p in m.relative_to(project_root).parts
-            )
-        ]
+        root_normed = os.path.normcase(str(project_root))
+        filtered: list[Path] = []
+        for m in matches:
+            if not os.path.normcase(str(m.resolve())).startswith(root_normed):
+                continue
+            try:
+                parts = m.relative_to(project_root).parts
+            except ValueError:
+                # Fallback for case-mismatch on Windows
+                rel_path = os.path.relpath(str(m), str(project_root))
+                parts = Path(rel_path).parts
+            if any(p.startswith(".") or p in EXCLUDED_DIRS for p in parts):
+                continue
+            filtered.append(m)
+        matches = filtered
         if len(matches) > MAX_GLOB_RESULTS:
             matches = matches[:MAX_GLOB_RESULTS]
             truncated = True
         else:
             truncated = False
-        rel = [str(m.relative_to(project_root)) for m in matches]
+        rel = [
+            os.path.relpath(str(m), str(project_root)).replace("\\", "/")
+            for m in matches
+        ]
         result = "\n".join(rel) if rel else "No matches found"
         if truncated:
             result += f"\n... [truncated at {MAX_GLOB_RESULTS} results]"
@@ -286,7 +297,9 @@ def _make_grep(project_root: Path) -> Callable[[dict[str, Any]], str]:
                 continue
             for i, line in enumerate(text.splitlines(), 1):
                 if regex.search(line):
-                    rel = str(fpath.relative_to(project_root))
+                    rel = os.path.relpath(str(fpath), str(project_root)).replace(
+                        "\\", "/"
+                    )
                     matches.append(f"{rel}:{i}: {line.rstrip()}")
                     if len(matches) >= MAX_GREP_MATCHES:
                         break

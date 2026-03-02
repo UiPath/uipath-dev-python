@@ -63,10 +63,12 @@ class SkillService:
         return path.read_text(encoding="utf-8")
 
     def get_skill_summary(self, skill_id: str) -> str:
-        """Return a compact summary: title + description + section headings + reference files.
+        """Return a compact summary: title + description.
 
         This is injected into the system prompt instead of the full content,
         so the model can use ``read_reference`` to drill into details.
+        Keeps it short — no section TOCs or reference file lists (those are
+        appended once globally by the caller).
         """
         path = self._resolve_skill_file(skill_id)
         if not path.is_file():
@@ -75,12 +77,10 @@ class SkillService:
 
         title = ""
         first_paragraph = ""
-        headings: list[str] = []
         in_frontmatter = False
         past_title = False
         for line in text.splitlines():
             stripped = line.strip()
-            # Skip YAML frontmatter
             if stripped == "---":
                 in_frontmatter = not in_frontmatter
                 continue
@@ -93,31 +93,32 @@ class SkillService:
             ):
                 title = stripped
                 past_title = True
-            elif stripped.startswith("## "):
-                headings.append(stripped)
             elif past_title and not first_paragraph and stripped:
                 first_paragraph = stripped
-
-        # List sibling reference files the model can read_reference into
-        refs_dir = path.parent
-        ref_files = sorted(
-            f.name for f in refs_dir.iterdir() if f.is_file() and f.suffix == ".md"
-        )
 
         parts = [title or f"# {skill_id}"]
         if first_paragraph:
             parts.append(first_paragraph)
         parts.append(
-            "\nTo use this skill: read the sections below, then call `read_reference` "
-            "with a filename to get full details on any topic."
+            "\nUse `read_reference` with a filename to get full details on any topic."
         )
-        if headings:
-            parts.append("\nSections:")
-            parts.extend(f"  - {h.lstrip('#').strip()}" for h in headings)
-        if ref_files:
-            parts.append("\nAvailable reference files (use read_reference to view):")
-            parts.extend(f"  - {f}" for f in ref_files)
         return "\n".join(parts)
+
+    def get_reference_files(self) -> list[str]:
+        """Return a deduplicated list of all reference file names across skills."""
+        seen: set[str] = set()
+        result: list[str] = []
+        if not self._skills_dir.is_dir():
+            return result
+        for child in sorted(self._skills_dir.iterdir()):
+            refs_dir = child / "references"
+            if not refs_dir.is_dir():
+                continue
+            for f in sorted(refs_dir.iterdir()):
+                if f.is_file() and f.suffix == ".md" and f.name not in seen:
+                    seen.add(f.name)
+                    result.append(f.name)
+        return result
 
     def get_reference(self, skill_id: str, ref_path: str) -> str:
         """Read a reference file relative to the skill's parent references dir."""

@@ -79,6 +79,18 @@ async def get_session_state(session_id: str, request: Request) -> dict[str, Any]
     return result
 
 
+@router.get("/agent/session/{session_id}/raw-state")
+async def get_session_raw_state(session_id: str, request: Request) -> dict[str, Any]:
+    """Return raw trace data for the agent trace inspector."""
+    from uipath.dev.services.agent import AgentService
+
+    agent_service: AgentService = request.app.state.server.agent_service
+    result = agent_service.get_session_raw_state(session_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return result
+
+
 @router.get("/agent/skills")
 async def list_agent_skills(request: Request) -> list[dict[str, str]]:
     """List available built-in skills."""
