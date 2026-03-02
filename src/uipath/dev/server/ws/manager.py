@@ -160,9 +160,18 @@ class ConnectionManager:
         msg = server_message(ServerEvent.STATE, serialize_state(state_data))
         self._schedule_broadcast(state_data.run_id, msg)
 
-    def broadcast_reload(self, changed_files: list[str]) -> None:
-        """Broadcast a reload event to all connected clients."""
-        msg = server_message(ServerEvent.RELOAD, {"files": changed_files})
+    def broadcast_reload(
+        self, changed_files: list[str], *, reloaded: bool = False
+    ) -> None:
+        """Broadcast a reload event to all connected clients.
+
+        Args:
+            reloaded: If True, the server already reloaded the factory and
+                      the client only needs to refresh entrypoints.
+        """
+        msg = server_message(
+            ServerEvent.RELOAD, {"files": changed_files, "reloaded": reloaded}
+        )
         for ws in self._connections:
             self._enqueue(ws, msg)
 

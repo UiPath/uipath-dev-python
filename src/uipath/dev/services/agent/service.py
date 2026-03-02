@@ -45,23 +45,25 @@ def _detect_project_context(project_root: Path) -> str:
         except Exception:
             pass
 
-    uipath_json = project_root / "uipath.json"
-    if uipath_json.is_file():
-        try:
-            parts.append(
-                f"uipath.json: {uipath_json.read_text(encoding='utf-8').strip()}"
-            )
-        except Exception:
-            pass
-
-    langgraph_json = project_root / "langgraph.json"
-    if langgraph_json.is_file():
-        try:
-            parts.append(
-                f"langgraph.json: {langgraph_json.read_text(encoding='utf-8').strip()}"
-            )
-        except Exception:
-            pass
+    # Detect agentic framework config files
+    framework_configs = [
+        "uipath.json",
+        "langgraph.json",
+        "llama_index.json",
+        "agent_framework.json",
+        "google_adk.json",
+        "pydantic_ai.json",
+        "openai_agents.json",
+    ]
+    for config_name in framework_configs:
+        config_path = project_root / config_name
+        if config_path.is_file():
+            try:
+                parts.append(
+                    f"{config_name}: {config_path.read_text(encoding='utf-8').strip()}"
+                )
+            except Exception:
+                pass
 
     evals_dir = project_root / "evaluations"
     if evals_dir.is_dir():

@@ -13,52 +13,64 @@ def mock_json_from_schema(schema: dict[str, Any]) -> Any:
     """
 
     def _is_uipath_conversational_input(s: dict[str, Any]) -> bool:
-        """Check if this schema represents a UiPath conversational agent input."""
+        """Check if this schema represents a UiPath conversational agent input.
+
+        Matches when the schema has a ``messages`` array whose items use the
+        UiPath contentParts/data/inline message shape — either declared via
+        ``$defs`` or defined inline.
+        """
         if s.get("type") != "object":
             return False
         props = s.get("properties", {})
-        # Check for the characteristic fields of ConversationalAgentInput
-        has_messages = "messages" in props
-        has_user_settings = "userSettings" in props
-
-        if not (has_messages and has_user_settings):
+        if "messages" not in props:
             return False
 
-        # Additional check: messages should be an array
         messages_prop = props.get("messages", {})
         if messages_prop.get("type") != "array":
             return False
 
-        # Check if $defs contains UiPath message types
+        # Path 1: $defs contain well-known UiPath message types
         defs = s.get("$defs", {})
         uipath_types = [
             "UiPathConversationMessage",
             "UiPathConversationContentPart",
             "UiPathInlineValue",
         ]
-        has_uipath_defs = any(t in defs for t in uipath_types)
+        if any(t in defs for t in uipath_types):
+            return True
 
-        return has_uipath_defs
+        # Path 2: items schema has contentParts → data → inline
+        items = messages_prop.get("items", {})
+        if not isinstance(items, dict):
+            return False
+        item_props = items.get("properties", {})
+        cp = item_props.get("contentParts", {})
+        if cp.get("type") != "array":
+            return False
+        cp_item = cp.get("items", {})
+        if not isinstance(cp_item, dict):
+            return False
+        data_prop = cp_item.get("properties", {}).get("data", {})
+        return "inline" in data_prop.get("properties", {})
 
-    def _mock_uipath_conversational_input() -> dict[str, Any]:
+    def _mock_uipath_conversational_input(s: dict[str, Any]) -> dict[str, Any]:
         """Generate a user-friendly mock for UiPath conversational agent input."""
-        return {
+        result: dict[str, Any] = {
             "messages": [
                 {
-                    "messageId": "msg-001",
                     "role": "user",
                     "contentParts": [
                         {
-                            "contentPartId": "part-001",
                             "mimeType": "text/plain",
                             "data": {"inline": "Hello, how can you help me today?"},
                         }
                     ],
-                    "createdAt": "2025-01-19T10:00:00Z",
-                    "updatedAt": "2025-01-19T10:00:00Z",
                 }
             ],
-            "userSettings": {
+        }
+        # Include userSettings only when the schema declares it
+        if "userSettings" in s.get("properties", {}):
+            result["userSettings"] = {
                 "name": "John Doe",
                 "email": "john.doe@example.com",
                 "role": "Software Engineer",
@@ -66,8 +78,8 @@ def mock_json_from_schema(schema: dict[str, Any]) -> Any:
                 "company": "Acme Corp",
                 "country": "United States",
                 "timezone": "America/New_York",
-            },
-        }
+            }
+        return result
 
     def _is_langchain_messages_array(sub_schema: dict[str, Any]) -> bool:
         """Check if this is a LangChain messages array."""
@@ -170,7 +182,7 @@ def mock_json_from_schema(schema: dict[str, Any]) -> Any:
 
     # Check for UiPath conversational input schema first
     if _is_uipath_conversational_input(schema):
-        return _mock_uipath_conversational_input()
+        return _mock_uipath_conversational_input(schema)
 
     # Top-level: if it's an object with properties, build a dict
     if schema.get("type") == "object":

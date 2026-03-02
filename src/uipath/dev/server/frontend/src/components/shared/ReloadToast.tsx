@@ -23,32 +23,31 @@ export default function ReloadToast() {
   };
 
   return (
-    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center justify-between px-5 py-2.5 rounded-lg shadow-lg min-w-[400px]"
+    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-2 rounded-lg shadow-lg"
       style={{ background: "var(--bg-secondary)", border: "1px solid var(--bg-tertiary)" }}>
-      <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
-        Files changed, reload to apply
+      <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
+        Files changed
       </span>
-      <div className="flex items-center gap-2">
-        <button
-          onClick={handleReload}
-          disabled={loading}
-          className="px-3 py-1 text-sm font-medium rounded cursor-pointer"
-          style={{
-            background: "var(--accent)",
-            color: "#fff",
-            opacity: loading ? 0.6 : 1,
-          }}
-        >
-          {loading ? "Reloading..." : "Reload"}
-        </button>
-        <button
-          onClick={() => setReloadPending(false)}
-          className="text-sm cursor-pointer px-1"
-          style={{ color: "var(--text-muted)", background: "none", border: "none" }}
-        >
-          ✕
-        </button>
-      </div>
+      <button
+        onClick={handleReload}
+        disabled={loading}
+        className="px-2.5 py-0.5 text-xs font-medium rounded cursor-pointer"
+        style={{
+          background: "var(--accent)",
+          color: "#fff",
+          opacity: loading ? 0.6 : 1,
+        }}
+      >
+        {loading ? "Reloading..." : "Reload"}
+      </button>
+      <button
+        onClick={() => setReloadPending(false)}
+        aria-label="Dismiss reload prompt"
+        className="text-xs cursor-pointer px-0.5"
+        style={{ color: "var(--text-muted)", background: "none", border: "none" }}
+      >
+        ✕
+      </button>
     </div>
   );
 }
