@@ -1,7 +1,9 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { useExplorerStore } from "../../store/useExplorerStore";
 import { useHashRoute } from "../../hooks/useHashRoute";
 import { listDirectory } from "../../api/explorer-client";
+import { getStateDbStatus, getStateDbTables } from "../../api/statedb-client";
+import type { StateDbTable } from "../../types/statedb";
 
 function FileTreeNode({ path, name, type, depth }: {
   path: string;
@@ -113,9 +115,114 @@ function FileTreeNode({ path, name, type, depth }: {
   );
 }
 
+function StateDbSection({ onDbMissing }: { onDbMissing: () => void }) {
+  const [tables, setTables] = useState<StateDbTable[]>([]);
+  const [expanded, setExpanded] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const { stateDbTable, navigate } = useHashRoute();
+
+  const refresh = useCallback(() => {
+    setRefreshing(true);
+    getStateDbStatus()
+      .then(({ exists }) => {
+        if (!exists) {
+          onDbMissing();
+          return;
+        }
+        return getStateDbTables().then(setTables);
+      })
+      .catch(console.error)
+      .finally(() => setRefreshing(false));
+  }, [onDbMissing]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  return (
+    <div>
+      {/* Section header */}
+      <div className="flex items-center">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="flex-1 text-left flex items-center gap-1 py-[5px] text-[11px] uppercase tracking-wider font-semibold cursor-pointer"
+          style={{ paddingLeft: "12px", background: "none", border: "none", color: "var(--text-muted)" }}
+        >
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 10 10"
+            fill="currentColor"
+            style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s" }}
+          >
+            <path d="M3 1.5L7 5L3 8.5z" />
+          </svg>
+          State Database
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); refresh(); }}
+          className="shrink-0 flex items-center justify-center w-5 h-5 rounded cursor-pointer"
+          style={{ background: "none", border: "none", color: "var(--text-muted)", marginRight: "8px" }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
+          title="Refresh tables"
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={refreshing ? { animation: "spin 0.6s linear infinite" } : undefined}
+          >
+            <polyline points="23 4 23 10 17 10" />
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+          </svg>
+        </button>
+      </div>
+      {expanded && tables.map((t) => (
+        <button
+          key={t.name}
+          onClick={() => navigate(`#/explorer/statedb/${encodeURIComponent(t.name)}`)}
+          className="w-full text-left flex items-center gap-1 py-[3px] text-[13px] cursor-pointer transition-colors"
+          style={{
+            paddingLeft: "28px",
+            paddingRight: "8px",
+            background: stateDbTable === t.name
+              ? "color-mix(in srgb, var(--accent) 15%, var(--bg-primary))"
+              : "transparent",
+            color: stateDbTable === t.name ? "var(--text-primary)" : "var(--text-secondary)",
+            border: "none",
+          }}
+          onMouseEnter={(e) => {
+            if (stateDbTable !== t.name) e.currentTarget.style.background = "var(--bg-hover)";
+          }}
+          onMouseLeave={(e) => {
+            if (stateDbTable !== t.name) e.currentTarget.style.background = "transparent";
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--accent)" }} className="shrink-0">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <line x1="3" y1="9" x2="21" y2="9" />
+            <line x1="3" y1="15" x2="21" y2="15" />
+            <line x1="9" y1="3" x2="9" y2="21" />
+          </svg>
+          <span className="truncate flex-1">{t.name}</span>
+          <span className="text-[10px] shrink-0" style={{ color: "var(--text-muted)" }}>
+            {t.row_count}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function ExplorerSidebar() {
   const rootChildren = useExplorerStore((s) => s.children[""]);
   const { setChildren } = useExplorerStore();
+  const [hasStateDb, setHasStateDb] = useState(false);
+  const [filesExpanded, setFilesExpanded] = useState(true);
 
   // Load root directory on mount
   useEffect(() => {
@@ -126,22 +233,51 @@ export default function ExplorerSidebar() {
     }
   }, [rootChildren, setChildren]);
 
+  // Check if state.db exists
+  useEffect(() => {
+    getStateDbStatus()
+      .then(({ exists }) => setHasStateDb(exists))
+      .catch(() => setHasStateDb(false));
+  }, []);
+
   return (
     <div className="flex-1 overflow-y-auto py-1">
-      {rootChildren ? (
-        rootChildren.map((entry) => (
-          <FileTreeNode
-            key={entry.path}
-            path={entry.path}
-            name={entry.name}
-            type={entry.type}
-            depth={0}
-          />
-        ))
-      ) : (
-        <p className="text-[11px] px-3 py-2" style={{ color: "var(--text-muted)" }}>
-          Loading...
-        </p>
+      {hasStateDb && (
+        <StateDbSection onDbMissing={() => setHasStateDb(false)} />
+      )}
+      {/* Collapsible FILES section */}
+      <button
+        onClick={() => setFilesExpanded(!filesExpanded)}
+        className="w-full text-left flex items-center gap-1 py-[5px] text-[11px] uppercase tracking-wider font-semibold cursor-pointer"
+        style={{ paddingLeft: "12px", paddingRight: "8px", background: "none", border: "none", color: "var(--text-muted)" }}
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          fill="currentColor"
+          style={{ transform: filesExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s" }}
+        >
+          <path d="M3 1.5L7 5L3 8.5z" />
+        </svg>
+        Files
+      </button>
+      {filesExpanded && (
+        rootChildren ? (
+          rootChildren.map((entry) => (
+            <FileTreeNode
+              key={entry.path}
+              path={entry.path}
+              name={entry.name}
+              type={entry.type}
+              depth={0}
+            />
+          ))
+        ) : (
+          <p className="text-[11px] px-3 py-2" style={{ color: "var(--text-muted)" }}>
+            Loading...
+          </p>
+        )
       )}
     </div>
   );
