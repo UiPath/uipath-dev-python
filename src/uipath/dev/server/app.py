@@ -200,6 +200,10 @@ def create_app(server: UiPathDeveloperServer) -> FastAPI:
     app.include_router(evals_router, prefix="/api")
     app.include_router(agent_router, prefix="/api")
     app.include_router(files_router, prefix="/api")
+
+    from uipath.dev.server.routes.statedb import router as statedb_router
+
+    app.include_router(statedb_router, prefix="/api")
     app.include_router(ws_router)
 
     # Auto-build frontend if source is available and build is stale

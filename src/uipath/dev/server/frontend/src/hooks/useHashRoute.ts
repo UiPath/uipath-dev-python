@@ -18,6 +18,7 @@ interface Route {
   evaluatorCreateType: string | null;
   evaluatorFilter: string | null;
   explorerFile: string | null;
+  stateDbTable: string | null;
 }
 
 function parseHash(hash: string): Route {
@@ -38,6 +39,7 @@ function parseHash(hash: string): Route {
     evaluatorCreateType: null,
     evaluatorFilter: null,
     explorerFile: null,
+    stateDbTable: null,
   };
 
   if (!path || path === "new" || path === "debug" || path === "debug/new") {
@@ -123,6 +125,17 @@ function parseHash(hash: string): Route {
   }
 
   // --- Explorer section ---
+
+  // #/explorer/statedb/:tableName
+  const stateDbTable = path.match(/^explorer\/statedb\/(.+)$/);
+  if (stateDbTable) {
+    return { ...base, section: "explorer", stateDbTable: decodeURIComponent(stateDbTable[1]) };
+  }
+
+  // #/explorer/statedb (no table selected)
+  if (path === "explorer/statedb") {
+    return { ...base, section: "explorer", stateDbTable: "" };
+  }
 
   // #/explorer/file/:path
   const explorerFile = path.match(/^explorer\/file\/(.+)$/);
