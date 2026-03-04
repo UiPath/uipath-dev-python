@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import platform
@@ -32,10 +33,13 @@ from uipath.dev.services.agent.tools import ToolDefinition
 
 logger = logging.getLogger(__name__)
 
-MAX_ITERATIONS = 50
+MAX_ITERATIONS = 30
 MAX_RETRIES = 3
 RETRY_BASE_DELAY = 1.0
 SUB_AGENT_MAX_ITERATIONS = 15
+_LOOP_WINDOW_SIZE = 6
+_LOOP_THRESHOLD = 3
+_MID_RUN_CHECKPOINT = 15
 
 # ---------------------------------------------------------------------------
 # System prompt
@@ -64,12 +68,19 @@ You help users build, debug, test, and improve Python agents using the UiPath SD
 
 ## Critical Rules
 
-### You Have a Shell — USE IT
-- You have direct access to the user's terminal via the `bash` tool.
+### Use the Shell for Real Commands
 - NEVER tell the user to run commands themselves. ALWAYS use `bash` to execute commands directly.
-- This includes: `uv run`, `uv sync`, `uipath init`, `uipath run`, `uipath eval`, `uipath pack`, `uipath publish`, and any other CLI commands.
-- If something needs to be run, run it. Don't explain how to run it.
+- Use `bash` for: `uv run`, `uv sync`, `uipath init/run/eval/pack/publish`, installing deps, running tests/linters.
+- Do NOT use `bash` to run exploratory Python scripts. Use `read_file`, `glob`, `grep` to understand code.
+- Do NOT use `bash` to trial-and-error code logic. Write correct code using `edit_file`/`write_file`.
 - The user is already authenticated — NEVER ask them to authenticate or run `uipath auth`.
+
+### Stay Focused
+- Solve exactly what was asked. Don't research tangential topics.
+- If you need info, use read_file/glob/grep — don't run exploratory scripts.
+- If you're past turn 5 without making an edit, you're over-exploring. Start implementing.
+- Don't read library source code in .venv unless absolutely necessary. Read docs or the user's code instead.
+- NEVER run a Python script just to "test" or "explore" how a library works. Read the user's existing code and edit it.
 
 ### Read Before Writing
 - NEVER suggest code changes without first reading the relevant source files.
@@ -92,7 +103,7 @@ You help users build, debug, test, and improve Python agents using the UiPath SD
 ## Workflow
 
 1. **Plan first**: Use `create_task` to add individual steps before doing anything else.
-2. **Explore**: Use `glob` and `grep` to find relevant files. Read them with `read_file`.
+2. **Explore**: Use `list_files` to understand project structure, then `glob` and `grep` to find specific files. Read them with `read_file`.
 3. **Implement**: Use `edit_file` for targeted changes, `write_file` only for new files.
 4. **Execute**: Use `bash` to run commands — installations, tests, linters, builds, `uv run` commands, etc.
 5. **Verify**: Read back edited files to confirm correctness. Run tests or linters via `bash`.
@@ -102,9 +113,21 @@ After completing each step, call `update_task` to mark it "completed" BEFORE mov
 NEVER give your final summary without first ensuring every task is marked completed.
 8. **Summarize**: When done, briefly state what you changed and why.
 
-## Full Build Cycle
+**Batch tool calls**: When multiple operations are independent (e.g., reading several files, creating \
+multiple tasks, running searches), call them all in a single response to minimize round trips.
 
-When building or modifying an agent or function, always complete the full cycle — don't stop at writing code:
+## Proportional Response
+Assess task scope BEFORE planning:
+- **Simple** (restructure code, rename, fix a bug, add a parameter): Read the file → edit it → done. 1-2 tasks max. No research phase.
+- **Moderate** (add a new tool, refactor a module, create a sub-agent): Plan → implement → test. 3-5 tasks max.
+- **Full build** (new agent from scratch with evals): Full workflow below. Up to 10 tasks.
+
+MOST tasks are simple. Default to simple unless the task clearly requires more. \
+If you can do it in 2 steps, don't plan 8. If you can read 2 files, don't read 10.
+
+## Full Build Cycle (New Agents Only)
+
+When building a NEW agent or function from scratch, complete the full cycle:
 
 1. **Write the code** — implement the agent/function with Input/Output models and `@traced()` main function.
 2. **Generate entry points** — run `uv run uipath init` via `bash`.
@@ -118,7 +141,7 @@ The `<name>` is the agent key from the active framework config. The `<eval-file>
    - `uv run uipath publish -w` — publish to personal workspace (default)
    - `uv run uipath publish -t` — publish to a specific tenant folder
 
-Never stop after just writing code. If you create an agent/function, you must also create evaluations and run them. \
+When modifying existing code, only create/run evals if the user asks. \
 If you create eval sets, you must also create the evaluator files they reference — otherwise the eval run will fail. \
 Default to publishing to personal workspace (`-w`) unless the user specifies a tenant folder.
 
@@ -173,6 +196,7 @@ When `uv run uipath eval` fails or all scores come back 0.0, the function likely
 - `write_file` — Create or overwrite a file
 - `edit_file` — Surgical string replacement (old_string must be unique)
 - `bash` — Execute a shell command (timeout: 120s).
+- `list_files` — List files/directories in a tree view (up to 3 levels deep). Use to understand project structure.
 - `glob` — Find files matching a pattern (e.g. `**/*.py`). Excludes .venv, node_modules, __pycache__, .git.
 - `grep` — Search file contents with regex. Excludes .venv, node_modules, __pycache__, .git.
 - `create_task` — Add a new step to your task plan
@@ -271,6 +295,13 @@ class AgentLoop:
             )
 
             tool_map = {t.name: t for t in self.tools}
+            recent_tool_calls: list[str] = []
+            total_edit_calls = 0
+            total_exploration_calls = 0
+            _EXPLORATION_TOOLS = frozenset(
+                {"read_file", "grep", "glob", "list_files", "bash"}
+            )
+            _EDIT_TOOLS = frozenset({"edit_file", "write_file"})
 
             for _iteration in range(self.max_iterations):
                 if session._cancel_event.is_set():
@@ -282,7 +313,26 @@ class AgentLoop:
                 prune_stale_tool_results(session)
 
                 # Check if compaction is needed
-                await maybe_compact(session, self.provider, system_prompt)
+                compacted = await maybe_compact(session, self.provider, system_prompt)
+                if compacted and session.tasks:
+                    task_lines = []
+                    for tid, task in session.tasks.items():
+                        task_lines.append(
+                            f"  [{tid}] ({task['status']}) {task['title']}"
+                        )
+                    pending = [
+                        t for t in session.tasks.values() if t["status"] != "completed"
+                    ]
+                    if pending:
+                        session.messages.append(
+                            {
+                                "role": "user",
+                                "content": (
+                                    "Context was compacted. Continue with the remaining tasks.\n\n"
+                                    "Current task state:\n" + "\n".join(task_lines)
+                                ),
+                            }
+                        )
 
                 # Build messages with stable prefix
                 llm_messages = [
@@ -433,6 +483,71 @@ class AgentLoop:
                 span["tool_results"] = tool_results_for_span
                 session.traces.append(span)
 
+                # --- Track tool usage stats ---
+                for tc in tool_calls:
+                    if tc.name in _EDIT_TOOLS:
+                        total_edit_calls += 1
+                    if tc.name in _EXPLORATION_TOOLS:
+                        total_exploration_calls += 1
+                    sig = (
+                        tc.name
+                        + ":"
+                        + hashlib.md5(tc.arguments.encode()).hexdigest()[:8]
+                    )
+                    recent_tool_calls.append(sig)
+                recent_tool_calls = recent_tool_calls[-_LOOP_WINDOW_SIZE:]
+
+                # --- Loop detection: repeated similar calls ---
+                unique_recent = set(recent_tool_calls)
+                if (
+                    len(recent_tool_calls) >= _LOOP_WINDOW_SIZE
+                    and len(unique_recent) <= len(recent_tool_calls) // 2
+                ):
+                    session.messages.append(
+                        {
+                            "role": "user",
+                            "content": (
+                                "You're repeating similar tool calls in a loop. "
+                                "STOP exploring and START making changes. "
+                                "What's the simplest edit to complete the task?"
+                            ),
+                        }
+                    )
+
+                # --- Productivity check: too much exploration, too few edits ---
+                if (
+                    _iteration >= 8
+                    and total_edit_calls == 0
+                    and total_exploration_calls >= 6
+                ):
+                    session.messages.append(
+                        {
+                            "role": "user",
+                            "content": (
+                                f"You've used {total_exploration_calls} "
+                                "exploration calls and made 0 edits after "
+                                f"{_iteration + 1} turns. You have enough "
+                                "context — make the edit NOW."
+                            ),
+                        }
+                    )
+
+                # --- Mid-run self-reflection checkpoint ---
+                if _iteration == _MID_RUN_CHECKPOINT:
+                    session.messages.append(
+                        {
+                            "role": "user",
+                            "content": (
+                                f"Turn {_iteration + 1}/{self.max_iterations}. "
+                                f"Edits made: {total_edit_calls}. "
+                                f"Exploration calls: {total_exploration_calls}. "
+                                "You're halfway through your turn budget. "
+                                "If you haven't made the core change yet, do it NOW. "
+                                "Simplify your approach."
+                            ),
+                        }
+                    )
+
                 # After tools, set status back to thinking
                 self.emit(StatusChanged(session.id, status="thinking"))
 
@@ -542,11 +657,19 @@ class AgentLoop:
             # Handle read_reference specially
             if tool_name == "read_reference":
                 result = self._handle_read_reference(session, tool_args)
-                self.emit(ToolStarted(session.id, tool=tool_name, args=tool_args))
+                self.emit(
+                    ToolStarted(
+                        session.id, tool_call_id=tc.id, tool=tool_name, args=tool_args
+                    )
+                )
                 is_error = result.startswith("Error:")
                 self.emit(
                     ToolCompleted(
-                        session.id, tool=tool_name, result=result, is_error=is_error
+                        session.id,
+                        tool_call_id=tc.id,
+                        tool=tool_name,
+                        result=result,
+                        is_error=is_error,
                     )
                 )
                 tasks.append((tc, result))
@@ -554,13 +677,21 @@ class AgentLoop:
 
             # Handle dispatch_agent specially
             if tool_name == "dispatch_agent" and self.allow_dispatch:
-                self.emit(ToolStarted(session.id, tool=tool_name, args=tool_args))
+                self.emit(
+                    ToolStarted(
+                        session.id, tool_call_id=tc.id, tool=tool_name, args=tool_args
+                    )
+                )
                 result = await self._handle_dispatch_agent(
                     tool_args.get("task", ""), session
                 )
                 self.emit(
                     ToolCompleted(
-                        session.id, tool=tool_name, result=result, is_error=False
+                        session.id,
+                        tool_call_id=tc.id,
+                        tool=tool_name,
+                        result=result,
+                        is_error=False,
                     )
                 )
                 tasks.append((tc, result))
@@ -572,7 +703,11 @@ class AgentLoop:
                 tasks.append((tc, result))
                 continue
 
-            self.emit(ToolStarted(session.id, tool=tool_name, args=tool_args))
+            self.emit(
+                ToolStarted(
+                    session.id, tool_call_id=tc.id, tool=tool_name, args=tool_args
+                )
+            )
 
             # Approval gate for destructive tools (sequential for UX clarity)
             if tool_def and tool_def.requires_approval:
@@ -602,6 +737,7 @@ class AgentLoop:
                     self.emit(
                         ToolCompleted(
                             session.id,
+                            tool_call_id=tc.id,
                             tool=tool_name,
                             result=result,
                             is_error=True,
@@ -649,6 +785,7 @@ class AgentLoop:
                 self.emit(
                     ToolCompleted(
                         session.id,
+                        tool_call_id=tc_done.id,
                         tool=tc_done.name,
                         result=result_str,
                         is_error=is_error,
@@ -688,6 +825,12 @@ class AgentLoop:
         title = args.get("title", "").strip()
         if not title:
             return "Error: title is required"
+        # Clear completed plan when starting a new one
+        if session.tasks and all(
+            t["status"] == "completed" for t in session.tasks.values()
+        ):
+            session.tasks.clear()
+            session._next_task_id = 1
         task_id = str(session._next_task_id)
         session._next_task_id += 1
         session.tasks[task_id] = {

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useAgentStore } from "../../store/useAgentStore";
 import { getAgentSessionRawState } from "../../api/agent-client";
 import type { AgentRawState, AgentTraceSpan, TraceMessage } from "../../types/agent";
@@ -68,6 +68,7 @@ export default function AgentStatePanel() {
         <Pill text={`${fmtTok(total)} tok`} />
         <StatusDot status={data.status} />
         <div className="flex-1" />
+        <CopyJsonButton data={data} />
         <button onClick={refresh}
           className="text-[11px] px-2 py-0.5 rounded cursor-pointer"
           style={{ background: "var(--bg-hover)", color: "var(--text-secondary)", border: "none" }}>
@@ -127,6 +128,23 @@ function StatusDot({ status }: { status: string }) {
       <span className={`w-1.5 h-1.5 rounded-full${active ? " animate-pulse" : ""}`} style={{ background: color }} />
       {status}
     </span>
+  );
+}
+function CopyJsonButton({ data }: { data: AgentRawState }) {
+  const [copied, setCopied] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(JSON.stringify(data.traces, null, 2));
+    setCopied(true);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button onClick={handleCopy}
+      className="text-[11px] px-2 py-0.5 rounded cursor-pointer"
+      style={{ background: "var(--bg-hover)", color: copied ? "var(--success)" : "var(--text-secondary)", border: "none" }}>
+      {copied ? "Copied!" : "Copy JSON"}
+    </button>
   );
 }
 

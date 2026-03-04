@@ -18,7 +18,6 @@ IGNORED_NAMES = {
     "__pycache__",
     ".venv",
     "venv",
-    ".env",
     ".mypy_cache",
     ".pytest_cache",
     ".ruff_cache",

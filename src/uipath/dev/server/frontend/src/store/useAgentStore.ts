@@ -24,8 +24,8 @@ interface AgentStore {
   addUserMessage: (text: string) => void;
   appendAssistantText: (content: string, done: boolean) => void;
   setPlan: (items: AgentPlanItem[]) => void;
-  addToolUse: (tool: string, args: Record<string, unknown>) => void;
-  addToolResult: (tool: string, result: string, isError: boolean) => void;
+  addToolUse: (toolCallId: string, tool: string, args: Record<string, unknown>) => void;
+  addToolResult: (toolCallId: string, result: string, isError: boolean) => void;
   addToolApprovalRequest: (toolCallId: string, tool: string, args: Record<string, unknown>) => void;
   resolveToolApproval: (toolCallId: string, approved: boolean) => void;
   appendThinking: (content: string) => void;
@@ -119,11 +119,11 @@ export const useAgentStore = create<AgentStore>((set) => ({
       return { messages: msgs, plan: items };
     }),
 
-  addToolUse: (tool, args) =>
+  addToolUse: (toolCallId, tool, args) =>
     set((state) => {
       const msgs = [...state.messages];
       const last = msgs[msgs.length - 1];
-      const newCall: AgentToolCall = { tool, args };
+      const newCall: AgentToolCall = { tool, args, tool_call_id: toolCallId };
       // Merge into last tool message if it exists
       if (last && last.role === "tool" && last.toolCalls) {
         msgs[msgs.length - 1] = {
@@ -142,16 +142,16 @@ export const useAgentStore = create<AgentStore>((set) => ({
       return { messages: msgs };
     }),
 
-  addToolResult: (tool, result, isError) =>
+  addToolResult: (toolCallId, result, isError) =>
     set((state) => {
       const msgs = [...state.messages];
-      // Find last tool message, then find the last call with matching tool and no result
+      // Match result to its tool call by tool_call_id
       for (let i = msgs.length - 1; i >= 0; i--) {
         const msg = msgs[i];
         if (msg.role === "tool" && msg.toolCalls) {
           const calls = [...msg.toolCalls];
-          for (let j = calls.length - 1; j >= 0; j--) {
-            if (calls[j].tool === tool && calls[j].result === undefined) {
+          for (let j = 0; j < calls.length; j++) {
+            if (calls[j].tool_call_id === toolCallId && calls[j].result === undefined) {
               calls[j] = { ...calls[j], result, is_error: isError };
               msgs[i] = { ...msg, toolCalls: calls };
               return { messages: msgs };
@@ -166,15 +166,15 @@ export const useAgentStore = create<AgentStore>((set) => ({
     set((state) => {
       const msgs = [...state.messages];
       // ToolStarted fires before ToolApprovalRequired, so an existing
-      // chip (same tool, no status, no result) may already be present.
+      // chip (same tool_call_id, no status, no result) may already be present.
       // Upgrade it in-place instead of adding a duplicate.
       for (let i = msgs.length - 1; i >= 0; i--) {
         const msg = msgs[i];
         if (msg.role === "tool" && msg.toolCalls) {
           const calls = [...msg.toolCalls];
           for (let j = calls.length - 1; j >= 0; j--) {
-            if (calls[j].tool === tool && !calls[j].status && calls[j].result === undefined) {
-              calls[j] = { ...calls[j], tool_call_id: toolCallId, status: "pending" };
+            if (calls[j].tool_call_id === toolCallId && !calls[j].status && calls[j].result === undefined) {
+              calls[j] = { ...calls[j], status: "pending" };
               msgs[i] = { ...msg, toolCalls: calls };
               return { messages: msgs };
             }

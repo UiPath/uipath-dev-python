@@ -12,13 +12,13 @@ interface Props {
   itemName?: string | null;
 }
 
-function formatScore(score: number | null): string {
-  if (score === null) return "-";
+function formatScore(score: number | null | undefined): string {
+  if (score == null) return "-";
   return `${Math.round(score * 100)}%`;
 }
 
-function scoreColor(score: number | null): string {
-  if (score === null) return "var(--text-muted)";
+function scoreColor(score: number | null | undefined): string {
+  if (score == null) return "var(--text-muted)";
   const pct = score * 100;
   if (pct >= 80) return "var(--success)";
   if (pct >= 50) return "var(--warning)";
@@ -71,6 +71,7 @@ export default function EvalRunResults({ evalRunId, itemName }: Props) {
 
   const storeRun = useEvalStore((s) => s.evalRuns[evalRunId]);
   const evaluators = useEvalStore((s) => s.evaluators);
+  const streamingItems = useEvalStore((s) => s.streamingResults[evalRunId]);
 
   useEffect(() => {
     setLoading(true);
@@ -97,9 +98,12 @@ export default function EvalRunResults({ evalRunId, itemName }: Props) {
   // Auto-select first completed item as results come in (when no item is in route)
   useEffect(() => {
     if (itemName || !detail?.results) return;
-    const first = detail.results.find((r) => r.status === "completed") ?? detail.results[0];
+    const results = streamingItems
+      ? detail.results.map((r) => streamingItems[r.name] ?? r)
+      : detail.results;
+    const first = results.find((r) => r.status === "completed") ?? results[0];
     if (first) navigate(`#/evals/runs/${evalRunId}/${encodeURIComponent(first.name)}`);
-  }, [detail?.results]);
+  }, [detail?.results, streamingItems]);
 
   // --- Row resize (item list height) ---
   const onRowResizeStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
@@ -191,8 +195,21 @@ export default function EvalRunResults({ evalRunId, itemName }: Props) {
   const run = storeRun ?? detail;
   const status = statusStyles[run.status] ?? statusStyles.pending;
   const isRunning = run.status === "running";
-  const evaluatorIds = Object.keys(run.evaluator_scores ?? {});
-  const selectedItem = detail.results.find((r) => r.name === selectedItemName) ?? null;
+  // Derive evaluator IDs from run scores (set on completion) or from first streamed item
+  const evaluatorIds = Object.keys(run.evaluator_scores ?? {}).length > 0
+    ? Object.keys(run.evaluator_scores)
+    : Object.keys(
+        streamingItems
+          ? Object.values(streamingItems).find((r) => Object.keys(r.scores).length > 0)?.scores ?? {}
+          : {},
+      );
+
+  // Merge streaming item results over the fetched detail results
+  const mergedResults = streamingItems
+    ? detail.results.map((r) => streamingItems[r.name] ?? r)
+    : detail.results;
+
+  const selectedItem = mergedResults.find((r) => r.name === selectedItemName) ?? null;
   const selectedTraces = (selectedItem?.traces ?? []).map((t) => ({ ...t, run_id: "" }));
 
   return (
@@ -279,7 +296,7 @@ export default function EvalRunResults({ evalRunId, itemName }: Props) {
           </div>
           {/* Scrollable item rows */}
           <div className="flex-1 overflow-y-auto">
-            {detail.results.map((item: EvalItemResult) => {
+            {mergedResults.map((item: EvalItemResult) => {
               const isPending = item.status === "pending";
               const isFailed = item.status === "failed";
               const isSelected = item.name === selectedItemName;
@@ -337,7 +354,7 @@ export default function EvalRunResults({ evalRunId, itemName }: Props) {
                 </button>
               );
             })}
-            {detail.results.length === 0 && (
+            {mergedResults.length === 0 && (
               <div className="flex items-center justify-center py-8 text-[var(--text-muted)] text-xs">
                 {isRunning ? "Waiting for results..." : "No results"}
               </div>

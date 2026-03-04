@@ -27,7 +27,6 @@ import EvaluatorsView from "./components/evaluators/EvaluatorDetail";
 import CreateEvaluatorView from "./components/evaluators/CreateEvaluatorView";
 import ExplorerSidebar from "./components/explorer/ExplorerSidebar";
 import FileEditor from "./components/explorer/FileEditor";
-import StateDbViewer from "./components/explorer/StateDbViewer";
 import AgentChatSidebar from "./components/agent/AgentChatSidebar";
 import { useExplorerStore } from "./store/useExplorerStore";
 
@@ -68,7 +67,6 @@ export default function App() {
     evaluatorId,
     evaluatorFilter,
     explorerFile,
-    stateDbTable,
     navigate,
   } = useHashRoute();
 
@@ -344,7 +342,6 @@ export default function App() {
   // --- Render main content based on section ---
   const renderMainContent = () => {
     if (section === "explorer") {
-      if (stateDbTable !== null) return <StateDbViewer table={stateDbTable} />;
       if (explorerTabs.length > 0 || explorerFile) return <FileEditor />;
       return (
         <div className="flex items-center justify-center h-full text-[var(--text-muted)]">

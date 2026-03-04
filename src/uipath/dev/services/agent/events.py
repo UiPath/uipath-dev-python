@@ -53,6 +53,7 @@ class PlanUpdated(AgentEvent):
 class ToolStarted(AgentEvent):
     """Tool execution started."""
 
+    tool_call_id: str = ""
     tool: str = ""
     args: dict[str, Any] = field(default_factory=dict)
 
@@ -61,6 +62,7 @@ class ToolStarted(AgentEvent):
 class ToolCompleted(AgentEvent):
     """Tool execution completed."""
 
+    tool_call_id: str = ""
     tool: str = ""
     result: str = ""
     is_error: bool = False

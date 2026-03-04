@@ -115,11 +115,15 @@ function FileTreeNode({ path, name, type, depth }: {
   );
 }
 
+const STATEDB_TAB_PREFIX = "__statedb__:";
+
 function StateDbSection({ onDbMissing }: { onDbMissing: () => void }) {
   const [tables, setTables] = useState<StateDbTable[]>([]);
   const [expanded, setExpanded] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const { stateDbTable, navigate } = useHashRoute();
+  const selectedFile = useExplorerStore((s) => s.selectedFile);
+  const { openTab } = useExplorerStore();
+  const { navigate } = useHashRoute();
 
   const refresh = useCallback(() => {
     setRefreshing(true);
@@ -146,14 +150,10 @@ function StateDbSection({ onDbMissing }: { onDbMissing: () => void }) {
           className="flex-1 text-left flex items-center gap-1 py-[5px] text-[11px] uppercase tracking-wider font-semibold cursor-pointer"
           style={{ paddingLeft: "12px", background: "none", border: "none", color: "var(--text-muted)" }}
         >
-          <svg
-            width="10"
-            height="10"
-            viewBox="0 0 10 10"
-            fill="currentColor"
-            style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s" }}
-          >
-            <path d="M3 1.5L7 5L3 8.5z" />
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <ellipse cx="12" cy="5" rx="9" ry="3" />
+            <path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3" />
+            <path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5" />
           </svg>
           State Database
         </button>
@@ -181,39 +181,43 @@ function StateDbSection({ onDbMissing }: { onDbMissing: () => void }) {
           </svg>
         </button>
       </div>
-      {expanded && tables.map((t) => (
-        <button
-          key={t.name}
-          onClick={() => navigate(`#/explorer/statedb/${encodeURIComponent(t.name)}`)}
-          className="w-full text-left flex items-center gap-1 py-[3px] text-[13px] cursor-pointer transition-colors"
-          style={{
-            paddingLeft: "28px",
-            paddingRight: "8px",
-            background: stateDbTable === t.name
-              ? "color-mix(in srgb, var(--accent) 15%, var(--bg-primary))"
-              : "transparent",
-            color: stateDbTable === t.name ? "var(--text-primary)" : "var(--text-secondary)",
-            border: "none",
-          }}
-          onMouseEnter={(e) => {
-            if (stateDbTable !== t.name) e.currentTarget.style.background = "var(--bg-hover)";
-          }}
-          onMouseLeave={(e) => {
-            if (stateDbTable !== t.name) e.currentTarget.style.background = "transparent";
-          }}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--accent)" }} className="shrink-0">
-            <rect x="3" y="3" width="18" height="18" rx="2" />
-            <line x1="3" y1="9" x2="21" y2="9" />
-            <line x1="3" y1="15" x2="21" y2="15" />
-            <line x1="9" y1="3" x2="9" y2="21" />
-          </svg>
-          <span className="truncate flex-1">{t.name}</span>
-          <span className="text-[10px] shrink-0" style={{ color: "var(--text-muted)" }}>
-            {t.row_count}
-          </span>
-        </button>
-      ))}
+      {expanded && tables.map((t) => {
+        const tabKey = `${STATEDB_TAB_PREFIX}${t.name}`;
+        const isSelected = selectedFile === tabKey;
+        return (
+          <button
+            key={t.name}
+            onClick={() => { openTab(tabKey); navigate(`#/explorer/statedb/${encodeURIComponent(t.name)}`); }}
+            className="w-full text-left flex items-center gap-1 py-[3px] text-[13px] cursor-pointer transition-colors"
+            style={{
+              paddingLeft: "28px",
+              paddingRight: "8px",
+              background: isSelected
+                ? "color-mix(in srgb, var(--accent) 15%, var(--bg-primary))"
+                : "transparent",
+              color: isSelected ? "var(--text-primary)" : "var(--text-secondary)",
+              border: "none",
+            }}
+            onMouseEnter={(e) => {
+              if (!isSelected) e.currentTarget.style.background = "var(--bg-hover)";
+            }}
+            onMouseLeave={(e) => {
+              if (!isSelected) e.currentTarget.style.background = "transparent";
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--accent)" }} className="shrink-0">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <line x1="3" y1="9" x2="21" y2="9" />
+              <line x1="3" y1="15" x2="21" y2="15" />
+              <line x1="9" y1="3" x2="9" y2="21" />
+            </svg>
+            <span className="truncate flex-1">{t.name}</span>
+            <span className="text-[10px] shrink-0" style={{ color: "var(--text-muted)" }}>
+              {t.row_count}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -223,6 +227,8 @@ export default function ExplorerSidebar() {
   const { setChildren } = useExplorerStore();
   const [hasStateDb, setHasStateDb] = useState(false);
   const [filesExpanded, setFilesExpanded] = useState(true);
+  const { openTab } = useExplorerStore();
+  const { navigate } = useHashRoute();
 
   // Load root directory on mount
   useEffect(() => {
@@ -242,6 +248,21 @@ export default function ExplorerSidebar() {
 
   return (
     <div className="flex-1 overflow-y-auto py-1">
+      {/* Canvas */}
+      <button
+        onClick={() => { openTab("__canvas__"); navigate("#/explorer/canvas"); }}
+        className="w-full text-left flex items-center gap-1 py-[5px] text-[11px] uppercase tracking-wider font-semibold cursor-pointer"
+        style={{ paddingLeft: "12px", paddingRight: "8px", background: "none", border: "none", color: "var(--text-muted)" }}
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+          <circle cx="5" cy="1.5" r="1.2" />
+          <circle cx="2" cy="8" r="1.2" />
+          <circle cx="8" cy="8" r="1.2" />
+          <line x1="5" y1="2.7" x2="2" y2="6.8" stroke="currentColor" strokeWidth="0.8" />
+          <line x1="5" y1="2.7" x2="8" y2="6.8" stroke="currentColor" strokeWidth="0.8" />
+        </svg>
+        Visualization
+      </button>
       {hasStateDb && (
         <StateDbSection onDbMissing={() => setHasStateDb(false)} />
       )}
@@ -251,14 +272,8 @@ export default function ExplorerSidebar() {
         className="w-full text-left flex items-center gap-1 py-[5px] text-[11px] uppercase tracking-wider font-semibold cursor-pointer"
         style={{ paddingLeft: "12px", paddingRight: "8px", background: "none", border: "none", color: "var(--text-muted)" }}
       >
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 10 10"
-          fill="currentColor"
-          style={{ transform: filesExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s" }}
-        >
-          <path d="M3 1.5L7 5L3 8.5z" />
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z" />
         </svg>
         Files
       </button>
