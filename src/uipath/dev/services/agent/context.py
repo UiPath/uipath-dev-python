@@ -81,6 +81,18 @@ async def maybe_compact(
     recent = (
         session.messages[-KEEP_RECENT:] if len(session.messages) > KEEP_RECENT else []
     )
+
+    # If recent starts with orphaned tool results, extend backwards to
+    # include the assistant message that carries the matching tool_calls.
+    if recent and recent[0].get("role") == "tool":
+        start_idx = len(session.messages) - len(recent)
+        for j in range(start_idx - 1, -1, -1):
+            if session.messages[j].get("role") == "assistant" and session.messages[
+                j
+            ].get("tool_calls"):
+                recent = session.messages[j:]
+                break
+
     summary_content = f"[Conversation Summary]\n{summary_response.content}"
     if task_state:
         summary_content += f"\n\n{task_state}"

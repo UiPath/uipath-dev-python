@@ -6,6 +6,8 @@ interface EvalStore {
   localEvaluators: LocalEvaluator[];
   evalSets: Record<string, EvalSetSummary>;
   evalRuns: Record<string, EvalRunSummary>;
+  /** Item results streamed via WebSocket, keyed by runId → itemName */
+  streamingResults: Record<string, Record<string, EvalItemResult>>;
 
   setEvaluators: (evaluators: EvaluatorInfo[]) => void;
   setLocalEvaluators: (evaluators: LocalEvaluator[]) => void;
@@ -26,6 +28,7 @@ export const useEvalStore = create<EvalStore>((set) => ({
   localEvaluators: [],
   evalSets: {},
   evalRuns: {},
+  streamingResults: {},
 
   setEvaluators: (evaluators) => set({ evaluators }),
 
@@ -77,15 +80,20 @@ export const useEvalStore = create<EvalStore>((set) => ({
   upsertEvalRun: (run) =>
     set((state) => ({ evalRuns: { ...state.evalRuns, [run.id]: run } })),
 
-  updateEvalRunProgress: (runId, completed, total) =>
+  updateEvalRunProgress: (runId, completed, total, itemResult) =>
     set((state) => {
       const existing = state.evalRuns[runId];
       if (!existing) return state;
+      const streamingResults = { ...state.streamingResults };
+      if (itemResult) {
+        streamingResults[runId] = { ...streamingResults[runId], [itemResult.name]: itemResult };
+      }
       return {
         evalRuns: {
           ...state.evalRuns,
           [runId]: { ...existing, progress_completed: completed, progress_total: total, status: "running" },
         },
+        streamingResults,
       };
     }),
 
@@ -93,6 +101,8 @@ export const useEvalStore = create<EvalStore>((set) => ({
     set((state) => {
       const existing = state.evalRuns[runId];
       if (!existing) return state;
+      const streamingResults = { ...state.streamingResults };
+      delete streamingResults[runId];
       return {
         evalRuns: {
           ...state.evalRuns,
@@ -104,6 +114,7 @@ export const useEvalStore = create<EvalStore>((set) => ({
             end_time: new Date().toISOString(),
           },
         },
+        streamingResults,
       };
     }),
 }));

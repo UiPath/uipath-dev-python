@@ -206,7 +206,7 @@ function ToolChip({ tc, active, onClick }: { tc: AgentToolCall; active: boolean;
   );
 }
 
-function ToolDetailPanel({ tc }: { tc: AgentToolCall }) {
+function ToolDetailPanel({ tc, onClose }: { tc: AgentToolCall; onClose: () => void }) {
   const hasResult = tc.result !== undefined;
   const hasArgs = tc.args != null && Object.keys(tc.args).length > 0;
   const diff = isEditFileDiff(tc);
@@ -232,6 +232,18 @@ function ToolDetailPanel({ tc }: { tc: AgentToolCall }) {
             Error
           </span>
         )}
+        <button
+          onClick={onClose}
+          className="ml-auto shrink-0 flex items-center justify-center w-5 h-5 rounded cursor-pointer"
+          style={{ background: "none", border: "none", color: "var(--text-muted)" }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <line x1="2" y1="2" x2="8" y2="8" />
+            <line x1="8" y1="2" x2="2" y2="8" />
+          </svg>
+        </button>
       </div>
 
       {/* Args + Result stacked */}
@@ -328,7 +340,7 @@ function ToolCard({ message }: Props) {
         </div>
         {/* Detail panel below chips */}
         {expandedIdx !== null && calls[expandedIdx] && (
-          <ToolDetailPanel tc={calls[expandedIdx]} />
+          <ToolDetailPanel tc={calls[expandedIdx]} onClose={() => setExpandedIdx(null)} />
         )}
       </div>
     </div>

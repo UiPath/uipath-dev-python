@@ -189,8 +189,13 @@ class UiPathDeveloperServer:
             del sys.modules[name]
         logger.debug("Flushed %d user modules", len(to_remove))
 
-        # Recreate factory
+        # Recreate factory — preserve state file across reloads so the dev
+        # server doesn't delete state.db while other processes may use it.
         self.runtime_factory = self.factory_creator()
+        try:
+            self.runtime_factory.context.keep_state_file = True  # type: ignore[attr-defined]
+        except AttributeError:
+            pass
         self.run_service.runtime_factory = self.runtime_factory
         await self.run_service.apply_factory_settings()
         self.reload_pending = False
@@ -342,12 +347,16 @@ class UiPathDeveloperServer:
                 cm.broadcast_agent_thinking(sid, content)
             case PlanUpdated(session_id=sid, items=items):
                 cm.broadcast_agent_plan(sid, items)
-            case ToolStarted(session_id=sid, tool=tool, args=args):
-                cm.broadcast_agent_tool_use(sid, tool, args)
+            case ToolStarted(session_id=sid, tool_call_id=tcid, tool=tool, args=args):
+                cm.broadcast_agent_tool_use(sid, tcid, tool, args)
             case ToolCompleted(
-                session_id=sid, tool=tool, result=result, is_error=is_error
+                session_id=sid,
+                tool_call_id=tcid,
+                tool=tool,
+                result=result,
+                is_error=is_error,
             ):
-                cm.broadcast_agent_tool_result(sid, tool, result, is_error)
+                cm.broadcast_agent_tool_result(sid, tcid, tool, result, is_error)
             case ToolApprovalRequired(
                 session_id=sid, tool_call_id=tcid, tool=tool, args=args
             ):

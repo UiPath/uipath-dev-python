@@ -203,12 +203,18 @@ class ConnectionManager:
         if item_result is not None:
             payload["item_result"] = {
                 "name": item_result.name,
+                "inputs": item_result.inputs,
+                "expected_output": item_result.expected_output,
                 "scores": item_result.scores,
                 "overall_score": item_result.overall_score,
-                "output": item_result.output,
+                "output": str(item_result.output)
+                if isinstance(item_result.output, Exception)
+                else item_result.output,
                 "justifications": item_result.justifications,
                 "duration_ms": item_result.duration_ms,
                 "status": item_result.status,
+                "error": item_result.error,
+                "traces": item_result.traces,
             }
         msg = server_message(ServerEvent.EVAL_RUN_PROGRESS, payload)
         for ws in self._connections:
@@ -255,24 +261,30 @@ class ConnectionManager:
             self._enqueue(ws, msg)
 
     def broadcast_agent_tool_use(
-        self, session_id: str, tool: str, args: dict[str, Any]
+        self, session_id: str, tool_call_id: str, tool: str, args: dict[str, Any]
     ) -> None:
         """Broadcast agent tool use to all connected clients."""
         msg = server_message(
             ServerEvent.AGENT_TOOL_USE,
-            {"session_id": session_id, "tool": tool, "args": args},
+            {
+                "session_id": session_id,
+                "tool_call_id": tool_call_id,
+                "tool": tool,
+                "args": args,
+            },
         )
         for ws in self._connections:
             self._enqueue(ws, msg)
 
     def broadcast_agent_tool_result(
-        self, session_id: str, tool: str, result: str, is_error: bool
+        self, session_id: str, tool_call_id: str, tool: str, result: str, is_error: bool
     ) -> None:
         """Broadcast agent tool result to all connected clients."""
         msg = server_message(
             ServerEvent.AGENT_TOOL_RESULT,
             {
                 "session_id": session_id,
+                "tool_call_id": tool_call_id,
                 "tool": tool,
                 "result": result,
                 "is_error": is_error,

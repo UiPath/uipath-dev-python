@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import difflib
 import fnmatch
 import os
 import re
@@ -17,6 +18,8 @@ MAX_OUTPUT_CHARS = 50_000
 MAX_FILE_CHARS = 100_000
 MAX_GLOB_RESULTS = 200
 MAX_GREP_MATCHES = 100
+MAX_LIST_DEPTH = 3
+MAX_LIST_ENTRIES = 200
 BASH_TIMEOUT = 120
 TOOLS_REQUIRING_APPROVAL = {"write_file", "edit_file", "bash"}
 
@@ -151,16 +154,69 @@ def _make_edit_file(project_root: Path) -> Callable[[dict[str, Any]], str]:
         content = path.read_text(encoding="utf-8")
         old_string = args["old_string"]
         new_string = args["new_string"]
+
+        # Exact match
         count = content.count(old_string)
-        if count == 0:
-            return "Error: old_string not found in file"
+        if count == 1:
+            content = content.replace(old_string, new_string, 1)
+            path.write_text(content, encoding="utf-8")
+            return "Edit applied successfully"
         if count > 1:
             return f"Error: old_string found {count} times, must be unique"
-        content = content.replace(old_string, new_string, 1)
-        path.write_text(content, encoding="utf-8")
-        return "Edit applied successfully"
+
+        # Fuzzy fallback: try matching with trimmed trailing whitespace
+        old_lines = old_string.splitlines()
+        content_lines = content.splitlines()
+        match_start = _fuzzy_find(old_lines, content_lines)
+        if match_start is not None:
+            before = "\n".join(content_lines[:match_start])
+            after = "\n".join(content_lines[match_start + len(old_lines) :])
+            parts = [p for p in (before, new_string, after) if p]
+            content = "\n".join(parts)
+            if content_lines and not content.endswith("\n"):
+                content += "\n"
+            path.write_text(content, encoding="utf-8")
+            return "Edit applied successfully (matched with whitespace tolerance)"
+
+        # No match — find closest lines for error hint
+        hint = _find_similar_hint(old_lines, content_lines)
+        msg = "Error: old_string not found in file."
+        if hint:
+            msg += f" Did you mean:\n{hint}"
+        return msg
 
     return handler
+
+
+def _fuzzy_find(old_lines: list[str], content_lines: list[str]) -> int | None:
+    """Find old_lines in content_lines with trailing whitespace stripped."""
+    stripped_old = [ln.rstrip() for ln in old_lines]
+    stripped_content = [ln.rstrip() for ln in content_lines]
+    n = len(stripped_old)
+    for i in range(len(stripped_content) - n + 1):
+        if stripped_content[i : i + n] == stripped_old:
+            return i
+    return None
+
+
+def _find_similar_hint(old_lines: list[str], content_lines: list[str]) -> str:
+    """Find the most similar block in the file and return it as a hint."""
+    if not old_lines or not content_lines:
+        return ""
+    n = len(old_lines)
+    old_text = "\n".join(old_lines)
+    best_ratio = 0.0
+    best_start = 0
+    for i in range(max(1, len(content_lines) - n + 1)):
+        window = "\n".join(content_lines[i : i + n])
+        ratio = difflib.SequenceMatcher(None, old_text, window).ratio()
+        if ratio > best_ratio:
+            best_ratio = ratio
+            best_start = i
+    if best_ratio < 0.5:
+        return ""
+    snippet = content_lines[best_start : best_start + n]
+    return "\n".join(f"  {line}" for line in snippet)
 
 
 def _make_bash(project_root: Path) -> Callable[[dict[str, Any]], str]:
@@ -312,6 +368,53 @@ def _make_grep(project_root: Path) -> Callable[[dict[str, Any]], str]:
     return handler
 
 
+def _make_list_files(project_root: Path) -> Callable[[dict[str, Any]], str]:
+    def handler(args: dict[str, Any]) -> str:
+        base = _resolve_safe(project_root, args.get("path", "."))
+        if not base.is_dir():
+            return f"Error: directory not found: {args.get('path', '.')}"
+        depth = min(int(args.get("depth", 2)), MAX_LIST_DEPTH)
+        entries: list[str] = []
+        _walk_tree(base, project_root, "", depth, entries)
+        if not entries:
+            return "Empty directory"
+        result = "\n".join(entries)
+        if len(entries) >= MAX_LIST_ENTRIES:
+            result += f"\n... [truncated at {MAX_LIST_ENTRIES} entries]"
+        return result
+
+    return handler
+
+
+def _walk_tree(
+    current: Path,
+    project_root: Path,
+    prefix: str,
+    depth: int,
+    entries: list[str],
+) -> None:
+    if len(entries) >= MAX_LIST_ENTRIES:
+        return
+    try:
+        children = sorted(
+            current.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())
+        )
+    except PermissionError:
+        return
+    for child in children:
+        if len(entries) >= MAX_LIST_ENTRIES:
+            return
+        name = child.name
+        if name.startswith(".") or name in EXCLUDED_DIRS:
+            continue
+        if child.is_dir():
+            entries.append(f"{prefix}{name}/")
+            if depth > 1:
+                _walk_tree(child, project_root, prefix + "  ", depth - 1, entries)
+        else:
+            entries.append(f"{prefix}{name}")
+
+
 # ---------------------------------------------------------------------------
 # Tool schemas (parameter definitions)
 # ---------------------------------------------------------------------------
@@ -398,6 +501,20 @@ _GREP_PARAMS: dict[str, Any] = {
         },
     },
     "required": ["pattern"],
+}
+
+_LIST_FILES_PARAMS: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "path": {
+            "type": "string",
+            "description": "Directory to list. Defaults to project root.",
+        },
+        "depth": {
+            "type": "integer",
+            "description": "How many levels deep to recurse (1-3). Defaults to 2.",
+        },
+    },
 }
 
 _CREATE_TASK_PARAMS: dict[str, Any] = {
@@ -504,9 +621,12 @@ def create_default_tools(project_root: Path) -> list[ToolDefinition]:
             name="edit_file",
             description=(
                 "Replace an exact string in a file with a new string. The old_string must appear "
-                "exactly once in the file (to prevent ambiguous edits). Use this for targeted, "
-                "surgical changes to existing files. Always read_file first to get the exact string "
-                "to match. Requires user approval."
+                "exactly once in the file (to prevent ambiguous edits). Always read_file first to "
+                "get the exact text to match. "
+                "To INSERT new code, set old_string to the existing lines around the insertion "
+                "point and new_string to those same lines with the new code added. "
+                "To DELETE code, set old_string to the code to remove and new_string to an empty string. "
+                "Requires user approval."
             ),
             parameters=_EDIT_FILE_PARAMS,
             handler=_make_edit_file(project_root),
@@ -531,6 +651,16 @@ def create_default_tools(project_root: Path) -> list[ToolDefinition]:
             parameters=_BASH_PARAMS,
             handler=_make_bash(project_root),
             requires_approval=True,
+        ),
+        ToolDefinition(
+            name="list_files",
+            description=(
+                "List files and directories in a tree format. Use this to get an overview of "
+                "project structure before diving into specific files. Recurses up to 3 levels deep. "
+                "Excludes .venv, node_modules, __pycache__, .git and other non-source directories."
+            ),
+            parameters=_LIST_FILES_PARAMS,
+            handler=_make_list_files(project_root),
         ),
         ToolDefinition(
             name="glob",

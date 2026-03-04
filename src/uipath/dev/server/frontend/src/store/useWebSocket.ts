@@ -142,7 +142,6 @@ export function useWebSocket() {
                 const isOpenInTab = useExplorerStore.getState().openTabs.includes(filePath);
                 if (!diffShown && isOpenInTab && oldContent !== null && fc.content !== null && oldContent !== fc.content) {
                   diffShown = true;
-                  useExplorerStore.getState().setSelectedFile(filePath);
                   s.setDiffView({ path: filePath, original: oldContent, modified: fc.content, language: oldLanguage });
                   setTimeout(() => {
                     const cur = useExplorerStore.getState().diffView;
@@ -241,15 +240,15 @@ export function useWebSocket() {
           break;
         }
         case "agent.tool_use": {
-          const { session_id, tool, args } = msg.payload as { session_id: string; tool: string; args: Record<string, unknown> };
+          const { session_id, tool_call_id, tool, args } = msg.payload as { session_id: string; tool_call_id: string; tool: string; args: Record<string, unknown> };
           const agent = useAgentStore.getState();
           if (!agent.sessionId) agent.setSessionId(session_id);
-          agent.addToolUse(tool, args);
+          agent.addToolUse(tool_call_id, tool, args);
           break;
         }
         case "agent.tool_result": {
-          const { tool, result, is_error } = msg.payload as { session_id: string; tool: string; result: string; is_error: boolean };
-          useAgentStore.getState().addToolResult(tool, result, is_error);
+          const { tool_call_id, result, is_error } = msg.payload as { session_id: string; tool_call_id: string; result: string; is_error: boolean };
+          useAgentStore.getState().addToolResult(tool_call_id, result, is_error);
           break;
         }
         case "agent.tool_approval": {
