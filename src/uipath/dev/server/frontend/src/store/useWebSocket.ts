@@ -3,13 +3,12 @@ import { WsClient } from "../api/websocket";
 import { listEntrypoints } from "../api/client";
 import { useRunStore } from "./useRunStore";
 import { useEvalStore } from "./useEvalStore";
-import { useAgentStore } from "./useAgentStore";
+import { useCliAgentStore } from "./useCliAgentStore";
 import { useExplorerStore } from "./useExplorerStore";
+import { getTerminalWriter } from "../api/cli-terminal-bridge";
 import { readFile, listDirectory } from "../api/explorer-client";
 import type { RunSummary, TraceSpan, LogEntry, InterruptEvent } from "../types/run";
 import type { EvalRunSummary, EvalItemResult } from "../types/eval";
-import type { AgentPlanItem, AgentStatus } from "../types/agent";
-
 let sharedWs: WsClient | null = null;
 
 export function getWs(): WsClient {
@@ -30,9 +29,21 @@ export function useWebSocket() {
 
     const unsub = client.onMessage((msg) => {
       switch (msg.type) {
-        case "run.updated":
-          upsertRun(msg.payload as unknown as RunSummary);
+        case "run.updated": {
+          const runPayload = msg.payload as unknown as RunSummary;
+          upsertRun(runPayload);
+          // Log key run lifecycle transitions to the events sidebar
+          if (runPayload.status === "running" || runPayload.status === "completed" || runPayload.status === "failed") {
+            useCliAgentStore.getState().addEvent({
+              type: "run_lifecycle",
+              timestamp: Date.now(),
+              runId: runPayload.id,
+              entrypoint: runPayload.entrypoint,
+              status: runPayload.status,
+            });
+          }
           break;
+        }
         case "trace":
           addTrace(msg.payload as unknown as TraceSpan);
           break;
@@ -87,94 +98,35 @@ export function useWebSocket() {
           const changedFiles = msg.payload.files as string[];
           const changedSet = new Set(changedFiles);
           const explorer = useExplorerStore.getState();
-          const agentState = useAgentStore.getState();
-          const agentStatus = agentState.status;
-          const agentIsActive = agentStatus === "thinking" || agentStatus === "planning" || agentStatus === "executing" || agentStatus === "awaiting_approval";
-          // Grace period: treat changes within 3s of agent finishing as agent-driven
-          // (file watcher debounce can delay files.changed past agent.status:done)
-          const recentlyActive = !agentIsActive && agentState._lastActiveAt != null && (Date.now() - agentState._lastActiveAt) < 3000;
 
           // Filter out directory paths — file watcher reports both files and dirs.
-          // A path with a dot in the last segment is likely a file; no dot = likely a directory.
-          // Also skip paths already known as directories in the tree.
           const fileChanges = changedFiles.filter((p) => {
-            if (p in explorer.children) return false; // known directory
+            if (p in explorer.children) return false;
             const lastSegment = p.split("/").pop() ?? "";
             return lastSegment.includes(".");
           });
 
-          console.log("[files.changed]", { all: changedFiles, files: fileChanges, agentStatus, agentIsActive, recentlyActive });
-
-          if (agentIsActive || recentlyActive) {
-            // Agent is running (or just finished) — treat file changes as agent-driven
-            // We track diff candidate across async calls; first file to resolve wins
-            let diffShown = false;
-
-            for (const filePath of fileChanges) {
-              // Skip dirty files (user is editing)
-              if (explorer.dirty[filePath]) continue;
-
-              // Snapshot old content before fetching new (for diff)
-              const oldContent = explorer.fileCache[filePath]?.content ?? null;
-              const oldLanguage = explorer.fileCache[filePath]?.language ?? null;
-
-              // Fetch new content — this also validates the file still exists
-              readFile(filePath).then((fc) => {
-                const s = useExplorerStore.getState();
-                if (s.dirty[filePath]) return;
-                s.setFileContent(filePath, fc);
-
-                // Expand tree to reveal the file (but don't auto-open a new tab)
-                s.expandPath(filePath);
-
-                // Load unloaded parent directories so tree reveals the file
-                const parts = filePath.split("/");
-                for (let j = 1; j < parts.length; j++) {
-                  const dir = parts.slice(0, j).join("/");
-                  if (!(dir in useExplorerStore.getState().children)) {
-                    listDirectory(dir)
-                      .then((entries) => useExplorerStore.getState().setChildren(dir, entries))
-                      .catch(() => {});
-                  }
-                }
-
-                // Show diff for the first eligible file (only if already open in a tab)
-                const isOpenInTab = useExplorerStore.getState().openTabs.includes(filePath);
-                if (!diffShown && isOpenInTab && oldContent !== null && fc.content !== null && oldContent !== fc.content) {
-                  diffShown = true;
-                  s.setDiffView({ path: filePath, original: oldContent, modified: fc.content, language: oldLanguage });
-                  setTimeout(() => {
-                    const cur = useExplorerStore.getState().diffView;
-                    if (cur && cur.path === filePath && cur.original === oldContent) {
-                      useExplorerStore.getState().setDiffView(null);
-                    }
-                  }, 5000);
-                }
-
-                s.markAgentChanged(filePath);
-                setTimeout(() => useExplorerStore.getState().clearAgentChanged(filePath), 10000);
-              }).catch(() => {
-                // File doesn't exist (deleted) — close tab if it was open
-                const s = useExplorerStore.getState();
-                if (s.openTabs.includes(filePath)) {
-                  s.closeTab(filePath);
-                }
-              });
-            }
-          } else {
-            // No agent running — regular refresh logic
-            for (const tab of explorer.openTabs) {
-              if (explorer.dirty[tab] || !changedSet.has(tab)) continue;
-              readFile(tab).then((fc) => {
-                const s = useExplorerStore.getState();
-                if (s.dirty[tab]) return;
-                if (s.fileCache[tab]?.content === fc.content) return;
-                s.setFileContent(tab, fc);
-              }).catch(() => {});
-            }
+          // Log file changes as events in the explorer sidebar
+          if (fileChanges.length > 0) {
+            useCliAgentStore.getState().addEvent({
+              type: "files_changed",
+              timestamp: Date.now(),
+              files: fileChanges,
+            });
           }
 
-          // Refresh directory listings for already-loaded parent dirs (always)
+          // Refresh open tabs with new content
+          for (const tab of explorer.openTabs) {
+            if (explorer.dirty[tab] || !changedSet.has(tab)) continue;
+            readFile(tab).then((fc) => {
+              const s = useExplorerStore.getState();
+              if (s.dirty[tab]) return;
+              if (s.fileCache[tab]?.content === fc.content) return;
+              s.setFileContent(tab, fc);
+            }).catch(() => {});
+          }
+
+          // Refresh directory listings for already-loaded parent dirs
           const dirsToRefresh = new Set<string>();
           for (const filePath of changedFiles) {
             const lastSlash = filePath.lastIndexOf("/");
@@ -213,87 +165,41 @@ export function useWebSocket() {
           completeEvalRun(run_id, overall_score, evaluator_scores);
           break;
         }
-        // Agent events
-        case "agent.status": {
-          const { session_id, status } = msg.payload as { session_id: string; status: AgentStatus };
-          const agent = useAgentStore.getState();
-          if (!agent.sessionId) agent.setSessionId(session_id);
-          agent.setStatus(status);
-          // Clear pending question when agent finishes or errors
-          if (status === "done" || status === "error" || status === "idle") {
-            agent.setActiveQuestion(null);
+        // CLI agent events
+        case "cli_agent.output": {
+          const { session_id, data } = msg.payload as { session_id: string; data: string };
+          const writer = getTerminalWriter(session_id);
+          if (writer) {
+            const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+            writer(bytes);
           }
           break;
         }
-        case "agent.text": {
-          const { session_id, content, done } = msg.payload as { session_id: string; content: string; done: boolean };
-          const agent = useAgentStore.getState();
-          if (!agent.sessionId) agent.setSessionId(session_id);
-          agent.appendAssistantText(content, done);
+        case "cli_agent.exit": {
+          const { session_id, exit_code } = msg.payload as { session_id: string; exit_code: number };
+          const cliStore = useCliAgentStore.getState();
+          if (cliStore.sessionId === session_id) {
+            cliStore.setStatus("exited");
+            cliStore.setExitCode(exit_code);
+            const agent = cliStore.availableAgents.find((a) => a.id === cliStore.selectedAgentId);
+            cliStore.addEvent({
+              type: "session",
+              timestamp: Date.now(),
+              agentName: agent?.name ?? "Unknown",
+              action: "exited",
+              exitCode: exit_code,
+            });
+          }
           break;
         }
-        case "agent.plan": {
-          const { session_id, items } = msg.payload as { session_id: string; items: AgentPlanItem[] };
-          const agent = useAgentStore.getState();
-          if (!agent.sessionId) agent.setSessionId(session_id);
-          agent.setPlan(items);
-          break;
-        }
-        case "agent.tool_use": {
-          const { session_id, tool_call_id, tool, args } = msg.payload as { session_id: string; tool_call_id: string; tool: string; args: Record<string, unknown> };
-          const agent = useAgentStore.getState();
-          if (!agent.sessionId) agent.setSessionId(session_id);
-          agent.addToolUse(tool_call_id, tool, args);
-          break;
-        }
-        case "agent.tool_result": {
-          const { tool_call_id, result, is_error } = msg.payload as { session_id: string; tool_call_id: string; result: string; is_error: boolean };
-          useAgentStore.getState().addToolResult(tool_call_id, result, is_error);
-          break;
-        }
-        case "agent.tool_approval": {
-          const { session_id, tool_call_id, tool, args } = msg.payload as {
-            session_id: string;
-            tool_call_id: string;
-            tool: string;
-            args: Record<string, unknown>;
-          };
-          const agent = useAgentStore.getState();
-          if (!agent.sessionId) agent.setSessionId(session_id);
-          agent.addToolApprovalRequest(tool_call_id, tool, args);
-          break;
-        }
-        case "agent.thinking": {
-          const { content } = msg.payload as { session_id: string; content: string };
-          useAgentStore.getState().appendThinking(content);
-          break;
-        }
-        case "agent.text_delta": {
-          const { session_id: deltaSid, delta } = msg.payload as { session_id: string; delta: string };
-          const agentDelta = useAgentStore.getState();
-          if (!agentDelta.sessionId) agentDelta.setSessionId(deltaSid);
-          agentDelta.appendAssistantText(delta, false);
-          break;
-        }
-        case "agent.question": {
-          const { session_id: qSid, question_id, question, options } = msg.payload as {
-            session_id: string;
-            question_id: string;
-            question: string;
-            options: string[];
-          };
-          const agentQ = useAgentStore.getState();
-          if (!agentQ.sessionId) agentQ.setSessionId(qSid);
-          agentQ.setActiveQuestion({ question_id, question, options });
-          break;
-        }
-        case "agent.token_usage": {
-          // Token usage received — could store for display if needed
-          break;
-        }
-        case "agent.error": {
-          const { message: errMsg } = msg.payload as { session_id: string; message: string };
-          useAgentStore.getState().addError(errMsg);
+        case "mcp.tool_call": {
+          const { tool, args } = msg.payload as { tool: string; args: Record<string, unknown> };
+          useCliAgentStore.getState().addEvent({
+            type: "mcp_tool_call",
+            timestamp: Date.now(),
+            tool,
+            args,
+          });
           break;
         }
       }

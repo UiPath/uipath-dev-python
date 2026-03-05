@@ -4,11 +4,9 @@ import { useExplorerStore } from "../../store/useExplorerStore";
 import { useTheme } from "../../store/useTheme";
 import { useHashRoute } from "../../hooks/useHashRoute";
 import { readFile, saveFile } from "../../api/explorer-client";
-import AgentStatePanel from "../agent/AgentStatePanel";
 import ExplorerCanvas from "./ExplorerCanvas";
 import StateDbViewer from "./StateDbViewer";
 
-const AGENT_STATE_TAB = "__agent_state__";
 const CANVAS_TAB = "__canvas__";
 const STATEDB_TAB_PREFIX = "__statedb__:";
 
@@ -127,7 +125,7 @@ export default function FileEditor() {
 
   // Load file content when selectedFile changes
   useEffect(() => {
-    if (!filePath || filePath === AGENT_STATE_TAB || filePath === CANVAS_TAB || filePath.startsWith(STATEDB_TAB_PREFIX)) return;
+    if (!filePath || filePath === CANVAS_TAB || filePath.startsWith(STATEDB_TAB_PREFIX)) return;
     if (!useExplorerStore.getState().fileCache[filePath]) {
       setLoadingFile(true);
       readFile(filePath)
@@ -238,7 +236,7 @@ export default function FileEditor() {
               if (!isActive) e.currentTarget.style.background = "transparent";
             }}
           >
-            <span className="truncate">{tab === AGENT_STATE_TAB ? "Agent Trace" : tab === CANVAS_TAB ? "Visualization" : tab.startsWith(STATEDB_TAB_PREFIX) ? `db:${tab.slice(STATEDB_TAB_PREFIX.length)}` : basename(tab)}</span>
+            <span className="truncate">{tab === CANVAS_TAB ? "Visualization" : tab.startsWith(STATEDB_TAB_PREFIX) ? `db:${tab.slice(STATEDB_TAB_PREFIX.length)}` : basename(tab)}</span>
             {tabDirty ? (
               <span
                 className="w-2 h-2 rounded-full shrink-0"
@@ -269,18 +267,6 @@ export default function FileEditor() {
       })}
     </div>
   );
-
-  // Agent Trace special tab
-  if (filePath === AGENT_STATE_TAB) {
-    return (
-      <div className="flex flex-col h-full">
-        {tabBar}
-        <div className="flex-1 overflow-hidden">
-          <AgentStatePanel />
-        </div>
-      </div>
-    );
-  }
 
   // Canvas special tab
   if (filePath === CANVAS_TAB) {

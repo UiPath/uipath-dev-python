@@ -10,17 +10,9 @@ export type ServerEventType =
   | "eval_run.created"
   | "eval_run.progress"
   | "eval_run.completed"
-  | "agent.status"
-  | "agent.text"
-  | "agent.plan"
-  | "agent.tool_use"
-  | "agent.tool_result"
-  | "agent.tool_approval"
-  | "agent.error"
-  | "agent.thinking"
-  | "agent.text_delta"
-  | "agent.token_usage"
-  | "agent.question";
+  | "cli_agent.output"
+  | "cli_agent.exit"
+  | "mcp.tool_call";
 
 export interface ServerMessage {
   type: ServerEventType;
@@ -36,10 +28,10 @@ export type ClientCommandType =
   | "debug.continue"
   | "debug.stop"
   | "debug.set_breakpoints"
-  | "agent.message"
-  | "agent.stop"
-  | "agent.tool_response"
-  | "agent.question_response";
+  | "cli_agent.start"
+  | "cli_agent.input"
+  | "cli_agent.resize"
+  | "cli_agent.stop";
 
 export interface ClientMessage {
   type: ClientCommandType;

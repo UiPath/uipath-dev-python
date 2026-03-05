@@ -124,32 +124,19 @@ export class WsClient {
     this.send("debug.set_breakpoints", { run_id: runId, breakpoints });
   }
 
-  sendAgentMessage(text: string, model: string, sessionId?: string | null, skillIds?: string[]): void {
-    this.send("agent.message", {
-      text,
-      model,
-      session_id: sessionId ?? undefined,
-      skill_ids: skillIds && skillIds.length > 0 ? skillIds : undefined,
-    });
+  sendCliAgentStart(agentId: string, sessionId: string, cols: number, rows: number): void {
+    this.send("cli_agent.start", { agent_id: agentId, session_id: sessionId, cols, rows });
   }
 
-  sendAgentStop(sessionId: string): void {
-    this.send("agent.stop", { session_id: sessionId });
+  sendCliAgentInput(sessionId: string, data: string): void {
+    this.send("cli_agent.input", { session_id: sessionId, data });
   }
 
-  sendToolApproval(sessionId: string, toolCallId: string, approved: boolean): void {
-    this.send("agent.tool_response", {
-      session_id: sessionId,
-      tool_call_id: toolCallId,
-      approved,
-    });
+  sendCliAgentResize(sessionId: string, cols: number, rows: number): void {
+    this.send("cli_agent.resize", { session_id: sessionId, cols, rows });
   }
 
-  sendQuestionResponse(sessionId: string, questionId: string, answer: string): void {
-    this.send("agent.question_response", {
-      session_id: sessionId,
-      question_id: questionId,
-      answer,
-    });
+  sendCliAgentStop(sessionId: string): void {
+    this.send("cli_agent.stop", { session_id: sessionId });
   }
 }

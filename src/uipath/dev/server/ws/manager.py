@@ -129,9 +129,15 @@ class ConnectionManager:
         self._subscriptions.pop(run_id, None)
 
     def broadcast_run_updated(self, run: ExecutionRun) -> None:
-        """Broadcast a run update to all subscribers (safe from sync context)."""
+        """Broadcast a run update to ALL connected clients.
+
+        This goes to all connections (not just subscribers) so the runs list
+        in the sidebar updates when new runs are created externally (e.g. MCP).
+        Subscribers additionally receive state/log/trace events.
+        """
         msg = server_message(ServerEvent.RUN_UPDATED, serialize_run(run))
-        self._schedule_broadcast(run.id, msg)
+        for ws in self._connections:
+            self._enqueue(ws, msg)
 
     def broadcast_log(self, log_data: LogData) -> None:
         """Broadcast a log entry to run subscribers."""
@@ -156,9 +162,14 @@ class ConnectionManager:
         self._schedule_broadcast(interrupt_data.run_id, msg)
 
     def broadcast_state(self, state_data: StateData) -> None:
-        """Broadcast a state transition to run subscribers."""
+        """Broadcast a state transition to all connected clients.
+
+        Sent to all connections (not just subscribers) so the explorer
+        canvas can highlight nodes for runs started externally (e.g. MCP).
+        """
         msg = server_message(ServerEvent.STATE, serialize_state(state_data))
-        self._schedule_broadcast(state_data.run_id, msg)
+        for ws in self._connections:
+            self._enqueue(ws, msg)
 
     def broadcast_reload(
         self, changed_files: list[str], *, reloaded: bool = False
@@ -233,149 +244,31 @@ class ConnectionManager:
         for ws in self._connections:
             self._enqueue(ws, msg)
 
-    def broadcast_agent_status(self, session_id: str, status: str) -> None:
-        """Broadcast agent status to all connected clients."""
+    def broadcast_cli_agent_output(self, session_id: str, data: str) -> None:
+        """Broadcast CLI agent PTY output (base64-encoded) to all clients."""
         msg = server_message(
-            ServerEvent.AGENT_STATUS, {"session_id": session_id, "status": status}
+            ServerEvent.CLI_AGENT_OUTPUT,
+            {"session_id": session_id, "data": data},
         )
         for ws in self._connections:
             self._enqueue(ws, msg)
 
-    def broadcast_agent_text(self, session_id: str, content: str, done: bool) -> None:
-        """Broadcast agent text to all connected clients."""
-        msg = server_message(
-            ServerEvent.AGENT_TEXT,
-            {"session_id": session_id, "content": content, "done": done},
-        )
-        for ws in self._connections:
-            self._enqueue(ws, msg)
-
-    def broadcast_agent_plan(
-        self, session_id: str, items: list[dict[str, str]]
+    def broadcast_mcp_tool_call(
+        self, tool: str, args: dict[str, Any] | None = None
     ) -> None:
-        """Broadcast agent plan to all connected clients."""
+        """Broadcast an MCP tool call event to all clients."""
         msg = server_message(
-            ServerEvent.AGENT_PLAN, {"session_id": session_id, "items": items}
+            ServerEvent.MCP_TOOL_CALL,
+            {"tool": tool, "args": args or {}},
         )
         for ws in self._connections:
             self._enqueue(ws, msg)
 
-    def broadcast_agent_tool_use(
-        self, session_id: str, tool_call_id: str, tool: str, args: dict[str, Any]
-    ) -> None:
-        """Broadcast agent tool use to all connected clients."""
+    def broadcast_cli_agent_exit(self, session_id: str, exit_code: int) -> None:
+        """Broadcast CLI agent process exit to all clients."""
         msg = server_message(
-            ServerEvent.AGENT_TOOL_USE,
-            {
-                "session_id": session_id,
-                "tool_call_id": tool_call_id,
-                "tool": tool,
-                "args": args,
-            },
-        )
-        for ws in self._connections:
-            self._enqueue(ws, msg)
-
-    def broadcast_agent_tool_result(
-        self, session_id: str, tool_call_id: str, tool: str, result: str, is_error: bool
-    ) -> None:
-        """Broadcast agent tool result to all connected clients."""
-        msg = server_message(
-            ServerEvent.AGENT_TOOL_RESULT,
-            {
-                "session_id": session_id,
-                "tool_call_id": tool_call_id,
-                "tool": tool,
-                "result": result,
-                "is_error": is_error,
-            },
-        )
-        for ws in self._connections:
-            self._enqueue(ws, msg)
-
-    def broadcast_agent_tool_approval(
-        self,
-        session_id: str,
-        tool_call_id: str,
-        tool: str,
-        args: dict[str, Any],
-    ) -> None:
-        """Broadcast agent tool approval request to all connected clients."""
-        msg = server_message(
-            ServerEvent.AGENT_TOOL_APPROVAL,
-            {
-                "session_id": session_id,
-                "tool_call_id": tool_call_id,
-                "tool": tool,
-                "args": args,
-            },
-        )
-        for ws in self._connections:
-            self._enqueue(ws, msg)
-
-    def broadcast_agent_error(self, session_id: str, message: str) -> None:
-        """Broadcast agent error to all connected clients."""
-        msg = server_message(
-            ServerEvent.AGENT_ERROR,
-            {"session_id": session_id, "message": message},
-        )
-        for ws in self._connections:
-            self._enqueue(ws, msg)
-
-    def broadcast_agent_thinking(self, session_id: str, content: str) -> None:
-        """Broadcast agent thinking/reasoning to all connected clients."""
-        msg = server_message(
-            ServerEvent.AGENT_THINKING,
-            {"session_id": session_id, "content": content},
-        )
-        for ws in self._connections:
-            self._enqueue(ws, msg)
-
-    def broadcast_agent_text_delta(self, session_id: str, delta: str) -> None:
-        """Broadcast a streaming text token to all connected clients."""
-        msg = server_message(
-            ServerEvent.AGENT_TEXT_DELTA,
-            {"session_id": session_id, "delta": delta},
-        )
-        for ws in self._connections:
-            self._enqueue(ws, msg)
-
-    def broadcast_agent_question(
-        self,
-        session_id: str,
-        question_id: str,
-        question: str,
-        options: list[str],
-    ) -> None:
-        """Broadcast agent question to all connected clients."""
-        msg = server_message(
-            ServerEvent.AGENT_QUESTION,
-            {
-                "session_id": session_id,
-                "question_id": question_id,
-                "question": question,
-                "options": options,
-            },
-        )
-        for ws in self._connections:
-            self._enqueue(ws, msg)
-
-    def broadcast_agent_token_usage(
-        self,
-        session_id: str,
-        prompt_tokens: int,
-        completion_tokens: int,
-        total_session_tokens: int,
-    ) -> None:
-        """Broadcast token usage stats to all connected clients."""
-        msg = server_message(
-            ServerEvent.AGENT_TOKEN_USAGE,
-            {
-                "session_id": session_id,
-                "prompt_tokens": prompt_tokens,
-                "completion_tokens": completion_tokens,
-                "total_session_tokens": total_session_tokens,
-            },
+            ServerEvent.CLI_AGENT_EXIT,
+            {"session_id": session_id, "exit_code": exit_code},
         )
         for ws in self._connections:
             self._enqueue(ws, msg)
