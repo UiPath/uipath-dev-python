@@ -93,36 +93,41 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     if run:
                         server.run_service.set_breakpoints(run, breakpoints)
 
-            elif command == ClientCommand.AGENT_MESSAGE.value:
-                text = payload.get("text", "")
-                model = payload.get("model", "")
-                session_id = payload.get("session_id") or None
-                skill_ids = payload.get("skill_ids") or None
-                if text and model:
+            elif command == ClientCommand.CLI_AGENT_START.value:
+                agent_id = payload.get("agent_id", "")
+                session_id = payload.get("session_id", "")
+                cols = payload.get("cols", 120)
+                rows = payload.get("rows", 40)
+                if agent_id and session_id:
                     asyncio.create_task(
-                        server.agent_service.send_message(
-                            session_id, text, model, skill_ids=skill_ids
+                        server.cli_agent_service.start_session(
+                            agent_id, session_id, cols=cols, rows=rows
                         )
                     )
 
-            elif command == ClientCommand.AGENT_STOP.value:
+            elif command == ClientCommand.CLI_AGENT_INPUT.value:
                 session_id = payload.get("session_id", "")
-                if session_id:
-                    server.agent_service.stop_session(session_id)
-
-            elif command == ClientCommand.AGENT_TOOL_RESPONSE.value:
-                tool_call_id = payload.get("tool_call_id", "")
-                approved = payload.get("approved", False)
-                if tool_call_id:
-                    server.agent_service.resolve_tool_approval(
-                        tool_call_id, bool(approved)
+                input_data = payload.get("data", "")
+                if session_id and input_data:
+                    asyncio.create_task(
+                        server.cli_agent_service.write_input(session_id, input_data)
                     )
 
-            elif command == ClientCommand.AGENT_QUESTION_RESPONSE.value:
-                question_id = payload.get("question_id", "")
-                answer = payload.get("answer", "")
-                if question_id:
-                    server.agent_service.resolve_question(question_id, str(answer))
+            elif command == ClientCommand.CLI_AGENT_RESIZE.value:
+                session_id = payload.get("session_id", "")
+                cols = payload.get("cols", 120)
+                rows = payload.get("rows", 40)
+                if session_id:
+                    asyncio.create_task(
+                        server.cli_agent_service.resize(session_id, cols, rows)
+                    )
+
+            elif command == ClientCommand.CLI_AGENT_STOP.value:
+                session_id = payload.get("session_id", "")
+                if session_id:
+                    asyncio.create_task(
+                        server.cli_agent_service.stop_session(session_id)
+                    )
 
     except WebSocketDisconnect:
         manager.disconnect(websocket)

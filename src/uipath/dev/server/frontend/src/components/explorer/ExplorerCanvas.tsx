@@ -1,16 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ReactFlow, {
   Background,
   Controls,
   MiniMap,
   useNodesState,
   useEdgesState,
+  type Edge,
   type ReactFlowInstance,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { getEntrypointGraph } from "../../api/client";
 import { useRunStore } from "../../store/useRunStore";
-import { runElkLayout } from "../graph/elkLayout";
+import { getWs } from "../../store/useWebSocket";
+import { runElkLayout, arrowMarker, mkEdgeStyle } from "../graph/elkLayout";
 import StartNode from "../graph/nodes/StartNode";
 import EndNode from "../graph/nodes/EndNode";
 import ModelNode from "../graph/nodes/ModelNode";
@@ -32,6 +34,7 @@ const edgeTypes = { elk: ElkEdge };
 
 export default function ExplorerCanvas() {
   const entrypoints = useRunStore((s) => s.entrypoints);
+  const runs = useRunStore((s) => s.runs);
   const [selectedEp, setSelectedEp] = useState<string | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -41,6 +44,33 @@ export default function ExplorerCanvas() {
   const lastGraphHash = useRef<string>("");
   const rfInstance = useRef<ReactFlowInstance | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const ws = useRef(getWs()).current;
+
+  // Find the latest active or most recent run for selected entrypoint
+  const activeRunId = useMemo(() => {
+    if (!selectedEp) return null;
+    let best: { id: string; start_time: string | null } | null = null;
+    for (const r of Object.values(runs)) {
+      if (r.entrypoint !== selectedEp) continue;
+      // Prefer running/pending runs
+      if (r.status === "running" || r.status === "pending") return r.id;
+      // Otherwise pick the most recent by start_time
+      if (!best || (r.start_time && (!best.start_time || r.start_time > best.start_time))) {
+        best = r;
+      }
+    }
+    return best?.id ?? null;
+  }, [runs, selectedEp]);
+
+  // Subscribe to the active run's WebSocket events
+  useEffect(() => {
+    if (!activeRunId) return;
+    ws.subscribe(activeRunId);
+    return () => { ws.unsubscribe(activeRunId); };
+  }, [activeRunId, ws]);
+
+  const stateEvents = useRunStore((s) => activeRunId ? s.stateEvents[activeRunId] : undefined);
+  const runStatus = useRunStore((s) => activeRunId ? s.runs[activeRunId]?.status : undefined);
 
   // Auto-select first entrypoint
   useEffect(() => {
@@ -88,6 +118,172 @@ export default function ExplorerCanvas() {
         if (layoutRef.current === layoutId) setLoading(false);
       });
   }, [selectedEp, entrypoints, setNodes, setEdges]);
+
+  // --- Execution highlighting (mirrors GraphPanel logic, no breakpoints) ---
+
+  // Highlight edges + nodes during execution
+  useEffect(() => {
+    if (!activeRunId) return;
+
+    // Derive currently-executing nodes from event log
+    const executingNodes = new Map<string, string | null>();
+    if (stateEvents) {
+      for (const evt of stateEvents) {
+        if (evt.phase === "started") {
+          executingNodes.set(evt.node_name, evt.qualified_node_name ?? null);
+        } else if (evt.phase === "completed") {
+          executingNodes.delete(evt.node_name);
+        }
+      }
+    }
+
+    let matchIds = new Set<string>();
+    const activeTargetIds = new Set<string>();
+    const nodeTypeById = new Map<string, string>();
+
+    setNodes((nds) => {
+      for (const n of nds) {
+        if (n.type) nodeTypeById.set(n.id, n.type);
+      }
+
+      if (executingNodes.size > 0) {
+        const labelToIds = new Map<string, Set<string>>();
+        for (const n of nds) {
+          const label = n.data?.label as string | undefined;
+          if (!label) continue;
+          const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
+          for (const key of [plainId, label]) {
+            let s = labelToIds.get(key);
+            if (!s) { s = new Set(); labelToIds.set(key, s); }
+            s.add(n.id);
+          }
+        }
+
+        for (const [nodeName, qualifiedNodeName] of executingNodes) {
+          let found = false;
+          if (qualifiedNodeName) {
+            const qualifiedId = qualifiedNodeName.replace(/:/g, "/");
+            for (const n of nds) {
+              if (n.id === qualifiedId) { matchIds.add(n.id); found = true; }
+            }
+          }
+          if (!found) {
+            const ids = labelToIds.get(nodeName);
+            if (ids) ids.forEach((id) => matchIds.add(id));
+          }
+        }
+      }
+
+      return nds;
+    });
+
+    // Highlight edges
+    setEdges((eds) =>
+      eds.map((e) => {
+        let isActive = matchIds.has(e.source);
+        if (!isActive && nodeTypeById.get(e.target) === "endNode" && matchIds.has(e.target)) {
+          isActive = true;
+        }
+
+        if (isActive) {
+          activeTargetIds.add(e.target);
+          return {
+            ...e,
+            style: { stroke: "var(--accent)", strokeWidth: 2.5 },
+            markerEnd: { ...arrowMarker, color: "var(--accent)" },
+            data: { ...e.data, highlighted: true },
+            animated: true,
+          };
+        }
+
+        if (e.data?.highlighted) {
+          return {
+            ...e,
+            style: mkEdgeStyle((e as Edge & { data?: { conditional?: boolean } }).data?.conditional),
+            markerEnd: arrowMarker,
+            data: { ...e.data, highlighted: false },
+            animated: false,
+          };
+        }
+
+        return e;
+      }),
+    );
+
+    // Mark executing + active nodes
+    setNodes((nds) =>
+      nds.map((n) => {
+        const executing = matchIds.has(n.id);
+        const active = activeTargetIds.has(n.id) || matchIds.has(n.id);
+        return active !== !!n.data?.isActiveNode || executing !== !!n.data?.isExecutingNode
+          ? { ...n, data: { ...n.data, isActiveNode: active, isExecutingNode: executing } }
+          : n;
+      }),
+    );
+  }, [activeRunId, stateEvents, setNodes, setEdges]);
+
+  // Update node completion status from state events
+  useEffect(() => {
+    if (!activeRunId) return;
+
+    setNodes((nds) => {
+      const hasEvents = !!stateEvents?.length;
+      const isTerminal = runStatus === "completed" || runStatus === "failed";
+
+      const completedIds = new Set<string>();
+      const allNodeIds = new Set(nds.map((n) => n.id));
+      const labelToIds = new Map<string, Set<string>>();
+      for (const n of nds) {
+        const label = n.data?.label as string | undefined;
+        if (!label) continue;
+        const plainId = n.id.includes("/") ? n.id.split("/").pop()! : n.id;
+        for (const key of [plainId, label]) {
+          let s = labelToIds.get(key);
+          if (!s) { s = new Set(); labelToIds.set(key, s); }
+          s.add(n.id);
+        }
+      }
+
+      if (hasEvents) {
+        for (const evt of stateEvents) {
+          let matched = false;
+          if (evt.qualified_node_name) {
+            const qId = evt.qualified_node_name.replace(/:/g, "/");
+            if (allNodeIds.has(qId)) { completedIds.add(qId); matched = true; }
+          }
+          if (!matched) {
+            const ids = labelToIds.get(evt.node_name);
+            if (ids) ids.forEach((id) => completedIds.add(id));
+          }
+        }
+      }
+
+      const visitedParents = new Set<string>();
+      for (const n of nds) {
+        if (n.parentNode && completedIds.has(n.id)) visitedParents.add(n.parentNode);
+      }
+
+      return nds.map((n) => {
+        let status: string | undefined;
+
+        if (completedIds.has(n.id)) {
+          status = "completed";
+        } else if (n.type === "startNode") {
+          if (!n.parentNode && hasEvents) status = "completed";
+          else if (n.parentNode && visitedParents.has(n.parentNode)) status = "completed";
+        } else if (n.type === "endNode") {
+          if (!n.parentNode && isTerminal) status = runStatus === "failed" ? "failed" : "completed";
+          else if (n.parentNode && visitedParents.has(n.parentNode)) status = "completed";
+        } else if (n.type === "groupNode") {
+          if (visitedParents.has(n.id)) status = "completed";
+        }
+
+        return status !== n.data?.status
+          ? { ...n, data: { ...n.data, status } }
+          : n;
+      });
+    });
+  }, [activeRunId, stateEvents, runStatus, setNodes]);
 
   // Fit view on container resize
   useEffect(() => {
@@ -152,6 +348,13 @@ export default function ExplorerCanvas() {
           overflow: visible !important;
           z-index: 1 !important;
         }
+        .explorer-canvas .react-flow__edge.animated path {
+          stroke-dasharray: 8 4;
+          animation: explorer-edge-flow 0.6s linear infinite;
+        }
+        @keyframes explorer-edge-flow {
+          to { stroke-dashoffset: -12; }
+        }
       `}</style>
       {entrypoints.length > 1 && (
         <div style={{
@@ -197,6 +400,9 @@ export default function ExplorerCanvas() {
         <MiniMap
           nodeColor={(n) => {
             if (n.type === "groupNode") return "var(--bg-tertiary)";
+            const status = n.data?.status as string | undefined;
+            if (status === "completed") return "var(--success)";
+            if (status === "failed") return "var(--error)";
             return "var(--node-border)";
           }}
           nodeStrokeWidth={0}

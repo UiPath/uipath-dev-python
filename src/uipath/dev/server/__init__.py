@@ -27,10 +27,9 @@ from uipath.dev.models.data import (
 from uipath.dev.models.eval_data import EvalItemResult, EvalRunState
 from uipath.dev.models.execution import ExecutionRun
 from uipath.dev.server.debug_bridge import WebDebugBridge
-from uipath.dev.services.agent import AgentService
+from uipath.dev.services.cli_agent import CliAgentService
 from uipath.dev.services.eval_service import EvalService
 from uipath.dev.services.run_service import RunService
-from uipath.dev.services.skill_service import SkillService
 
 logger = logging.getLogger(__name__)
 
@@ -98,11 +97,11 @@ class UiPathDeveloperServer:
             on_eval_run_completed=self._on_eval_run_completed,
         )
 
-        self.skill_service = SkillService()
-
-        self.agent_service = AgentService(
-            skill_service=self.skill_service,
-            on_event=self._on_agent_event,
+        self.cli_agent_service = CliAgentService(
+            on_output=self._on_cli_agent_output,
+            on_exit=self._on_cli_agent_exit,
+            server_port=self.port,
+            server_host=self.host,
         )
 
     def create_app(self) -> Any:
@@ -140,12 +139,17 @@ class UiPathDeveloperServer:
             log_level="warning",
         )
         server = uvicorn.Server(config)
-        await server.serve()
+        try:
+            await server.serve()
+        finally:
+            await self.shutdown()
 
     async def shutdown(self) -> None:
         """Clean up resources before shutting down."""
         logger.info("Shutting down server resources...")
         self._stop_watcher()
+        # Stop any active CLI agent PTY sessions
+        await self.cli_agent_service.stop_all_sessions()
         # Close any active WebSocket connections
         await self.connection_manager.disconnect_all()
         # Give threads time to finish
@@ -319,61 +323,16 @@ class UiPathDeveloperServer:
         """Broadcast eval run completed to all connected clients."""
         self.connection_manager.broadcast_eval_run_completed(run)
 
-    def _on_agent_event(self, event: Any) -> None:
-        """Route agent events to the appropriate broadcast method."""
-        from uipath.dev.services.agent import (
-            ErrorOccurred,
-            PlanUpdated,
-            StatusChanged,
-            TextDelta,
-            TextGenerated,
-            ThinkingGenerated,
-            TokenUsageUpdated,
-            ToolApprovalRequired,
-            ToolCompleted,
-            ToolStarted,
-            UserQuestionAsked,
-        )
+    def _on_cli_agent_output(self, session_id: str, data: bytes) -> None:
+        """Broadcast CLI agent PTY output as base64."""
+        import base64
 
-        cm = self.connection_manager
-        match event:
-            case StatusChanged(session_id=sid, status=status):
-                cm.broadcast_agent_status(sid, status)
-            case TextGenerated(session_id=sid, content=content, done=done):
-                cm.broadcast_agent_text(sid, content, done)
-            case TextDelta(session_id=sid, delta=delta):
-                cm.broadcast_agent_text_delta(sid, delta)
-            case ThinkingGenerated(session_id=sid, content=content):
-                cm.broadcast_agent_thinking(sid, content)
-            case PlanUpdated(session_id=sid, items=items):
-                cm.broadcast_agent_plan(sid, items)
-            case ToolStarted(session_id=sid, tool_call_id=tcid, tool=tool, args=args):
-                cm.broadcast_agent_tool_use(sid, tcid, tool, args)
-            case ToolCompleted(
-                session_id=sid,
-                tool_call_id=tcid,
-                tool=tool,
-                result=result,
-                is_error=is_error,
-            ):
-                cm.broadcast_agent_tool_result(sid, tcid, tool, result, is_error)
-            case ToolApprovalRequired(
-                session_id=sid, tool_call_id=tcid, tool=tool, args=args
-            ):
-                cm.broadcast_agent_tool_approval(sid, tcid, tool, args)
-            case UserQuestionAsked(
-                session_id=sid, question_id=qid, question=q, options=opts
-            ):
-                cm.broadcast_agent_question(sid, qid, q, opts)
-            case ErrorOccurred(session_id=sid, message=message):
-                cm.broadcast_agent_error(sid, message)
-            case TokenUsageUpdated(
-                session_id=sid,
-                prompt_tokens=pt,
-                completion_tokens=ct,
-                total_session_tokens=total,
-            ):
-                cm.broadcast_agent_token_usage(sid, pt, ct, total)
+        encoded = base64.b64encode(data).decode("ascii")
+        self.connection_manager.broadcast_cli_agent_output(session_id, encoded)
+
+    def _on_cli_agent_exit(self, session_id: str, exit_code: int) -> None:
+        """Broadcast CLI agent process exit."""
+        self.connection_manager.broadcast_cli_agent_exit(session_id, exit_code)
 
     @staticmethod
     def _find_free_port(host: str, start_port: int, max_attempts: int = 100) -> int:

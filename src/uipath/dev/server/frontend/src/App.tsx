@@ -26,9 +26,7 @@ import EvaluatorsSidebar from "./components/evaluators/EvaluatorsSidebar";
 import EvaluatorsView from "./components/evaluators/EvaluatorDetail";
 import CreateEvaluatorView from "./components/evaluators/CreateEvaluatorView";
 import ExplorerSidebar from "./components/explorer/ExplorerSidebar";
-import FileEditor from "./components/explorer/FileEditor";
-import AgentChatSidebar from "./components/agent/AgentChatSidebar";
-import { useExplorerStore } from "./store/useExplorerStore";
+import ExplorerContent from "./components/explorer/ExplorerContent";
 
 export default function App() {
   const ws = useWebSocket();
@@ -36,8 +34,6 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(248);
   const [isDraggingSidebar, setIsDraggingSidebar] = useState(false);
-  const [agentWidth, setAgentWidth] = useState(380);
-  const [isDraggingAgent, setIsDraggingAgent] = useState(false);
   const {
     runs,
     selectedRunId,
@@ -66,7 +62,6 @@ export default function App() {
     evaluatorCreateType,
     evaluatorId,
     evaluatorFilter,
-    explorerFile,
     navigate,
   } = useHashRoute();
 
@@ -304,50 +299,10 @@ export default function App() {
     document.addEventListener("touchend", onUp);
   }, [sidebarWidth]);
 
-  // --- Agent panel col resize ---
-  const onAgentResizeStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    e.preventDefault();
-    setIsDraggingAgent(true);
-
-    const startX = "touches" in e ? e.touches[0].clientX : e.clientX;
-    const startW = agentWidth;
-
-    const onMove = (ev: MouseEvent | TouchEvent) => {
-      const clientX = "touches" in ev ? ev.touches[0].clientX : ev.clientX;
-      // Dragging left increases width (panel is on the right)
-      const newW = Math.max(280, Math.min(700, startW - (clientX - startX)));
-      setAgentWidth(newW);
-    };
-
-    const onUp = () => {
-      setIsDraggingAgent(false);
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-      document.removeEventListener("touchmove", onMove);
-      document.removeEventListener("touchend", onUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-    document.addEventListener("touchmove", onMove, { passive: false });
-    document.addEventListener("touchend", onUp);
-  }, [agentWidth]);
-
-  const explorerTabs = useExplorerStore((s) => s.openTabs);
-
   // --- Render main content based on section ---
   const renderMainContent = () => {
     if (section === "explorer") {
-      if (explorerTabs.length > 0 || explorerFile) return <FileEditor />;
-      return (
-        <div className="flex items-center justify-center h-full text-[var(--text-muted)]">
-          Select a file to view
-        </div>
-      );
+      return <ExplorerContent />;
     }
 
     if (section === "evals") {
@@ -509,23 +464,8 @@ export default function App() {
           className="shrink-0 drag-handle-col"
           style={isDraggingSidebar ? { background: "var(--accent)" } : undefined}
         />
-        <main className="flex-1 overflow-hidden bg-[var(--bg-primary)] flex">
-          <div className="flex-1 overflow-hidden">
-            {renderMainContent()}
-          </div>
-          {section === "explorer" && (
-            <>
-              <div
-                onMouseDown={onAgentResizeStart}
-                onTouchStart={onAgentResizeStart}
-                className="shrink-0 drag-handle-col"
-                style={isDraggingAgent ? { background: "var(--accent)" } : undefined}
-              />
-              <div className="shrink-0 overflow-hidden" style={{ width: agentWidth, borderLeft: "1px solid var(--border)" }}>
-                <AgentChatSidebar />
-              </div>
-            </>
-          )}
+        <main className="flex-1 overflow-hidden bg-[var(--bg-primary)]">
+          {renderMainContent()}
         </main>
       </div>
       <StatusBar />

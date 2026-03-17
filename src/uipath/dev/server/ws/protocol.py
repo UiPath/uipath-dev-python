@@ -20,17 +20,9 @@ class ServerEvent(str, Enum):
     EVAL_RUN_CREATED = "eval_run.created"
     EVAL_RUN_PROGRESS = "eval_run.progress"
     EVAL_RUN_COMPLETED = "eval_run.completed"
-    AGENT_STATUS = "agent.status"
-    AGENT_TEXT = "agent.text"
-    AGENT_PLAN = "agent.plan"
-    AGENT_TOOL_USE = "agent.tool_use"
-    AGENT_TOOL_RESULT = "agent.tool_result"
-    AGENT_TOOL_APPROVAL = "agent.tool_approval"
-    AGENT_ERROR = "agent.error"
-    AGENT_THINKING = "agent.thinking"
-    AGENT_TEXT_DELTA = "agent.text_delta"
-    AGENT_TOKEN_USAGE = "agent.token_usage"
-    AGENT_QUESTION = "agent.question"
+    CLI_AGENT_OUTPUT = "cli_agent.output"
+    CLI_AGENT_EXIT = "cli_agent.exit"
+    MCP_TOOL_CALL = "mcp.tool_call"
 
 
 class ClientCommand(str, Enum):
@@ -44,10 +36,10 @@ class ClientCommand(str, Enum):
     DEBUG_CONTINUE = "debug.continue"
     DEBUG_STOP = "debug.stop"
     DEBUG_SET_BREAKPOINTS = "debug.set_breakpoints"
-    AGENT_MESSAGE = "agent.message"
-    AGENT_STOP = "agent.stop"
-    AGENT_TOOL_RESPONSE = "agent.tool_response"
-    AGENT_QUESTION_RESPONSE = "agent.question_response"
+    CLI_AGENT_START = "cli_agent.start"
+    CLI_AGENT_INPUT = "cli_agent.input"
+    CLI_AGENT_RESIZE = "cli_agent.resize"
+    CLI_AGENT_STOP = "cli_agent.stop"
 
 
 def server_message(event: ServerEvent, payload: dict[str, Any]) -> dict[str, Any]:

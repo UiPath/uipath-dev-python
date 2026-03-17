@@ -150,7 +150,6 @@ def create_app(server: UiPathDeveloperServer) -> FastAPI:
         return {"auth_enabled": auth_enabled, **_user_project}
 
     # Register routes
-    from uipath.dev.server.routes.agent import router as agent_router
     from uipath.dev.server.routes.entrypoints import router as entrypoints_router
     from uipath.dev.server.routes.evals import router as evals_router
     from uipath.dev.server.routes.evaluators import router as evaluators_router
@@ -198,8 +197,15 @@ def create_app(server: UiPathDeveloperServer) -> FastAPI:
     app.include_router(reload_router, prefix="/api")
     app.include_router(evaluators_router, prefix="/api")
     app.include_router(evals_router, prefix="/api")
-    app.include_router(agent_router, prefix="/api")
     app.include_router(files_router, prefix="/api")
+
+    from uipath.dev.server.routes.cli_agent import router as cli_agent_router
+
+    app.include_router(cli_agent_router, prefix="/api")
+
+    from uipath.dev.server.routes.mcp import router as mcp_router
+
+    app.include_router(mcp_router, prefix="/api")
 
     from uipath.dev.server.routes.statedb import router as statedb_router
 

@@ -1,6 +1,6 @@
 [project]
 name = "uipath-dev"
-version = "0.0.73"
+version = "0.0.74"
 description = "UiPath Developer Console"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
@@ -11,8 +11,9 @@ dependencies = [
   "fastapi>=0.128.8",
   "uvicorn[standard]>=0.40.0",
   "uipath>=2.10.0, <2.11.0",
-  "openai",
   "aiosqlite>=0.20.0",
+  "pywinpty>=2.0.0; sys_platform == 'win32'",
+  "mcp[cli]>=1.0.0",
 ]
 classifiers = [
   "Intended Audience :: Developers",
@@ -34,6 +35,7 @@ Documentation = "https://uipath.github.io/uipath-python/"
 [project.scripts]
 uipath-dev = "uipath.dev.__mock__:main"
 uipath-dev-server = "uipath.dev.__mock_server__:main"
+uipath-dev-mcp = "uipath.dev.mcp:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -102,6 +104,10 @@ check_untyped_defs = true
 no_implicit_reexport = true
 
 disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = "uipath.dev.services.cli_agent.pty_session"
+warn_unused_ignores = false
 
 [tool.pydantic-mypy]
 init_forbid_extra = true
