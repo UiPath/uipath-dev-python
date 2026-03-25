@@ -54,6 +54,10 @@ class WebChatBridge:
         if self.on_exchange_end:
             self.on_exchange_end()
 
+    async def emit_exchange_error_event(self, error: Exception) -> None:
+        """Send an exchange error event."""
+        logger.error(f"Exchange error: {error}")
+
     async def wait_for_resume(self) -> dict[str, Any]:
         """Wait for the user to respond to an interrupt."""
         self._resume_event.clear()
