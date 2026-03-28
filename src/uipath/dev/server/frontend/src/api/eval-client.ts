@@ -59,6 +59,27 @@ export async function addEvalItem(
   });
 }
 
+export async function updateEvalItem(
+  evalSetId: string,
+  itemName: string,
+  body: {
+    name?: string;
+    inputs?: Record<string, unknown>;
+    expected_output?: unknown;
+    expected_behavior?: string;
+    simulation_instructions?: string;
+  },
+): Promise<EvalItem> {
+  return fetchJson(
+    `${BASE}/eval-sets/${encodeURIComponent(evalSetId)}/items/${encodeURIComponent(itemName)}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+}
+
 export async function updateEvalItemEvaluators(
   evalSetId: string,
   itemName: string,

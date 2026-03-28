@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getEvalSet, startEvalRun, updateEvalSetEvaluators, updateEvalItemEvaluators, deleteEvalItem } from "../../api/eval-client";
+import { getEvalSet, startEvalRun, updateEvalSetEvaluators, updateEvalItemEvaluators, updateEvalItem, addEvalItem, deleteEvalItem } from "../../api/eval-client";
 import { useEvalStore } from "../../store/useEvalStore";
 import { useHashRoute } from "../../hooks/useHashRoute";
 import type { EvalSetDetail as EvalSetDetailType, EvalItem, EvaluatorInfo, LocalEvaluator } from "../../types/eval";
@@ -88,6 +88,41 @@ export default function EvalSetDetail({ evalSetId }: Props) {
       if (selectedItemName === itemName) setSelectedItemName(null);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleAddItem = async () => {
+    if (!detail) return;
+    const itemName = `item-${detail.items.length + 1}`;
+    try {
+      const item = await addEvalItem(evalSetId, {
+        name: itemName,
+        inputs: {},
+        expected_output: null,
+      });
+      setDetail((prev) => {
+        if (!prev) return prev;
+        return { ...prev, items: [...prev.items, item], eval_count: prev.eval_count + 1 };
+      });
+      incrementEvalSetCount(evalSetId);
+      setSelectedItemName(itemName);
+      setSidebarTab("io");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleItemUpdated = (updated: EvalItem, oldName?: string) => {
+    setDetail((prev) => {
+      if (!prev) return prev;
+      const matchName = oldName ?? updated.name;
+      return {
+        ...prev,
+        items: prev.items.map((it) => it.name === matchName ? updated : it),
+      };
+    });
+    if (oldName && selectedItemName === oldName) {
+      setSelectedItemName(updated.name);
     }
   };
 
@@ -296,6 +331,19 @@ export default function EvalSetDetail({ evalSetId }: Props) {
             </svg>
             {runLoading ? "Running..." : "Run"}
           </button>
+          <button
+            onClick={handleAddItem}
+            className="ml-1 px-3 py-1 h-7 text-xs font-semibold rounded border flex items-center gap-1.5 cursor-pointer transition-colors"
+            style={{ color: "var(--text-muted)", borderColor: "var(--border)", background: "transparent" }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; e.currentTarget.style.borderColor = "var(--text-muted)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.borderColor = "var(--border)"; }}
+            title="Add eval item"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Add Item
+          </button>
         </div>
 
         {/* Table header */}
@@ -435,22 +483,14 @@ export default function EvalSetDetail({ evalSetId }: Props) {
         <div className="flex-1 overflow-hidden" style={{ minWidth: sidebarWidth }}>
           {selectedItem ? (
             sidebarTab === "io" ? (
-              <ItemIOView item={selectedItem} />
+              <ItemIOView item={selectedItem} evalSetId={evalSetId} onItemUpdated={handleItemUpdated} />
             ) : (
               <ItemEvaluatorsView
                 item={selectedItem}
                 evalSetId={evalSetId}
                 evaluators={evaluators}
                 localEvaluators={localEvaluators}
-                onItemUpdated={(updated) => {
-                  setDetail((prev) => {
-                    if (!prev) return prev;
-                    return {
-                      ...prev,
-                      items: prev.items.map((it) => it.name === updated.name ? updated : it),
-                    };
-                  });
-                }}
+                onItemUpdated={handleItemUpdated}
               />
             )
           ) : null}
@@ -460,7 +500,121 @@ export default function EvalSetDetail({ evalSetId }: Props) {
   );
 }
 
-function ItemIOView({ item }: { item: EvalItem }) {
+function ItemIOView({
+  item,
+  evalSetId,
+  onItemUpdated,
+}: {
+  item: EvalItem;
+  evalSetId: string;
+  onItemUpdated: (updated: EvalItem, oldName?: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(item.name);
+  const [inputsJson, setInputsJson] = useState(JSON.stringify(item.inputs, null, 2));
+  const [expectedOutput, setExpectedOutput] = useState(
+    item.expected_output != null ? (typeof item.expected_output === "string" ? item.expected_output : JSON.stringify(item.expected_output, null, 2)) : "",
+  );
+  const [expectedBehavior, setExpectedBehavior] = useState(item.expected_behavior ?? "");
+  const [simulationInstructions, setSimulationInstructions] = useState(item.simulation_instructions ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setEditing(false);
+    setName(item.name);
+    setInputsJson(JSON.stringify(item.inputs, null, 2));
+    setExpectedOutput(
+      item.expected_output != null ? (typeof item.expected_output === "string" ? item.expected_output : JSON.stringify(item.expected_output, null, 2)) : "",
+    );
+    setExpectedBehavior(item.expected_behavior ?? "");
+    setSimulationInstructions(item.simulation_instructions ?? "");
+    setError(null);
+  }, [item.name]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      let parsedInputs: Record<string, unknown> = {};
+      try { parsedInputs = JSON.parse(inputsJson); } catch { setError("Invalid JSON in inputs"); setSaving(false); return; }
+
+      let parsedOutput: unknown = null;
+      if (expectedOutput.trim()) {
+        try { parsedOutput = JSON.parse(expectedOutput); } catch { parsedOutput = expectedOutput; }
+      }
+
+      const oldName = item.name;
+      const updated = await updateEvalItem(evalSetId, oldName, {
+        name: name.trim() || oldName,
+        inputs: parsedInputs,
+        expected_output: parsedOutput,
+        expected_behavior: expectedBehavior,
+        simulation_instructions: simulationInstructions,
+      });
+      onItemUpdated(updated, oldName !== updated.name ? oldName : undefined);
+      setEditing(false);
+    } catch (err: unknown) {
+      const detail = (err as { detail?: string })?.detail;
+      setError(detail ?? "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputStyle: React.CSSProperties = {
+    background: "var(--bg-primary)",
+    border: "1px solid var(--border)",
+    color: "var(--text-primary)",
+  };
+
+  if (editing) {
+    return (
+      <div className="p-2 overflow-y-auto h-full space-y-3">
+        {error && (
+          <div className="px-2 py-1.5 rounded text-[11px]" style={{ background: "rgba(239,68,68,0.1)", color: "var(--error)" }}>{error}</div>
+        )}
+        <div>
+          <label className="block text-[10px] font-medium mb-1" style={{ color: "var(--text-muted)" }}>Name</label>
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded px-2 py-1.5 text-xs" style={inputStyle} />
+        </div>
+        <div>
+          <label className="block text-[10px] font-medium mb-1" style={{ color: "var(--text-muted)" }}>Input (JSON)</label>
+          <textarea value={inputsJson} onChange={(e) => setInputsJson(e.target.value)} rows={6} className="w-full rounded px-2 py-1.5 text-xs font-mono resize-y" style={inputStyle} />
+        </div>
+        <div>
+          <label className="block text-[10px] font-medium mb-1" style={{ color: "var(--text-muted)" }}>Expected Output</label>
+          <textarea value={expectedOutput} onChange={(e) => setExpectedOutput(e.target.value)} rows={4} placeholder="JSON or plain text" className="w-full rounded px-2 py-1.5 text-xs font-mono resize-y" style={inputStyle} />
+        </div>
+        <div>
+          <label className="block text-[10px] font-medium mb-1" style={{ color: "var(--text-muted)" }}>Expected Behavior</label>
+          <textarea value={expectedBehavior} onChange={(e) => setExpectedBehavior(e.target.value)} rows={3} placeholder="Describe expected agent behavior" className="w-full rounded px-2 py-1.5 text-xs resize-y" style={inputStyle} />
+        </div>
+        <div>
+          <label className="block text-[10px] font-medium mb-1" style={{ color: "var(--text-muted)" }}>Simulation Instructions</label>
+          <textarea value={simulationInstructions} onChange={(e) => setSimulationInstructions(e.target.value)} rows={3} placeholder="Instructions for trajectory simulation" className="w-full rounded px-2 py-1.5 text-xs resize-y" style={inputStyle} />
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-1 py-1.5 text-[11px] font-semibold rounded cursor-pointer transition-colors disabled:opacity-40"
+            style={{ background: "var(--accent)", color: "var(--bg-primary)", border: "none" }}
+          >
+            {saving ? "Saving..." : "Save"}
+          </button>
+          <button
+            onClick={() => setEditing(false)}
+            className="flex-1 py-1.5 text-[11px] font-semibold rounded cursor-pointer transition-colors"
+            style={{ background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border)" }}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const inputJson = JSON.stringify(item.inputs, null, 2);
   const expectedOutputJson = item.expected_output != null
     ? (typeof item.expected_output === "string" ? item.expected_output : JSON.stringify(item.expected_output, null, 2))
@@ -468,21 +622,24 @@ function ItemIOView({ item }: { item: EvalItem }) {
 
   return (
     <div className="p-2 overflow-y-auto h-full space-y-1.5">
+      <div className="flex justify-end px-1 pb-1">
+        <button
+          onClick={() => setEditing(true)}
+          className="text-[10px] px-2 py-0.5 rounded cursor-pointer transition-colors"
+          style={{ color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 10%, transparent)", border: "none" }}
+        >
+          Edit
+        </button>
+      </div>
+      <DataSection title="Name">
+        <div className="px-3 py-2 text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{item.name}</div>
+      </DataSection>
       <DataSection title="Input" copyText={inputJson}>
         <JsonHighlight
           json={inputJson}
           className="px-3 py-2 text-xs font-mono whitespace-pre-wrap break-words"
         />
       </DataSection>
-
-      {item.expected_behavior && (
-        <DataSection title="Expected Behavior" copyText={item.expected_behavior}>
-          <div className="px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text-secondary)" }}>
-            {item.expected_behavior}
-          </div>
-        </DataSection>
-      )}
-
       {expectedOutputJson && (
         <DataSection title="Expected Output" copyText={expectedOutputJson}>
           <JsonHighlight
@@ -491,13 +648,25 @@ function ItemIOView({ item }: { item: EvalItem }) {
           />
         </DataSection>
       )}
-
+      {item.expected_behavior && (
+        <DataSection title="Expected Behavior" copyText={item.expected_behavior}>
+          <div className="px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text-secondary)" }}>
+            {item.expected_behavior}
+          </div>
+        </DataSection>
+      )}
       {item.simulation_instructions && (
         <DataSection title="Simulation Instructions" copyText={item.simulation_instructions}>
           <div className="px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text-secondary)" }}>
             {item.simulation_instructions}
           </div>
         </DataSection>
+      )}
+      {!expectedOutputJson && !item.expected_behavior && !item.simulation_instructions && (
+        <div className="text-center py-4 text-[11px]" style={{ color: "var(--text-muted)" }}>
+          No expected output, behavior, or simulation instructions set.
+          <br />Click Edit to add them.
+        </div>
       )}
     </div>
   );

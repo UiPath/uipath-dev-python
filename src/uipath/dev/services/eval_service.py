@@ -224,6 +224,8 @@ class EvalService:
         inputs: dict[str, Any],
         expected_output: Any,
         *,
+        expected_behavior: str = "",
+        simulation_instructions: str = "",
         evaluation_criterias: dict[str, dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Append a new item to an eval set and persist to disk."""
@@ -237,10 +239,8 @@ class EvalService:
         evaluator_ids = raw.get("evaluatorRefs", raw.get("evaluator_refs", []))
         criterias: dict[str, Any] = {}
         if evaluation_criterias is not None:
-            # Use per-evaluator criteria as provided by the frontend
             criterias = evaluation_criterias
         elif expected_output is not None:
-            # Backward compat: set expectedOutput on all evaluators
             for ev_id in evaluator_ids:
                 criterias[ev_id] = {"expectedOutput": expected_output}
 
@@ -250,6 +250,13 @@ class EvalService:
             "inputs": inputs,
             "evaluationCriterias": criterias,
         }
+        if expected_output is not None:
+            item["expectedOutput"] = expected_output
+        if expected_behavior:
+            item["expectedBehavior"] = expected_behavior
+        if simulation_instructions:
+            item["simulationInstructions"] = simulation_instructions
+
         raw.setdefault("evaluations", []).append(item)
 
         filepath = Path(self._eval_set_paths[set_id])
@@ -258,6 +265,50 @@ class EvalService:
         evaluator_ids = raw.get("evaluatorRefs", raw.get("evaluator_refs", []))
         index = len(raw["evaluations"]) - 1
         return self._build_item(item, index, evaluator_ids)
+
+    def update_eval_item(
+        self,
+        set_id: str,
+        item_name: str,
+        *,
+        name: str | None = None,
+        inputs: dict[str, Any] | None = None,
+        expected_output: Any = ...,
+        expected_behavior: str | None = None,
+        simulation_instructions: str | None = None,
+    ) -> dict[str, Any]:
+        """Update fields of a specific eval item and persist to disk."""
+        if set_id not in self._eval_sets:
+            self.discover_eval_sets()
+
+        raw = self._eval_sets.get(set_id)
+        if raw is None:
+            raise KeyError(f"Eval set '{set_id}' not found")
+
+        evaluator_ids = raw.get("evaluatorRefs", raw.get("evaluator_refs", []))
+
+        for i, item in enumerate(raw.get("evaluations", [])):
+            if item.get("name") == item_name:
+                if name is not None:
+                    item["name"] = name
+                if inputs is not None:
+                    item["inputs"] = inputs
+                if expected_output is not ...:
+                    if expected_output is not None:
+                        item["expectedOutput"] = expected_output
+                    else:
+                        item.pop("expectedOutput", None)
+                        item.pop("expected_output", None)
+                if expected_behavior is not None:
+                    item["expectedBehavior"] = expected_behavior
+                if simulation_instructions is not None:
+                    item["simulationInstructions"] = simulation_instructions
+
+                filepath = Path(self._eval_set_paths[set_id])
+                filepath.write_text(json.dumps(raw, indent=2), encoding="utf-8")
+                return self._build_item(item, i, evaluator_ids)
+
+        raise KeyError(f"Item '{item_name}' not found in eval set '{set_id}'")
 
     def update_eval_item_criterias(
         self,
