@@ -1,9 +1,10 @@
 import { create } from "zustand";
-import type { EvaluatorInfo, LocalEvaluator, EvalSetSummary, EvalRunSummary, EvalItemResult } from "../types/eval";
+import type { EvaluatorInfo, LocalEvaluator, LlmModel, EvalSetSummary, EvalRunSummary, EvalItemResult } from "../types/eval";
 
 interface EvalStore {
   evaluators: EvaluatorInfo[];
   localEvaluators: LocalEvaluator[];
+  llmModels: LlmModel[];
   evalSets: Record<string, EvalSetSummary>;
   evalRuns: Record<string, EvalRunSummary>;
   /** Item results streamed via WebSocket, keyed by runId → itemName */
@@ -11,6 +12,7 @@ interface EvalStore {
 
   setEvaluators: (evaluators: EvaluatorInfo[]) => void;
   setLocalEvaluators: (evaluators: LocalEvaluator[]) => void;
+  setLlmModels: (models: LlmModel[]) => void;
   addLocalEvaluator: (evaluator: LocalEvaluator) => void;
   upsertLocalEvaluator: (evaluator: LocalEvaluator) => void;
   setEvalSets: (sets: EvalSetSummary[]) => void;
@@ -26,6 +28,7 @@ interface EvalStore {
 export const useEvalStore = create<EvalStore>((set) => ({
   evaluators: [],
   localEvaluators: [],
+  llmModels: [],
   evalSets: {},
   evalRuns: {},
   streamingResults: {},
@@ -33,6 +36,8 @@ export const useEvalStore = create<EvalStore>((set) => ({
   setEvaluators: (evaluators) => set({ evaluators }),
 
   setLocalEvaluators: (localEvaluators) => set({ localEvaluators }),
+
+  setLlmModels: (llmModels) => set({ llmModels }),
 
   addLocalEvaluator: (evaluator) =>
     set((state) => ({ localEvaluators: [...state.localEvaluators, evaluator] })),

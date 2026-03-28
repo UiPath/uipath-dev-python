@@ -147,13 +147,11 @@ def _load_evaluators() -> list[dict[str, Any]]:
             ev_id = cls.get_evaluator_id()
             meta = _EVALUATOR_META.get(ev_id, {})
 
-            config_schema: dict[str, Any] = {}
-            config_type = cls.model_fields.get("config_type")
-            if config_type and config_type.default is not None:
-                try:
-                    config_schema = config_type.default.model_json_schema()
-                except Exception:
-                    pass
+            json_type: dict[str, Any] = {}
+            try:
+                json_type = cls.generate_json_type()
+            except Exception:
+                pass
 
             result.append(
                 {
@@ -162,7 +160,10 @@ def _load_evaluators() -> list[dict[str, Any]]:
                     "type": meta.get("type", _infer_type(cls.__name__)),
                     "category": meta.get("category", "output"),
                     "description": meta.get("description", ""),
-                    "config_schema": config_schema,
+                    "config_schema": json_type.get("evaluatorConfigSchema", {}),
+                    "criteria_schema": json_type.get(
+                        "evaluationCriteriaSchema", {}
+                    ),
                 }
             )
         return result
@@ -175,6 +176,22 @@ def _load_evaluators() -> list[dict[str, Any]]:
 async def list_evaluators() -> list[dict[str, Any]]:
     """Return metadata for all available evaluators."""
     return _load_evaluators()
+
+
+@router.get("/llm-models")
+async def list_llm_models() -> list[dict[str, Any]]:
+    """Return available LLM models from AgentHub."""
+    try:
+        from uipath.platform import UiPath
+
+        sdk = UiPath()
+        models = await sdk.agenthub.get_available_llm_models_async()
+        return [
+            {"model_name": m.model_name, "vendor": m.vendor} for m in models
+        ]
+    except Exception:
+        logger.debug("Failed to fetch LLM models from AgentHub", exc_info=True)
+        return []
 
 
 # ------------------------------------------------------------------

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useEvalStore } from "../../store/useEvalStore";
 import { useHashRoute } from "../../hooks/useHashRoute";
-import { listLocalEvaluators, updateLocalEvaluator } from "../../api/eval-client";
+import { listLocalEvaluators, listLlmModels, updateLocalEvaluator } from "../../api/eval-client";
 import type { EvaluatorInfo, LocalEvaluator } from "../../types/eval";
 
 // --- Badge styles ---
@@ -368,6 +368,8 @@ function EditEvaluatorForm({
 }) {
   const category = categoryForTypeId(evaluator.evaluator_type_id);
   const types = typesByCategory[category] ?? [];
+  const llmModels = useEvalStore((s) => s.llmModels);
+  const setLlmModels = useEvalStore((s) => s.setLlmModels);
 
   const [description, setDescription] = useState(evaluator.description);
   const [typeId, setTypeId] = useState(evaluator.evaluator_type_id);
@@ -377,9 +379,18 @@ function EditEvaluatorForm({
   const [prompt, setPrompt] = useState(
     (evaluator.config?.prompt as string) ?? "",
   );
+  const [model, setModel] = useState(
+    (evaluator.config?.model as string) ?? "",
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    if (category === "llm" && llmModels.length === 0) {
+      listLlmModels().then(setLlmModels).catch(() => {});
+    }
+  }, [category]);
 
   // Reset form when switching to a different evaluator
   useEffect(() => {
@@ -387,11 +398,13 @@ function EditEvaluatorForm({
     setTypeId(evaluator.evaluator_type_id);
     setTargetOutputKey((evaluator.config?.targetOutputKey as string) ?? "*");
     setPrompt((evaluator.config?.prompt as string) ?? "");
+    setModel((evaluator.config?.model as string) ?? "");
     setError(null);
     setSuccess(false);
   }, [evaluator.id]);
 
   const fields = getTypeFields(typeId);
+  const isLlm = category === "llm";
 
   const handleSave = async () => {
     setSaving(true);
@@ -401,6 +414,7 @@ function EditEvaluatorForm({
       const config: Record<string, unknown> = {};
       if (fields.targetOutputKey) config.targetOutputKey = targetOutputKey;
       if (fields.prompt && prompt.trim()) config.prompt = prompt;
+      if (isLlm && model) config.model = model;
 
       const result = await updateLocalEvaluator(evaluator.id, {
         description: description.trim(),
@@ -519,6 +533,39 @@ function EditEvaluatorForm({
               className="w-full px-3 py-2 rounded-lg text-xs font-mono leading-relaxed outline-none resize-y"
               style={inputStyle}
             />
+          </div>
+        )}
+
+        {/* Model (LLM evaluators only) */}
+        {isLlm && (
+          <div>
+            <label className="text-[11px] font-medium block mb-1" style={{ color: "var(--text-muted)" }}>
+              Model
+            </label>
+            {llmModels.length > 0 ? (
+              <select
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg text-xs outline-none cursor-pointer"
+                style={inputStyle}
+              >
+                <option value="">Select a model</option>
+                {llmModels.map((m) => (
+                  <option key={m.model_name} value={m.model_name}>
+                    {m.model_name}{m.vendor ? ` (${m.vendor})` : ""}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder="e.g. gpt-4.1-mini-2025-04-14"
+                className="w-full px-3 py-2 rounded-lg text-xs outline-none"
+                style={inputStyle}
+              />
+            )}
           </div>
         )}
       </div>

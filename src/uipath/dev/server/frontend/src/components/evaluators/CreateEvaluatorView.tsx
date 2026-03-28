@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useEvalStore } from "../../store/useEvalStore";
 import { useHashRoute } from "../../hooks/useHashRoute";
-import { createLocalEvaluator } from "../../api/eval-client";
+import { createLocalEvaluator, listLlmModels } from "../../api/eval-client";
 import { typesByCategory, typeDefaults, getTypeFields, categoryLabel } from "./EvaluatorDetail";
 
 const allCategories = ["deterministic", "llm", "tool"] as const;
@@ -12,6 +12,8 @@ interface Props {
 
 export default function CreateEvaluatorView({ category: initialCategory }: Props) {
   const addLocalEvaluator = useEvalStore((s) => s.addLocalEvaluator);
+  const llmModels = useEvalStore((s) => s.llmModels);
+  const setLlmModels = useEvalStore((s) => s.setLlmModels);
   const { navigate } = useHashRoute();
 
   const isFixed = initialCategory !== "any";
@@ -22,10 +24,17 @@ export default function CreateEvaluatorView({ category: initialCategory }: Props
   const [typeId, setTypeId] = useState(types[0]?.id ?? "");
   const [targetOutputKey, setTargetOutputKey] = useState("*");
   const [prompt, setPrompt] = useState("");
+  const [model, setModel] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [descriptionTouched, setDescriptionTouched] = useState(false);
   const [promptTouched, setPromptTouched] = useState(false);
+
+  useEffect(() => {
+    if (llmModels.length === 0) {
+      listLlmModels().then(setLlmModels).catch(() => {});
+    }
+  }, []);
 
   // Reset form when initial category prop changes
   useEffect(() => {
@@ -39,6 +48,7 @@ export default function CreateEvaluatorView({ category: initialCategory }: Props
     setTypeId(firstId);
     setTargetOutputKey("*");
     setPrompt(defaults?.prompt ?? "");
+    setModel("");
     setError(null);
     setDescriptionTouched(false);
     setPromptTouched(false);
@@ -64,6 +74,7 @@ export default function CreateEvaluatorView({ category: initialCategory }: Props
   };
 
   const fields = getTypeFields(typeId);
+  const isLlm = category === "llm";
 
   const handleSubmit = async () => {
     if (!name.trim()) {
@@ -76,6 +87,7 @@ export default function CreateEvaluatorView({ category: initialCategory }: Props
       const config: Record<string, unknown> = {};
       if (fields.targetOutputKey) config.targetOutputKey = targetOutputKey;
       if (fields.prompt && prompt.trim()) config.prompt = prompt;
+      if (isLlm && model) config.model = model;
 
       const result = await createLocalEvaluator({
         name: name.trim(),
@@ -244,6 +256,42 @@ export default function CreateEvaluatorView({ category: initialCategory }: Props
                 className="w-full rounded-md px-3 py-2 text-xs font-mono leading-relaxed resize-y"
                 style={inputStyle}
               />
+            </div>
+          )}
+
+          {/* Model (LLM evaluators only) */}
+          {isLlm && (
+            <div className="mb-6">
+              <label
+                className="block text-[11px] font-medium mb-1.5"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Model
+              </label>
+              {llmModels.length > 0 ? (
+                <select
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  className="w-full rounded-md px-3 py-2 text-xs cursor-pointer appearance-auto"
+                  style={inputStyle}
+                >
+                  <option value="">Select a model</option>
+                  {llmModels.map((m) => (
+                    <option key={m.model_name} value={m.model_name}>
+                      {m.model_name}{m.vendor ? ` (${m.vendor})` : ""}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  placeholder="e.g. gpt-4.1-mini-2025-04-14"
+                  className="w-full rounded-md px-3 py-2 text-xs"
+                  style={inputStyle}
+                />
+              )}
             </div>
           )}
 

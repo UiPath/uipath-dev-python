@@ -1,4 +1,4 @@
-import type { EvaluatorInfo, LocalEvaluator, EvalSetSummary, EvalSetDetail, EvalItem, EvalRunSummary, EvalRunDetail } from "../types/eval";
+import type { EvaluatorInfo, LocalEvaluator, LlmModel, EvalSetSummary, EvalSetDetail, EvalItem, EvalRunSummary, EvalRunDetail } from "../types/eval";
 
 const BASE = "/api";
 
@@ -22,6 +22,10 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 
 export async function listEvaluators(): Promise<EvaluatorInfo[]> {
   return fetchJson(`${BASE}/evaluators`);
+}
+
+export async function listLlmModels(): Promise<LlmModel[]> {
+  return fetchJson(`${BASE}/llm-models`);
 }
 
 export async function listEvalSets(): Promise<EvalSetSummary[]> {
