@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getEvalSet, startEvalRun, updateEvalSetEvaluators, updateEvalItemEvaluators, deleteEvalItem } from "../../api/eval-client";
 import { useEvalStore } from "../../store/useEvalStore";
 import { useHashRoute } from "../../hooks/useHashRoute";
-import type { EvalSetDetail as EvalSetDetailType, EvalItem } from "../../types/eval";
+import type { EvalSetDetail as EvalSetDetailType, EvalItem, EvaluatorInfo, LocalEvaluator } from "../../types/eval";
+import { getSchemaConfigFields } from "../evaluators/EvaluatorDetail";
 import JsonHighlight from "../shared/JsonHighlight";
 import DataSection from "../shared/DataSection";
 
@@ -502,6 +503,39 @@ function ItemIOView({ item }: { item: EvalItem }) {
   );
 }
 
+/** Resolve the criteria schema for a local evaluator via the built-in evaluator catalog. */
+function getCriteriaFields(evId: string, localEvaluators: LocalEvaluator[], builtInEvaluators: EvaluatorInfo[]) {
+  const local = localEvaluators.find((e) => e.id === evId);
+  if (!local) return [];
+  const builtIn = builtInEvaluators.find((e) => e.id === local.evaluator_type_id);
+  if (!builtIn?.criteria_schema) return [];
+  return getSchemaConfigFields(builtIn.criteria_schema as Record<string, unknown>);
+}
+
+/** Show a summary of the evaluator's config (from the evaluator JSON file). */
+function EvaluatorConfigSummary({ evId, localEvaluators }: { evId: string; localEvaluators: LocalEvaluator[] }) {
+  const local = localEvaluators.find((e) => e.id === evId);
+  if (!local) return null;
+  const cfg = local.config ?? {};
+  const entries = Object.entries(cfg).filter(([k]) => k !== "name");
+  if (entries.length === 0) return null;
+  return (
+    <div className="px-3 py-2 border-t space-y-1" style={{ borderColor: "var(--border)" }}>
+      <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+        Evaluator config
+      </div>
+      {entries.map(([k, v]) => (
+        <div key={k} className="flex items-start gap-2 text-[11px]">
+          <span className="font-medium shrink-0" style={{ color: "var(--text-muted)" }}>{k}:</span>
+          <span className="font-mono break-all" style={{ color: "var(--text-secondary)" }}>
+            {typeof v === "string" && v.length > 80 ? v.slice(0, 80) + "..." : String(v)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ItemEvaluatorsView({
   item,
   evalSetId,
@@ -511,17 +545,16 @@ function ItemEvaluatorsView({
 }: {
   item: EvalItem;
   evalSetId: string;
-  evaluators: { id: string; name: string }[];
-  localEvaluators: { id: string; name: string; type: string }[];
+  evaluators: EvaluatorInfo[];
+  localEvaluators: LocalEvaluator[];
   onItemUpdated: (updated: EvalItem) => void;
 }) {
   const criterias = item.evaluation_criterias ?? {};
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editJson, setEditJson] = useState("");
+  const [editValues, setEditValues] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Reset editing state when item changes
   useEffect(() => {
     setEditingId(null);
     setError(null);
@@ -553,28 +586,30 @@ function ItemEvaluatorsView({
 
   const handleStartEdit = (evId: string) => {
     const val = criterias[evId];
-    setEditJson(val != null ? JSON.stringify(val, null, 2) : "");
+    setEditValues(val != null && typeof val === "object" ? { ...(val as Record<string, unknown>) } : {});
     setEditingId(evId);
     setError(null);
   };
 
   const handleSaveEdit = (evId: string) => {
-    const trimmed = editJson.trim();
-    let parsed: unknown = null;
-    if (trimmed) {
-      try {
-        parsed = JSON.parse(trimmed);
-      } catch {
-        setError("Invalid JSON");
-        return;
-      }
-    }
-    const next = { ...criterias, [evId]: parsed as Record<string, unknown> };
+    const fields = getCriteriaFields(evId, localEvaluators, evaluators);
+    // If no schema fields, save the editValues as-is; empty object means null (defaults)
+    const hasValues = fields.length > 0
+      ? fields.some((f) => editValues[f.key] !== undefined && editValues[f.key] !== null && editValues[f.key] !== "")
+      : Object.keys(editValues).length > 0;
+    const val = hasValues ? editValues : null;
+    const next = { ...criterias, [evId]: val as Record<string, unknown> };
     saveCriterias(next).then(() => setEditingId(null));
   };
 
   const enabled = Object.keys(criterias);
   const available = localEvaluators.filter((ev) => !(ev.id in criterias));
+
+  const inputStyle = {
+    background: "var(--bg-primary)",
+    border: "1px solid var(--border)",
+    color: "var(--text-primary)",
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -591,6 +626,7 @@ function ItemEvaluatorsView({
               const ev = evaluators.find((e) => e.id === evId) ?? localEvaluators.find((e) => e.id === evId);
               const val = criterias[evId];
               const isEditing = editingId === evId;
+              const criteriaFields = getCriteriaFields(evId, localEvaluators, evaluators);
               return (
                 <div
                   key={evId}
@@ -601,6 +637,7 @@ function ItemEvaluatorsView({
                     className="px-3 py-2 flex items-center gap-2"
                     style={{ background: "var(--bg-secondary)" }}
                   >
+                    <div className="w-2 h-2 rounded-full shrink-0" style={{ background: "var(--success)" }} />
                     <span className="text-[11px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>
                       {ev?.name ?? evId}
                     </span>
@@ -628,15 +665,93 @@ function ItemEvaluatorsView({
                     </span>
                   </div>
                   {isEditing ? (
-                    <div className="px-3 py-2 border-t space-y-1.5" style={{ borderColor: "var(--border)" }}>
-                      <textarea
-                        value={editJson}
-                        onChange={(e) => setEditJson(e.target.value)}
-                        rows={5}
-                        placeholder="null (use evaluator defaults)"
-                        className="w-full rounded px-2 py-1.5 text-[11px] font-mono resize-y"
-                        style={{ background: "var(--bg-primary)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
-                      />
+                    <div className="px-3 py-2 border-t space-y-2" style={{ borderColor: "var(--border)" }}>
+                      {criteriaFields.length > 0 ? (
+                        <>
+                          {criteriaFields.map((f) => {
+                            const fieldVal = editValues[f.key] ?? "";
+                            if (f.type === "boolean") {
+                              return (
+                                <label key={f.key} className="flex items-center gap-2 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(fieldVal)}
+                                    onChange={(e) => setEditValues((prev) => ({ ...prev, [f.key]: e.target.checked }))}
+                                    className="accent-[var(--accent)]"
+                                  />
+                                  <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>{f.title}</span>
+                                </label>
+                              );
+                            }
+                            if (f.type === "number" || f.type === "integer") {
+                              return (
+                                <div key={f.key}>
+                                  <label className="block text-[10px] font-medium mb-1" style={{ color: "var(--text-muted)" }}>{f.title}</label>
+                                  <input
+                                    type="number"
+                                    value={fieldVal === null ? "" : Number(fieldVal)}
+                                    onChange={(e) => setEditValues((prev) => ({ ...prev, [f.key]: e.target.value === "" ? null : Number(e.target.value) }))}
+                                    step={f.type === "integer" ? 1 : 0.1}
+                                    className="w-full rounded px-2 py-1 text-[11px]"
+                                    style={inputStyle}
+                                  />
+                                </div>
+                              );
+                            }
+                            if (f.type === "array") {
+                              const arrVal = Array.isArray(fieldVal) ? fieldVal : [];
+                              return (
+                                <div key={f.key}>
+                                  <label className="block text-[10px] font-medium mb-1" style={{ color: "var(--text-muted)" }}>{f.title}</label>
+                                  <textarea
+                                    value={arrVal.length > 0 ? JSON.stringify(arrVal, null, 2) : ""}
+                                    onChange={(e) => {
+                                      try { setEditValues((prev) => ({ ...prev, [f.key]: JSON.parse(e.target.value) })); } catch { /* let them type */ }
+                                    }}
+                                    rows={3}
+                                    placeholder='["item1", "item2"]'
+                                    className="w-full rounded px-2 py-1 text-[11px] font-mono resize-y"
+                                    style={inputStyle}
+                                  />
+                                </div>
+                              );
+                            }
+                            // string / object
+                            const isLong = typeof fieldVal === "string" && fieldVal.length > 60;
+                            return (
+                              <div key={f.key}>
+                                <label className="block text-[10px] font-medium mb-1" style={{ color: "var(--text-muted)" }}>{f.title}</label>
+                                {isLong || f.type === "object" ? (
+                                  <textarea
+                                    value={typeof fieldVal === "object" ? JSON.stringify(fieldVal, null, 2) : String(fieldVal)}
+                                    onChange={(e) => setEditValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                                    rows={4}
+                                    className="w-full rounded px-2 py-1 text-[11px] font-mono resize-y"
+                                    style={inputStyle}
+                                  />
+                                ) : (
+                                  <input
+                                    type="text"
+                                    value={String(fieldVal)}
+                                    onChange={(e) => setEditValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                                    className="w-full rounded px-2 py-1 text-[11px]"
+                                    style={inputStyle}
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </>
+                      ) : (
+                        <textarea
+                          value={Object.keys(editValues).length > 0 ? JSON.stringify(editValues, null, 2) : ""}
+                          onChange={(e) => { try { setEditValues(JSON.parse(e.target.value)); } catch { /* let them type */ } }}
+                          rows={4}
+                          placeholder="Custom criteria JSON (leave empty for defaults)"
+                          className="w-full rounded px-2 py-1.5 text-[11px] font-mono resize-y"
+                          style={inputStyle}
+                        />
+                      )}
                       <button
                         onClick={() => handleSaveEdit(evId)}
                         disabled={saving}
@@ -647,15 +762,20 @@ function ItemEvaluatorsView({
                       </button>
                     </div>
                   ) : (
-                    <div className="px-3 py-1.5 border-t text-[10px]" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
+                    <>
                       {val != null ? (
-                        <pre className="font-mono whitespace-pre-wrap break-words max-h-24 overflow-y-auto" style={{ color: "var(--text-secondary)" }}>
-                          {JSON.stringify(val, null, 2)}
-                        </pre>
+                        <div className="px-3 py-2 border-t" style={{ borderColor: "var(--border)" }}>
+                          <div className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: "var(--text-muted)" }}>
+                            Custom criteria
+                          </div>
+                          <pre className="text-[11px] font-mono whitespace-pre-wrap break-words max-h-32 overflow-y-auto" style={{ color: "var(--text-secondary)" }}>
+                            {JSON.stringify(val, null, 2)}
+                          </pre>
+                        </div>
                       ) : (
-                        <span className="italic">Using evaluator defaults</span>
+                        <EvaluatorConfigSummary evId={evId} localEvaluators={localEvaluators} />
                       )}
-                    </div>
+                    </>
                   )}
                 </div>
               );
