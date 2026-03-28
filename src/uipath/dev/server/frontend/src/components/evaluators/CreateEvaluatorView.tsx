@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useEvalStore } from "../../store/useEvalStore";
 import { useHashRoute } from "../../hooks/useHashRoute";
 import { createLocalEvaluator, listLlmModels } from "../../api/eval-client";
-import { typesByCategory, typeDefaults, getTypeFields, categoryLabel } from "./EvaluatorDetail";
+import { typesByCategory, typeDefaults, categoryLabel, getSchemaConfigFields, SchemaConfigFields } from "./EvaluatorDetail";
 
 const allCategories = ["deterministic", "llm", "tool"] as const;
 
@@ -12,6 +12,7 @@ interface Props {
 
 export default function CreateEvaluatorView({ category: initialCategory }: Props) {
   const addLocalEvaluator = useEvalStore((s) => s.addLocalEvaluator);
+  const evaluators = useEvalStore((s) => s.evaluators);
   const llmModels = useEvalStore((s) => s.llmModels);
   const setLlmModels = useEvalStore((s) => s.setLlmModels);
   const { navigate } = useHashRoute();
@@ -22,19 +23,37 @@ export default function CreateEvaluatorView({ category: initialCategory }: Props
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [typeId, setTypeId] = useState(types[0]?.id ?? "");
-  const [targetOutputKey, setTargetOutputKey] = useState("*");
-  const [prompt, setPrompt] = useState("");
-  const [model, setModel] = useState("");
+  const [configValues, setConfigValues] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [descriptionTouched, setDescriptionTouched] = useState(false);
-  const [promptTouched, setPromptTouched] = useState(false);
 
   useEffect(() => {
     if (llmModels.length === 0) {
       listLlmModels().then(setLlmModels).catch(() => {});
     }
   }, []);
+
+  const schemaFields = useMemo(() => {
+    const ev = evaluators.find((e) => e.id === typeId);
+    return ev ? getSchemaConfigFields(ev.config_schema) : [];
+  }, [typeId, evaluators]);
+
+  // Build default config values from schema + typeDefaults
+  const buildDefaults = (tid: string) => {
+    const ev = evaluators.find((e) => e.id === tid);
+    const fields = ev ? getSchemaConfigFields(ev.config_schema) : [];
+    const defaults: Record<string, unknown> = {};
+    for (const f of fields) {
+      if (f.default_value !== undefined && f.default_value !== null) {
+        defaults[f.key] = f.default_value;
+      }
+    }
+    // Override prompt from typeDefaults if available
+    const td = typeDefaults[tid];
+    if (td?.prompt) defaults.prompt = td.prompt;
+    return defaults;
+  };
 
   // Reset form when initial category prop changes
   useEffect(() => {
@@ -46,13 +65,10 @@ export default function CreateEvaluatorView({ category: initialCategory }: Props
     setName("");
     setDescription(defaults?.description ?? "");
     setTypeId(firstId);
-    setTargetOutputKey("*");
-    setPrompt(defaults?.prompt ?? "");
-    setModel("");
+    setConfigValues(buildDefaults(firstId));
     setError(null);
     setDescriptionTouched(false);
-    setPromptTouched(false);
-  }, [initialCategory, isFixed]);
+  }, [initialCategory, isFixed, evaluators]);
 
   const handleCategoryChange = (newCat: string) => {
     setCategory(newCat);
@@ -61,20 +77,19 @@ export default function CreateEvaluatorView({ category: initialCategory }: Props
     const defaults = typeDefaults[firstId];
     setTypeId(firstId);
     if (!descriptionTouched) setDescription(defaults?.description ?? "");
-    if (!promptTouched) setPrompt(defaults?.prompt ?? "");
+    setConfigValues(buildDefaults(firstId));
   };
 
   const handleTypeChange = (newTypeId: string) => {
     setTypeId(newTypeId);
     const defaults = typeDefaults[newTypeId];
-    if (defaults) {
-      if (!descriptionTouched) setDescription(defaults.description);
-      if (!promptTouched) setPrompt(defaults.prompt);
-    }
+    if (defaults && !descriptionTouched) setDescription(defaults.description);
+    setConfigValues(buildDefaults(newTypeId));
   };
 
-  const fields = getTypeFields(typeId);
-  const isLlm = category === "llm";
+  const handleConfigChange = (key: string, value: unknown) => {
+    setConfigValues((prev) => ({ ...prev, [key]: value }));
+  };
 
   const handleSubmit = async () => {
     if (!name.trim()) {
@@ -84,10 +99,14 @@ export default function CreateEvaluatorView({ category: initialCategory }: Props
     setSaving(true);
     setError(null);
     try {
+      // Build config from schema fields, only including non-default values
       const config: Record<string, unknown> = {};
-      if (fields.targetOutputKey) config.targetOutputKey = targetOutputKey;
-      if (fields.prompt && prompt.trim()) config.prompt = prompt;
-      if (isLlm && model) config.model = model;
+      for (const f of schemaFields) {
+        const val = configValues[f.key];
+        if (val !== undefined && val !== null && val !== "") {
+          config[f.key] = val;
+        }
+      }
 
       const result = await createLocalEvaluator({
         name: name.trim(),
@@ -130,10 +149,7 @@ export default function CreateEvaluatorView({ category: initialCategory }: Props
 
           {/* Name */}
           <div className="mb-6">
-            <label
-              className="block text-[11px] font-medium mb-1.5"
-              style={{ color: "var(--text-muted)" }}
-            >
+            <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-muted)" }}>
               Name
             </label>
             <input
@@ -143,25 +159,17 @@ export default function CreateEvaluatorView({ category: initialCategory }: Props
               placeholder="e.g. MyEvaluator"
               className="w-full rounded-md px-3 py-2 text-xs"
               style={inputStyle}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && name.trim()) handleSubmit();
-              }}
+              onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) handleSubmit(); }}
             />
           </div>
 
           {/* Category */}
           <div className="mb-6">
-            <label
-              className="block text-[11px] font-medium mb-1.5"
-              style={{ color: "var(--text-muted)" }}
-            >
+            <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-muted)" }}>
               Category
             </label>
             {isFixed ? (
-              <div
-                className="px-3 py-2 rounded-md text-xs"
-                style={{ background: "var(--bg-tertiary)", color: "var(--text-secondary)" }}
-              >
+              <div className="px-3 py-2 rounded-md text-xs" style={{ background: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
                 {categoryLabel[category] ?? category}
               </div>
             ) : (
@@ -180,10 +188,7 @@ export default function CreateEvaluatorView({ category: initialCategory }: Props
 
           {/* Type */}
           <div className="mb-6">
-            <label
-              className="block text-[11px] font-medium mb-1.5"
-              style={{ color: "var(--text-muted)" }}
-            >
+            <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-muted)" }}>
               Type
             </label>
             <select
@@ -200,10 +205,7 @@ export default function CreateEvaluatorView({ category: initialCategory }: Props
 
           {/* Description */}
           <div className="mb-6">
-            <label
-              className="block text-[11px] font-medium mb-1.5"
-              style={{ color: "var(--text-muted)" }}
-            >
+            <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-muted)" }}>
               Description
             </label>
             <textarea
@@ -216,84 +218,14 @@ export default function CreateEvaluatorView({ category: initialCategory }: Props
             />
           </div>
 
-          {/* Target Output Key (conditional) */}
-          {fields.targetOutputKey && (
-            <div className="mb-6">
-              <label
-                className="block text-[11px] font-medium mb-1.5"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Target Output Key
-              </label>
-              <input
-                type="text"
-                value={targetOutputKey}
-                onChange={(e) => setTargetOutputKey(e.target.value)}
-                placeholder="*"
-                className="w-full rounded-md px-3 py-2 text-xs"
-                style={inputStyle}
-              />
-              <div className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                Use * for entire output or a specific key name
-              </div>
-            </div>
-          )}
-
-          {/* Prompt (conditional) */}
-          {fields.prompt && (
-            <div className="mb-6">
-              <label
-                className="block text-[11px] font-medium mb-1.5"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Prompt
-              </label>
-              <textarea
-                value={prompt}
-                onChange={(e) => { setPrompt(e.target.value); setPromptTouched(true); }}
-                placeholder="Evaluation prompt for the LLM judge..."
-                rows={6}
-                className="w-full rounded-md px-3 py-2 text-xs font-mono leading-relaxed resize-y"
-                style={inputStyle}
-              />
-            </div>
-          )}
-
-          {/* Model (LLM evaluators only) */}
-          {isLlm && (
-            <div className="mb-6">
-              <label
-                className="block text-[11px] font-medium mb-1.5"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Model
-              </label>
-              {llmModels.length > 0 ? (
-                <select
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  className="w-full rounded-md px-3 py-2 text-xs cursor-pointer appearance-auto"
-                  style={inputStyle}
-                >
-                  <option value="">Select a model</option>
-                  {llmModels.map((m) => (
-                    <option key={m.model_name} value={m.model_name}>
-                      {m.model_name}{m.vendor ? ` (${m.vendor})` : ""}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  placeholder="e.g. gpt-4.1-mini-2025-04-14"
-                  className="w-full rounded-md px-3 py-2 text-xs"
-                  style={inputStyle}
-                />
-              )}
-            </div>
-          )}
+          {/* Dynamic config fields from schema */}
+          <SchemaConfigFields
+            fields={schemaFields}
+            values={configValues}
+            onChange={handleConfigChange}
+            llmModels={llmModels}
+            inputStyle={inputStyle}
+          />
 
           {/* Error */}
           {error && (
@@ -305,11 +237,7 @@ export default function CreateEvaluatorView({ category: initialCategory }: Props
             onClick={handleSubmit}
             disabled={saving || !name.trim()}
             className="w-full py-2 rounded-md text-[13px] font-semibold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{
-              background: "var(--accent)",
-              color: "var(--bg-primary)",
-              border: "none",
-            }}
+            style={{ background: "var(--accent)", color: "var(--bg-primary)", border: "none" }}
           >
             {saving ? "Creating..." : "Create Evaluator"}
           </button>

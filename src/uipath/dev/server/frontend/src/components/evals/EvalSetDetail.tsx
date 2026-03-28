@@ -307,6 +307,7 @@ export default function EvalSetDetail({ evalSetId }: Props) {
           <span className="w-32 shrink-0 pl-2">Expected Behavior</span>
           <span className="w-32 shrink-0 pl-2">Expected Output</span>
           <span className="w-32 shrink-0 pl-2">Simulation Instr.</span>
+          <span className="w-20 shrink-0 pl-2">Evaluators</span>
           <span className="w-8 shrink-0" />
         </div>
 
@@ -346,6 +347,22 @@ export default function EvalSetDetail({ evalSetId }: Props) {
                 {/* Simulation Instructions */}
                 <span className="w-32 shrink-0 truncate pl-2 text-[11px]" style={{ color: "var(--text-muted)" }}>
                   {item.simulation_instructions || "-"}
+                </span>
+                {/* Evaluators count */}
+                <span
+                  className="w-20 shrink-0 pl-2 text-[11px]"
+                  onClick={(e) => { e.stopPropagation(); setSelectedItemName(item.name); setSidebarTab("evaluators"); }}
+                >
+                  {(() => {
+                    const count = Object.keys(item.evaluation_criterias ?? {}).length;
+                    return count > 0 ? (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium" style={{ background: "rgba(34,197,94,0.1)", color: "var(--success)" }}>
+                        {count} active
+                      </span>
+                    ) : (
+                      <span style={{ color: "var(--text-muted)" }}>none</span>
+                    );
+                  })()}
                 </span>
                 {/* Delete */}
                 <span
