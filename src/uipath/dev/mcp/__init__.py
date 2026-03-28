@@ -217,9 +217,7 @@ async def get_eval_set(eval_set_id: str) -> dict[str, Any]:
     """
     await _report_tool_call("get_eval_set", {"eval_set_id": eval_set_id})
     async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            _api_url(f"/eval-sets/{eval_set_id}"), timeout=10
-        )
+        resp = await client.get(_api_url(f"/eval-sets/{eval_set_id}"), timeout=10)
         resp.raise_for_status()
         return resp.json()
 
@@ -239,16 +237,12 @@ async def run_eval_set(
     """
     await _report_tool_call("run_eval_set", {"eval_set_id": eval_set_id})
     async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            _api_url(f"/eval-sets/{eval_set_id}/runs"), timeout=30
-        )
+        resp = await client.post(_api_url(f"/eval-sets/{eval_set_id}/runs"), timeout=30)
         resp.raise_for_status()
         run: dict[str, Any] = resp.json()
         run_id = run["id"]
 
     await ctx.log("info", f"Eval run {run_id} created — streaming progress...")
-
-    terminal_statuses = {"completed", "failed"}
 
     async with websockets.connect(_ws_url()) as ws:
         async for raw in ws:
@@ -265,13 +259,17 @@ async def run_eval_set(
                     status = item.get("status", "")
                     score = item.get("overall_score")
                     score_str = f" — score: {score:.0%}" if score is not None else ""
-                    await ctx.log("info", f"  [{completed}/{total}] {name}: {status}{score_str}")
+                    await ctx.log(
+                        "info", f"  [{completed}/{total}] {name}: {status}{score_str}"
+                    )
                 await ctx.report_progress(progress=completed, total=total)
 
             elif msg_type == "eval_run.completed" and payload.get("run_id") == run_id:
                 overall = payload.get("overall_score")
                 if overall is not None:
-                    await ctx.log("info", f"Eval run completed — overall score: {overall:.0%}")
+                    await ctx.log(
+                        "info", f"Eval run completed — overall score: {overall:.0%}"
+                    )
                 break
 
     # Fetch final run detail
@@ -306,9 +304,7 @@ async def get_eval_run(eval_run_id: str) -> dict[str, Any]:
     """
     await _report_tool_call("get_eval_run", {"eval_run_id": eval_run_id})
     async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            _api_url(f"/eval-runs/{eval_run_id}"), timeout=10
-        )
+        resp = await client.get(_api_url(f"/eval-runs/{eval_run_id}"), timeout=10)
         resp.raise_for_status()
         return resp.json()
 

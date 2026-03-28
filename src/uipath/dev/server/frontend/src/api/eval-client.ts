@@ -150,6 +150,25 @@ export async function updateEvalSetEvaluators(
   });
 }
 
+export async function scaffoldCustomEvaluator(body: {
+  name: string;
+  description?: string;
+}): Promise<{ file_path: string; filename: string; class_name: string; evaluator_id: string }> {
+  return fetchJson(`${BASE}/custom-evaluators/scaffold`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function registerCustomEvaluator(filename: string): Promise<{ evaluator_id: string; spec_path: string }> {
+  return fetchJson(`${BASE}/custom-evaluators/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filename }),
+  });
+}
+
 export async function updateLocalEvaluator(
   id: string,
   body: {

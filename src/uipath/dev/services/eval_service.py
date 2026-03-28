@@ -132,7 +132,6 @@ class EvalService:
 
         old_refs = set(raw.get("evaluatorRefs", raw.get("evaluator_refs", [])))
         new_refs = set(evaluator_refs)
-        added = new_refs - old_refs
         removed = old_refs - new_refs
 
         raw["evaluatorRefs"] = evaluator_refs
