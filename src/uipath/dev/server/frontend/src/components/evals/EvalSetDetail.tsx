@@ -468,6 +468,7 @@ export default function EvalSetDetail({ evalSetId }: Props) {
               <ItemEvaluatorsView
                 item={selectedItem}
                 evalSetId={evalSetId}
+                evalSetEvaluatorIds={detail?.evaluator_ids ?? []}
                 evaluators={evaluators}
                 localEvaluators={localEvaluators}
                 onItemUpdated={handleItemUpdated}
@@ -697,12 +698,14 @@ function EvaluatorConfigSummary({ evId, localEvaluators }: { evId: string; local
 function ItemEvaluatorsView({
   item,
   evalSetId,
+  evalSetEvaluatorIds,
   evaluators,
   localEvaluators,
   onItemUpdated,
 }: {
   item: EvalItem;
   evalSetId: string;
+  evalSetEvaluatorIds: string[];
   evaluators: EvaluatorInfo[];
   localEvaluators: LocalEvaluator[];
   onItemUpdated: (updated: EvalItem) => void;
@@ -761,7 +764,9 @@ function ItemEvaluatorsView({
   };
 
   const enabled = Object.keys(criterias);
-  const available = localEvaluators.filter((ev) => !(ev.id in criterias));
+  const setRefIds = new Set(evalSetEvaluatorIds);
+  const available = localEvaluators.filter((ev) => setRefIds.has(ev.id) && !(ev.id in criterias));
+  const orphanedIds = enabled.filter((id) => !setRefIds.has(id));
 
   const inputStyle = {
     background: "var(--bg-primary)",
@@ -775,6 +780,12 @@ function ItemEvaluatorsView({
         {error && (
           <div className="px-2 py-1.5 rounded text-[11px]" style={{ background: "rgba(239,68,68,0.1)", color: "var(--error)" }}>
             {error}
+          </div>
+        )}
+
+        {orphanedIds.length > 0 && (
+          <div className="px-2 py-1.5 rounded text-[11px]" style={{ background: "rgba(229,160,13,0.1)", color: "var(--warning)" }}>
+            {orphanedIds.length} evaluator{orphanedIds.length > 1 ? "s" : ""} referenced but not in eval set: {orphanedIds.join(", ")}. Add {orphanedIds.length > 1 ? "them" : "it"} to the eval set or remove from this item.
           </div>
         )}
 
@@ -970,8 +981,10 @@ function ItemEvaluatorsView({
         )}
 
         {enabled.length === 0 && available.length === 0 && (
-          <div className="flex items-center justify-center h-full text-[var(--text-muted)] text-xs">
-            No evaluators available
+          <div className="flex items-center justify-center h-full text-[var(--text-muted)] text-xs text-center px-4">
+            {evalSetEvaluatorIds.length === 0
+              ? "No evaluators on this eval set. Add evaluators to the eval set first using the edit button in the header."
+              : "All eval set evaluators are assigned to this item."}
           </div>
         )}
       </div>

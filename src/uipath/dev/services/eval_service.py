@@ -476,12 +476,11 @@ class EvalService:
                 if not event.success and event.exception_details:
                     item_result.error = str(event.exception_details.exception)
 
-                # Map eval results to scores
+                # Map eval results to scores (normalize 0-100 → 0-1)
                 for er in event.eval_results:
                     ev_id = er.evaluator_id
-                    item_result.scores[ev_id] = (
-                        float(er.result.score) if er.result.score is not None else 0.0
-                    )
+                    raw = float(er.result.score) if er.result.score is not None else 0.0
+                    item_result.scores[ev_id] = raw / 100.0 if raw > 1.0 else raw
                     if er.result.details:
                         item_result.justifications[ev_id] = str(er.result.details)
 
