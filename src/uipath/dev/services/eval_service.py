@@ -139,9 +139,6 @@ class EvalService:
 
         for item in raw.get("evaluations", []):
             criterias = item.setdefault("evaluationCriterias", {})
-            for ev_id in added:
-                if ev_id not in criterias:
-                    criterias[ev_id] = {}
             for ev_id in removed:
                 criterias.pop(ev_id, None)
 
