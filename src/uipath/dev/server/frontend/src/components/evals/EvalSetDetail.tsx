@@ -4,8 +4,6 @@ import { useEvalStore } from "../../store/useEvalStore";
 import { useHashRoute } from "../../hooks/useHashRoute";
 import type { EvalSetDetail as EvalSetDetailType, EvalItem, EvaluatorInfo, LocalEvaluator } from "../../types/eval";
 import { getSchemaConfigFields } from "../evaluators/EvaluatorDetail";
-import JsonHighlight from "../shared/JsonHighlight";
-import DataSection from "../shared/DataSection";
 
 interface Props {
   evalSetId: string;
@@ -357,7 +355,6 @@ export default function EvalSetDetail({ evalSetId }: Props) {
           <span className="w-32 shrink-0 pl-2">Expected Output</span>
           <span className="w-32 shrink-0 pl-2">Simulation Instr.</span>
           <span className="w-20 shrink-0 pl-2">Evaluators</span>
-          <span className="w-8 shrink-0" />
         </div>
 
         {/* Scrollable item rows */}
@@ -413,23 +410,6 @@ export default function EvalSetDetail({ evalSetId }: Props) {
                     );
                   })()}
                 </span>
-                {/* Delete */}
-                <span
-                  role="button"
-                  tabIndex={0}
-                  className="w-8 shrink-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={(e) => { e.stopPropagation(); handleDeleteItem(item.name); }}
-                  onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); handleDeleteItem(item.name); } }}
-                  style={{ color: "var(--text-muted)" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.color = "var(--error)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
-                  title="Delete item"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                </span>
               </button>
             );
           })}
@@ -483,7 +463,7 @@ export default function EvalSetDetail({ evalSetId }: Props) {
         <div className="flex-1 overflow-hidden" style={{ minWidth: sidebarWidth }}>
           {selectedItem ? (
             sidebarTab === "io" ? (
-              <ItemIOView item={selectedItem} evalSetId={evalSetId} onItemUpdated={handleItemUpdated} />
+              <ItemIOView item={selectedItem} evalSetId={evalSetId} onItemUpdated={handleItemUpdated} onDelete={handleDeleteItem} />
             ) : (
               <ItemEvaluatorsView
                 item={selectedItem}
@@ -500,66 +480,38 @@ export default function EvalSetDetail({ evalSetId }: Props) {
   );
 }
 
-function ItemIOView({
-  item,
-  evalSetId,
-  onItemUpdated,
+/** Inline-editable field: click to edit, blur/Enter to save, Escape to cancel. */
+function InlineField({
+  label,
+  value,
+  placeholder,
+  onSave,
+  mono,
+  multiline,
 }: {
-  item: EvalItem;
-  evalSetId: string;
-  onItemUpdated: (updated: EvalItem, oldName?: string) => void;
+  label: string;
+  value: string;
+  placeholder: string;
+  onSave: (val: string) => void;
+  mono?: boolean;
+  multiline?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(item.name);
-  const [inputsJson, setInputsJson] = useState(JSON.stringify(item.inputs, null, 2));
-  const [expectedOutput, setExpectedOutput] = useState(
-    item.expected_output != null ? (typeof item.expected_output === "string" ? item.expected_output : JSON.stringify(item.expected_output, null, 2)) : "",
-  );
-  const [expectedBehavior, setExpectedBehavior] = useState(item.expected_behavior ?? "");
-  const [simulationInstructions, setSimulationInstructions] = useState(item.simulation_instructions ?? "");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [draft, setDraft] = useState(value);
+  const ref = useRef<HTMLTextAreaElement | HTMLInputElement>(null);
 
-  useEffect(() => {
+  useEffect(() => { setDraft(value); }, [value]);
+  useEffect(() => { if (editing) ref.current?.focus(); }, [editing]);
+
+  const save = () => {
     setEditing(false);
-    setName(item.name);
-    setInputsJson(JSON.stringify(item.inputs, null, 2));
-    setExpectedOutput(
-      item.expected_output != null ? (typeof item.expected_output === "string" ? item.expected_output : JSON.stringify(item.expected_output, null, 2)) : "",
-    );
-    setExpectedBehavior(item.expected_behavior ?? "");
-    setSimulationInstructions(item.simulation_instructions ?? "");
-    setError(null);
-  }, [item.name]);
-
-  const handleSave = async () => {
-    setSaving(true);
-    setError(null);
-    try {
-      let parsedInputs: Record<string, unknown> = {};
-      try { parsedInputs = JSON.parse(inputsJson); } catch { setError("Invalid JSON in inputs"); setSaving(false); return; }
-
-      let parsedOutput: unknown = null;
-      if (expectedOutput.trim()) {
-        try { parsedOutput = JSON.parse(expectedOutput); } catch { parsedOutput = expectedOutput; }
-      }
-
-      const oldName = item.name;
-      const updated = await updateEvalItem(evalSetId, oldName, {
-        name: name.trim() || oldName,
-        inputs: parsedInputs,
-        expected_output: parsedOutput,
-        expected_behavior: expectedBehavior,
-        simulation_instructions: simulationInstructions,
-      });
-      onItemUpdated(updated, oldName !== updated.name ? oldName : undefined);
-      setEditing(false);
-    } catch (err: unknown) {
-      const detail = (err as { detail?: string })?.detail;
-      setError(detail ?? "Failed to save");
-    } finally {
-      setSaving(false);
-    }
+    if (draft !== value) onSave(draft);
+  };
+  const cancel = () => { setEditing(false); setDraft(value); };
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") cancel();
+    if (e.key === "Enter" && !multiline) save();
+    if (e.key === "Enter" && e.metaKey && multiline) save();
   };
 
   const inputStyle: React.CSSProperties = {
@@ -568,106 +520,143 @@ function ItemIOView({
     color: "var(--text-primary)",
   };
 
-  if (editing) {
-    return (
-      <div className="p-2 overflow-y-auto h-full space-y-3">
+  return (
+    <div className="overflow-hidden" style={{ border: "1px solid var(--border)" }}>
+      <div
+        className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide"
+        style={{ background: "var(--bg-secondary)", color: "var(--text-muted)" }}
+      >
+        {label}
+      </div>
+      {editing ? (
+        <div className="px-2 py-1.5">
+          {multiline ? (
+            <textarea
+              ref={ref as React.RefObject<HTMLTextAreaElement>}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={save}
+              onKeyDown={onKeyDown}
+              rows={Math.max(3, draft.split("\n").length + 1)}
+              className={`w-full rounded px-2 py-1.5 text-xs resize-y outline-none ${mono ? "font-mono" : "leading-relaxed"}`}
+              style={inputStyle}
+            />
+          ) : (
+            <input
+              ref={ref as React.RefObject<HTMLInputElement>}
+              type="text"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={save}
+              onKeyDown={onKeyDown}
+              className="w-full rounded px-2 py-1.5 text-xs outline-none"
+              style={inputStyle}
+            />
+          )}
+        </div>
+      ) : (
+        <div
+          className={`px-3 py-2 text-xs cursor-text transition-colors ${mono ? "font-mono whitespace-pre-wrap break-words" : "leading-relaxed whitespace-pre-wrap"}`}
+          style={{ color: value ? "var(--text-primary)" : "var(--text-muted)", minHeight: 28 }}
+          onClick={() => setEditing(true)}
+          title="Click to edit"
+        >
+          {value || placeholder}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ItemIOView({
+  item,
+  evalSetId,
+  onItemUpdated,
+  onDelete,
+}: {
+  item: EvalItem;
+  evalSetId: string;
+  onItemUpdated: (updated: EvalItem, oldName?: string) => void;
+  onDelete: (name: string) => void;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  useEffect(() => { setError(null); setConfirmDelete(false); }, [item.name]);
+
+  const saveField = async (field: string, value: string) => {
+    setError(null);
+    try {
+      const body: Record<string, unknown> = {};
+      if (field === "name") {
+        body.name = value.trim() || item.name;
+      } else if (field === "inputs") {
+        try { body.inputs = JSON.parse(value); } catch { setError("Invalid JSON"); return; }
+      } else if (field === "expected_output") {
+        if (!value.trim()) { body.expected_output = null; }
+        else { try { body.expected_output = JSON.parse(value); } catch { body.expected_output = value; } }
+      } else if (field === "expected_behavior") {
+        body.expected_behavior = value;
+      } else if (field === "simulation_instructions") {
+        body.simulation_instructions = value;
+      }
+      const oldName = item.name;
+      const updated = await updateEvalItem(evalSetId, oldName, body);
+      onItemUpdated(updated, field === "name" && updated.name !== oldName ? oldName : undefined);
+    } catch (err: unknown) {
+      const detail = (err as { detail?: string })?.detail;
+      setError(detail ?? "Failed to save");
+    }
+  };
+
+  const inputJson = JSON.stringify(item.inputs, null, 2);
+  const expectedOutputStr = item.expected_output != null
+    ? (typeof item.expected_output === "string" ? item.expected_output : JSON.stringify(item.expected_output, null, 2))
+    : "";
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="p-2 overflow-y-auto flex-1 space-y-1.5">
         {error && (
           <div className="px-2 py-1.5 rounded text-[11px]" style={{ background: "rgba(239,68,68,0.1)", color: "var(--error)" }}>{error}</div>
         )}
-        <div>
-          <label className="block text-[10px] font-medium mb-1" style={{ color: "var(--text-muted)" }}>Name</label>
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded px-2 py-1.5 text-xs" style={inputStyle} />
-        </div>
-        <div>
-          <label className="block text-[10px] font-medium mb-1" style={{ color: "var(--text-muted)" }}>Input (JSON)</label>
-          <textarea value={inputsJson} onChange={(e) => setInputsJson(e.target.value)} rows={6} className="w-full rounded px-2 py-1.5 text-xs font-mono resize-y" style={inputStyle} />
-        </div>
-        <div>
-          <label className="block text-[10px] font-medium mb-1" style={{ color: "var(--text-muted)" }}>Expected Output</label>
-          <textarea value={expectedOutput} onChange={(e) => setExpectedOutput(e.target.value)} rows={4} placeholder="JSON or plain text" className="w-full rounded px-2 py-1.5 text-xs font-mono resize-y" style={inputStyle} />
-        </div>
-        <div>
-          <label className="block text-[10px] font-medium mb-1" style={{ color: "var(--text-muted)" }}>Expected Behavior</label>
-          <textarea value={expectedBehavior} onChange={(e) => setExpectedBehavior(e.target.value)} rows={3} placeholder="Describe expected agent behavior" className="w-full rounded px-2 py-1.5 text-xs resize-y" style={inputStyle} />
-        </div>
-        <div>
-          <label className="block text-[10px] font-medium mb-1" style={{ color: "var(--text-muted)" }}>Simulation Instructions</label>
-          <textarea value={simulationInstructions} onChange={(e) => setSimulationInstructions(e.target.value)} rows={3} placeholder="Instructions for trajectory simulation" className="w-full rounded px-2 py-1.5 text-xs resize-y" style={inputStyle} />
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex-1 py-1.5 text-[11px] font-semibold rounded cursor-pointer transition-colors disabled:opacity-40"
-            style={{ background: "var(--accent)", color: "var(--bg-primary)", border: "none" }}
-          >
-            {saving ? "Saving..." : "Save"}
-          </button>
-          <button
-            onClick={() => setEditing(false)}
-            className="flex-1 py-1.5 text-[11px] font-semibold rounded cursor-pointer transition-colors"
-            style={{ background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border)" }}
-          >
-            Cancel
-          </button>
-        </div>
+        <InlineField label="Name" value={item.name} placeholder="Item name" onSave={(v) => saveField("name", v)} />
+        <InlineField label="Input" value={inputJson} placeholder="{ }" onSave={(v) => saveField("inputs", v)} mono multiline />
+        <InlineField label="Expected Output" value={expectedOutputStr} placeholder="+ Add expected output" onSave={(v) => saveField("expected_output", v)} mono multiline />
+        <InlineField label="Expected Behavior" value={item.expected_behavior ?? ""} placeholder="+ Add expected behavior" onSave={(v) => saveField("expected_behavior", v)} multiline />
+        <InlineField label="Simulation Instructions" value={item.simulation_instructions ?? ""} placeholder="+ Add simulation instructions" onSave={(v) => saveField("simulation_instructions", v)} multiline />
       </div>
-    );
-  }
-
-  const inputJson = JSON.stringify(item.inputs, null, 2);
-  const expectedOutputJson = item.expected_output != null
-    ? (typeof item.expected_output === "string" ? item.expected_output : JSON.stringify(item.expected_output, null, 2))
-    : null;
-
-  return (
-    <div className="p-2 overflow-y-auto h-full space-y-1.5">
-      <div className="flex justify-end px-1 pb-1">
-        <button
-          onClick={() => setEditing(true)}
-          className="text-[10px] px-2 py-0.5 rounded cursor-pointer transition-colors"
-          style={{ color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 10%, transparent)", border: "none" }}
-        >
-          Edit
-        </button>
+      <div className="shrink-0 p-2 border-t" style={{ borderColor: "var(--border)" }}>
+        {confirmDelete ? (
+          <div className="flex items-center gap-2">
+            <span className="text-[11px]" style={{ color: "var(--error)" }}>Delete this item?</span>
+            <button
+              onClick={() => onDelete(item.name)}
+              className="px-2 py-1 text-[11px] font-semibold rounded cursor-pointer"
+              style={{ background: "var(--error)", color: "#fff", border: "none" }}
+            >
+              Yes, delete
+            </button>
+            <button
+              onClick={() => setConfirmDelete(false)}
+              className="px-2 py-1 text-[11px] rounded cursor-pointer"
+              style={{ color: "var(--text-muted)", background: "transparent", border: "1px solid var(--border)" }}
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="w-full py-1.5 text-[11px] rounded cursor-pointer transition-colors"
+            style={{ color: "var(--error)", background: "transparent", border: "none" }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+          >
+            Delete Item
+          </button>
+        )}
       </div>
-      <DataSection title="Name">
-        <div className="px-3 py-2 text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{item.name}</div>
-      </DataSection>
-      <DataSection title="Input" copyText={inputJson}>
-        <JsonHighlight
-          json={inputJson}
-          className="px-3 py-2 text-xs font-mono whitespace-pre-wrap break-words"
-        />
-      </DataSection>
-      {expectedOutputJson && (
-        <DataSection title="Expected Output" copyText={expectedOutputJson}>
-          <JsonHighlight
-            json={expectedOutputJson}
-            className="px-3 py-2 text-xs font-mono whitespace-pre-wrap break-words"
-          />
-        </DataSection>
-      )}
-      {item.expected_behavior && (
-        <DataSection title="Expected Behavior" copyText={item.expected_behavior}>
-          <div className="px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text-secondary)" }}>
-            {item.expected_behavior}
-          </div>
-        </DataSection>
-      )}
-      {item.simulation_instructions && (
-        <DataSection title="Simulation Instructions" copyText={item.simulation_instructions}>
-          <div className="px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text-secondary)" }}>
-            {item.simulation_instructions}
-          </div>
-        </DataSection>
-      )}
-      {!expectedOutputJson && !item.expected_behavior && !item.simulation_instructions && (
-        <div className="text-center py-4 text-[11px]" style={{ color: "var(--text-muted)" }}>
-          No expected output, behavior, or simulation instructions set.
-          <br />Click Edit to add them.
-        </div>
-      )}
     </div>
   );
 }
