@@ -259,6 +259,31 @@ class EvalService:
         index = len(raw["evaluations"]) - 1
         return self._build_item(item, index, evaluator_ids)
 
+    def update_eval_item_criterias(
+        self,
+        set_id: str,
+        item_name: str,
+        evaluation_criterias: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Update evaluationCriterias for a specific item and persist to disk."""
+        if set_id not in self._eval_sets:
+            self.discover_eval_sets()
+
+        raw = self._eval_sets.get(set_id)
+        if raw is None:
+            raise KeyError(f"Eval set '{set_id}' not found")
+
+        evaluator_ids = raw.get("evaluatorRefs", raw.get("evaluator_refs", []))
+
+        for i, item in enumerate(raw.get("evaluations", [])):
+            if item.get("name") == item_name:
+                item["evaluationCriterias"] = evaluation_criterias
+                filepath = Path(self._eval_set_paths[set_id])
+                filepath.write_text(json.dumps(raw, indent=2), encoding="utf-8")
+                return self._build_item(item, i, evaluator_ids)
+
+        raise KeyError(f"Item '{item_name}' not found in eval set '{set_id}'")
+
     def delete_eval_item(self, set_id: str, item_name: str) -> None:
         """Remove an item by name from an eval set and persist to disk."""
         if set_id not in self._eval_sets:

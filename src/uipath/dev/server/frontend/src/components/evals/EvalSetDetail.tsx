@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getEvalSet, startEvalRun, updateEvalSetEvaluators, deleteEvalItem } from "../../api/eval-client";
+import { getEvalSet, startEvalRun, updateEvalSetEvaluators, updateEvalItemEvaluators, deleteEvalItem } from "../../api/eval-client";
 import { useEvalStore } from "../../store/useEvalStore";
 import { useHashRoute } from "../../hooks/useHashRoute";
 import type { EvalSetDetail as EvalSetDetailType, EvalItem } from "../../types/eval";
@@ -419,7 +419,21 @@ export default function EvalSetDetail({ evalSetId }: Props) {
             sidebarTab === "io" ? (
               <ItemIOView item={selectedItem} />
             ) : (
-              <ItemEvaluatorsView item={selectedItem} evaluators={evaluators} />
+              <ItemEvaluatorsView
+                item={selectedItem}
+                evalSetId={evalSetId}
+                evaluators={evaluators}
+                localEvaluators={localEvaluators}
+                onItemUpdated={(updated) => {
+                  setDetail((prev) => {
+                    if (!prev) return prev;
+                    return {
+                      ...prev,
+                      items: prev.items.map((it) => it.name === updated.name ? updated : it),
+                    };
+                  });
+                }}
+              />
             )
           ) : null}
         </div>
@@ -471,48 +485,201 @@ function ItemIOView({ item }: { item: EvalItem }) {
   );
 }
 
-function ItemEvaluatorsView({ item, evaluators }: { item: EvalItem; evaluators: { id: string; name: string }[] }) {
+function ItemEvaluatorsView({
+  item,
+  evalSetId,
+  evaluators,
+  localEvaluators,
+  onItemUpdated,
+}: {
+  item: EvalItem;
+  evalSetId: string;
+  evaluators: { id: string; name: string }[];
+  localEvaluators: { id: string; name: string; type: string }[];
+  onItemUpdated: (updated: EvalItem) => void;
+}) {
+  const criterias = item.evaluation_criterias ?? {};
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editJson, setEditJson] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Reset editing state when item changes
+  useEffect(() => {
+    setEditingId(null);
+    setError(null);
+  }, [item.name]);
+
+  const saveCriterias = async (newCriterias: Record<string, unknown>) => {
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await updateEvalItemEvaluators(evalSetId, item.name, newCriterias);
+      onItemUpdated(updated);
+    } catch (err: unknown) {
+      const detail = (err as { detail?: string })?.detail;
+      setError(detail ?? "Failed to update");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToggle = (evId: string) => {
+    const next = { ...criterias };
+    if (evId in next) {
+      delete next[evId];
+    } else {
+      next[evId] = null as unknown as Record<string, unknown>;
+    }
+    saveCriterias(next);
+  };
+
+  const handleStartEdit = (evId: string) => {
+    const val = criterias[evId];
+    setEditJson(val != null ? JSON.stringify(val, null, 2) : "");
+    setEditingId(evId);
+    setError(null);
+  };
+
+  const handleSaveEdit = (evId: string) => {
+    const trimmed = editJson.trim();
+    let parsed: unknown = null;
+    if (trimmed) {
+      try {
+        parsed = JSON.parse(trimmed);
+      } catch {
+        setError("Invalid JSON");
+        return;
+      }
+    }
+    const next = { ...criterias, [evId]: parsed as Record<string, unknown> };
+    saveCriterias(next).then(() => setEditingId(null));
+  };
+
+  const enabled = Object.keys(criterias);
+  const available = localEvaluators.filter((ev) => !(ev.id in criterias));
+
   return (
-    <div className="p-2 overflow-y-auto h-full space-y-1.5">
-      {item.evaluator_ids.length > 0 ? (
-        <>
-          {item.evaluator_ids.map((evId) => {
-            const ev = evaluators.find((e) => e.id === evId);
-            const criteria = item.evaluation_criterias?.[evId];
-            return (
-              <div
-                key={evId}
-                className="overflow-hidden"
-                style={{ border: "1px solid var(--border)" }}
-              >
+    <div className="flex flex-col h-full">
+      <div className="p-2 overflow-y-auto flex-1 space-y-1.5">
+        {error && (
+          <div className="px-2 py-1.5 rounded text-[11px]" style={{ background: "rgba(239,68,68,0.1)", color: "var(--error)" }}>
+            {error}
+          </div>
+        )}
+
+        {enabled.length > 0 && (
+          <>
+            {enabled.map((evId) => {
+              const ev = evaluators.find((e) => e.id === evId) ?? localEvaluators.find((e) => e.id === evId);
+              const val = criterias[evId];
+              const isEditing = editingId === evId;
+              return (
                 <div
-                  className="px-3 py-2 flex items-center gap-2"
-                  style={{ background: "var(--bg-secondary)" }}
+                  key={evId}
+                  className="overflow-hidden"
+                  style={{ border: "1px solid var(--border)" }}
                 >
-                  <span className="text-[11px] font-semibold" style={{ color: "var(--text-primary)" }}>
-                    {ev?.name ?? evId}
-                  </span>
-                  <span className="ml-auto text-[10px]" style={{ color: "var(--text-muted)" }}>
-                    {criteria ? "Custom criteria" : "Default criteria"}
-                  </span>
-                </div>
-                {criteria && (
-                  <pre
-                    className="px-3 py-2 border-t text-[11px] font-mono overflow-x-auto max-h-32 whitespace-pre-wrap break-words"
-                    style={{ borderColor: "var(--border)", color: "var(--text-secondary)" }}
+                  <div
+                    className="px-3 py-2 flex items-center gap-2"
+                    style={{ background: "var(--bg-secondary)" }}
                   >
-                    {JSON.stringify(criteria, null, 2)}
-                  </pre>
-                )}
-              </div>
-            );
-          })}
-        </>
-      ) : (
-        <div className="flex items-center justify-center h-full text-[var(--text-muted)] text-xs">
-          No evaluators configured for this item
-        </div>
-      )}
+                    <span className="text-[11px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>
+                      {ev?.name ?? evId}
+                    </span>
+                    <span className="ml-auto flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={() => isEditing ? setEditingId(null) : handleStartEdit(evId)}
+                        className="text-[10px] px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+                        style={{ color: "var(--text-muted)", background: "transparent", border: "none" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
+                      >
+                        {isEditing ? "Cancel" : "Edit"}
+                      </button>
+                      <button
+                        onClick={() => handleToggle(evId)}
+                        disabled={saving}
+                        className="text-[10px] px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+                        style={{ color: "var(--error)", background: "transparent", border: "none" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(239,68,68,0.1)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                        title="Remove evaluator from this item"
+                      >
+                        Remove
+                      </button>
+                    </span>
+                  </div>
+                  {isEditing ? (
+                    <div className="px-3 py-2 border-t space-y-1.5" style={{ borderColor: "var(--border)" }}>
+                      <textarea
+                        value={editJson}
+                        onChange={(e) => setEditJson(e.target.value)}
+                        rows={5}
+                        placeholder="null (use evaluator defaults)"
+                        className="w-full rounded px-2 py-1.5 text-[11px] font-mono resize-y"
+                        style={{ background: "var(--bg-primary)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+                      />
+                      <button
+                        onClick={() => handleSaveEdit(evId)}
+                        disabled={saving}
+                        className="px-2.5 py-1 text-[10px] font-semibold rounded cursor-pointer transition-colors disabled:opacity-40"
+                        style={{ background: "var(--accent)", color: "var(--bg-primary)", border: "none" }}
+                      >
+                        {saving ? "Saving..." : "Save"}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="px-3 py-1.5 border-t text-[10px]" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
+                      {val != null ? (
+                        <pre className="font-mono whitespace-pre-wrap break-words max-h-24 overflow-y-auto" style={{ color: "var(--text-secondary)" }}>
+                          {JSON.stringify(val, null, 2)}
+                        </pre>
+                      ) : (
+                        <span className="italic">Using evaluator defaults</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </>
+        )}
+
+        {available.length > 0 && (
+          <>
+            <div
+              className="text-[10px] uppercase tracking-wide font-semibold pt-2 pb-1 px-1"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Add evaluator
+            </div>
+            {available.map((ev) => (
+              <button
+                key={ev.id}
+                onClick={() => handleToggle(ev.id)}
+                disabled={saving}
+                className="w-full text-left px-3 py-2 rounded flex items-center gap-2 cursor-pointer transition-colors disabled:opacity-40"
+                style={{ border: "1px dashed var(--border)", background: "transparent" }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.borderColor = "var(--text-muted)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "var(--border)"; }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                <span className="text-[11px] truncate" style={{ color: "var(--text-primary)" }}>{ev.name}</span>
+                <span className="ml-auto text-[10px]" style={{ color: "var(--text-muted)" }}>{ev.type}</span>
+              </button>
+            ))}
+          </>
+        )}
+
+        {enabled.length === 0 && available.length === 0 && (
+          <div className="flex items-center justify-center h-full text-[var(--text-muted)] text-xs">
+            No evaluators available
+          </div>
+        )}
+      </div>
     </div>
   );
 }

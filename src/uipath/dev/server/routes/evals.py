@@ -79,6 +79,27 @@ async def add_eval_item(
     return item
 
 
+class UpdateEvalItemCriteriasBody(BaseModel):
+    """Body for updating evaluationCriterias on a specific eval item."""
+
+    evaluation_criterias: dict[str, Any]
+
+
+@router.patch("/eval-sets/{set_id}/items/{item_name}/evaluators")
+async def update_eval_item_criterias(
+    request: Request, set_id: str, item_name: str, body: UpdateEvalItemCriteriasBody
+) -> dict[str, Any]:
+    """Update evaluationCriterias for a specific eval item."""
+    server = request.app.state.server
+    try:
+        item = server.eval_service.update_eval_item_criterias(
+            set_id, item_name, body.evaluation_criterias
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+    return item
+
+
 @router.delete("/eval-sets/{set_id}/items/{item_name}")
 async def delete_eval_item(
     request: Request, set_id: str, item_name: str

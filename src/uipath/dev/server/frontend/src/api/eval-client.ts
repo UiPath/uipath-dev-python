@@ -59,6 +59,21 @@ export async function addEvalItem(
   });
 }
 
+export async function updateEvalItemEvaluators(
+  evalSetId: string,
+  itemName: string,
+  evaluationCriterias: Record<string, unknown>,
+): Promise<EvalItem> {
+  return fetchJson(
+    `${BASE}/eval-sets/${encodeURIComponent(evalSetId)}/items/${encodeURIComponent(itemName)}/evaluators`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ evaluation_criterias: evaluationCriterias }),
+    },
+  );
+}
+
 export async function deleteEvalItem(
   evalSetId: string,
   itemName: string,
