@@ -352,6 +352,10 @@ class EvalService:
         """Execute eval run using uipath.eval.runtime.evaluate()."""
         run.start()
 
+        # Broadcast "running" status immediately so the UI transitions from "pending"
+        if self._on_eval_run_progress:
+            self._on_eval_run_progress(run.id, 0, run.progress_total, None)
+
         try:
             eval_set_path = self._eval_set_paths.get(run.eval_set_id)
             if eval_set_path is None:
