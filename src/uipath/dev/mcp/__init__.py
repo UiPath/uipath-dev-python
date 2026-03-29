@@ -191,6 +191,27 @@ async def get_run_status(run_id: str) -> dict[str, Any]:
         return resp.json()
 
 
+def _summarize_eval_run(result: dict[str, Any]) -> dict[str, Any]:
+    """Return only scores and justifications per item — drop everything else."""
+    items = [
+        {
+            "name": item.get("name"),
+            "status": item.get("status"),
+            "scores": item.get("scores", {}),
+            "justifications": item.get("justifications", {}),
+            "overall_score": item.get("overall_score"),
+        }
+        for item in result.get("results", [])
+    ]
+    return {
+        "id": result.get("id"),
+        "status": result.get("status"),
+        "overall_score": result.get("overall_score"),
+        "evaluator_scores": result.get("evaluator_scores", {}),
+        "results": items,
+    }
+
+
 @mcp.tool()
 async def list_eval_sets() -> list[dict[str, Any]]:
     """List all evaluation sets.
@@ -276,7 +297,9 @@ async def run_eval_set(
     async with httpx.AsyncClient() as client:
         resp = await client.get(_api_url(f"/eval-runs/{run_id}"), timeout=10)
         resp.raise_for_status()
-        return resp.json()
+        result = resp.json()
+
+    return _summarize_eval_run(result)
 
 
 @mcp.tool()
@@ -300,13 +323,15 @@ async def get_eval_run(eval_run_id: str) -> dict[str, Any]:
     Args:
         eval_run_id: ID of the eval run.
 
-    Returns the run with all item results, scores, justifications, and traces.
+    Returns per-item evaluator scores and justifications.
     """
     await _report_tool_call("get_eval_run", {"eval_run_id": eval_run_id})
     async with httpx.AsyncClient() as client:
         resp = await client.get(_api_url(f"/eval-runs/{eval_run_id}"), timeout=10)
         resp.raise_for_status()
-        return resp.json()
+        result = resp.json()
+
+    return _summarize_eval_run(result)
 
 
 def main() -> None:
