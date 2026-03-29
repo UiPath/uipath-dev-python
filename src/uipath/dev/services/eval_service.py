@@ -132,16 +132,12 @@ class EvalService:
 
         old_refs = set(raw.get("evaluatorRefs", raw.get("evaluator_refs", [])))
         new_refs = set(evaluator_refs)
-        added = new_refs - old_refs
         removed = old_refs - new_refs
 
         raw["evaluatorRefs"] = evaluator_refs
 
         for item in raw.get("evaluations", []):
             criterias = item.setdefault("evaluationCriterias", {})
-            for ev_id in added:
-                if ev_id not in criterias:
-                    criterias[ev_id] = {}
             for ev_id in removed:
                 criterias.pop(ev_id, None)
 
@@ -227,6 +223,8 @@ class EvalService:
         inputs: dict[str, Any],
         expected_output: Any,
         *,
+        expected_behavior: str = "",
+        simulation_instructions: str = "",
         evaluation_criterias: dict[str, dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Append a new item to an eval set and persist to disk."""
@@ -240,10 +238,8 @@ class EvalService:
         evaluator_ids = raw.get("evaluatorRefs", raw.get("evaluator_refs", []))
         criterias: dict[str, Any] = {}
         if evaluation_criterias is not None:
-            # Use per-evaluator criteria as provided by the frontend
             criterias = evaluation_criterias
         elif expected_output is not None:
-            # Backward compat: set expectedOutput on all evaluators
             for ev_id in evaluator_ids:
                 criterias[ev_id] = {"expectedOutput": expected_output}
 
@@ -253,6 +249,13 @@ class EvalService:
             "inputs": inputs,
             "evaluationCriterias": criterias,
         }
+        if expected_output is not None:
+            item["expectedOutput"] = expected_output
+        if expected_behavior:
+            item["expectedBehavior"] = expected_behavior
+        if simulation_instructions:
+            item["simulationInstructions"] = simulation_instructions
+
         raw.setdefault("evaluations", []).append(item)
 
         filepath = Path(self._eval_set_paths[set_id])
@@ -261,6 +264,75 @@ class EvalService:
         evaluator_ids = raw.get("evaluatorRefs", raw.get("evaluator_refs", []))
         index = len(raw["evaluations"]) - 1
         return self._build_item(item, index, evaluator_ids)
+
+    def update_eval_item(
+        self,
+        set_id: str,
+        item_name: str,
+        *,
+        name: str | None = None,
+        inputs: dict[str, Any] | None = None,
+        expected_output: Any = ...,
+        expected_behavior: str | None = None,
+        simulation_instructions: str | None = None,
+    ) -> dict[str, Any]:
+        """Update fields of a specific eval item and persist to disk."""
+        if set_id not in self._eval_sets:
+            self.discover_eval_sets()
+
+        raw = self._eval_sets.get(set_id)
+        if raw is None:
+            raise KeyError(f"Eval set '{set_id}' not found")
+
+        evaluator_ids = raw.get("evaluatorRefs", raw.get("evaluator_refs", []))
+
+        for i, item in enumerate(raw.get("evaluations", [])):
+            if item.get("name") == item_name:
+                if name is not None:
+                    item["name"] = name
+                if inputs is not None:
+                    item["inputs"] = inputs
+                if expected_output is not ...:
+                    if expected_output is not None:
+                        item["expectedOutput"] = expected_output
+                    else:
+                        item.pop("expectedOutput", None)
+                        item.pop("expected_output", None)
+                if expected_behavior is not None:
+                    item["expectedBehavior"] = expected_behavior
+                if simulation_instructions is not None:
+                    item["simulationInstructions"] = simulation_instructions
+
+                filepath = Path(self._eval_set_paths[set_id])
+                filepath.write_text(json.dumps(raw, indent=2), encoding="utf-8")
+                return self._build_item(item, i, evaluator_ids)
+
+        raise KeyError(f"Item '{item_name}' not found in eval set '{set_id}'")
+
+    def update_eval_item_criterias(
+        self,
+        set_id: str,
+        item_name: str,
+        evaluation_criterias: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Update evaluationCriterias for a specific item and persist to disk."""
+        if set_id not in self._eval_sets:
+            self.discover_eval_sets()
+
+        raw = self._eval_sets.get(set_id)
+        if raw is None:
+            raise KeyError(f"Eval set '{set_id}' not found")
+
+        evaluator_ids = raw.get("evaluatorRefs", raw.get("evaluator_refs", []))
+
+        for i, item in enumerate(raw.get("evaluations", [])):
+            if item.get("name") == item_name:
+                item["evaluationCriterias"] = evaluation_criterias
+                filepath = Path(self._eval_set_paths[set_id])
+                filepath.write_text(json.dumps(raw, indent=2), encoding="utf-8")
+                return self._build_item(item, i, evaluator_ids)
+
+        raise KeyError(f"Item '{item_name}' not found in eval set '{set_id}'")
 
     def delete_eval_item(self, set_id: str, item_name: str) -> None:
         """Remove an item by name from an eval set and persist to disk."""
@@ -352,6 +424,10 @@ class EvalService:
         """Execute eval run using uipath.eval.runtime.evaluate()."""
         run.start()
 
+        # Broadcast "running" status immediately so the UI transitions from "pending"
+        if self._on_eval_run_progress:
+            self._on_eval_run_progress(run.id, 0, run.progress_total, None)
+
         try:
             eval_set_path = self._eval_set_paths.get(run.eval_set_id)
             if eval_set_path is None:
@@ -399,12 +475,11 @@ class EvalService:
                 if not event.success and event.exception_details:
                     item_result.error = str(event.exception_details.exception)
 
-                # Map eval results to scores
+                # Map eval results to scores (normalize 0-100 → 0-1)
                 for er in event.eval_results:
                     ev_id = er.evaluator_id
-                    item_result.scores[ev_id] = (
-                        float(er.result.score) if er.result.score is not None else 0.0
-                    )
+                    raw = float(er.result.score) if er.result.score is not None else 0.0
+                    item_result.scores[ev_id] = raw / 100.0 if raw > 1.0 else raw
                     if er.result.details:
                         item_result.justifications[ev_id] = str(er.result.details)
 

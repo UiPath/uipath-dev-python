@@ -147,13 +147,11 @@ def _load_evaluators() -> list[dict[str, Any]]:
             ev_id = cls.get_evaluator_id()
             meta = _EVALUATOR_META.get(ev_id, {})
 
-            config_schema: dict[str, Any] = {}
-            config_type = cls.model_fields.get("config_type")
-            if config_type and config_type.default is not None:
-                try:
-                    config_schema = config_type.default.model_json_schema()
-                except Exception:
-                    pass
+            json_type: dict[str, Any] = {}
+            try:
+                json_type = cls.generate_json_type()
+            except Exception:
+                pass
 
             result.append(
                 {
@@ -162,7 +160,8 @@ def _load_evaluators() -> list[dict[str, Any]]:
                     "type": meta.get("type", _infer_type(cls.__name__)),
                     "category": meta.get("category", "output"),
                     "description": meta.get("description", ""),
-                    "config_schema": config_schema,
+                    "config_schema": json_type.get("evaluatorConfigSchema", {}),
+                    "criteria_schema": json_type.get("evaluationCriteriaSchema", {}),
                 }
             )
         return result
@@ -175,6 +174,20 @@ def _load_evaluators() -> list[dict[str, Any]]:
 async def list_evaluators() -> list[dict[str, Any]]:
     """Return metadata for all available evaluators."""
     return _load_evaluators()
+
+
+@router.get("/llm-models")
+async def list_llm_models() -> list[dict[str, Any]]:
+    """Return available LLM models from AgentHub."""
+    try:
+        from uipath.platform import UiPath
+
+        sdk = UiPath()
+        models = await sdk.agenthub.get_available_llm_models_async()
+        return [{"model_name": m.model_name, "vendor": m.vendor} for m in models]
+    except Exception:
+        logger.debug("Failed to fetch LLM models from AgentHub", exc_info=True)
+        return []
 
 
 # ------------------------------------------------------------------
@@ -216,6 +229,127 @@ def _discover_local_evaluators() -> list[dict[str, Any]]:
             logger.warning("Failed to parse evaluator: %s", json_file, exc_info=True)
 
     return results
+
+
+_CUSTOM_EVALUATOR_TEMPLATE = '''\
+from typing import Optional
+
+from uipath.eval.evaluators import (
+    BaseEvaluationCriteria,
+    BaseEvaluator,
+    BaseEvaluatorConfig,
+)
+from uipath.eval.models import (
+    AgentExecution,
+    ErrorEvaluationResult,
+    EvaluationResult,
+    NumericEvaluationResult,
+)
+
+
+class {class_name}Criteria(BaseEvaluationCriteria):
+    """Per-item evaluation criteria for {class_name}."""
+
+    pass  # TODO: add fields like expected_value: str
+
+
+class {class_name}Config(BaseEvaluatorConfig[{class_name}Criteria]):
+    """Configuration for {class_name}."""
+
+    name: str = "{class_name}"
+    default_evaluation_criteria: Optional[{class_name}Criteria] = None
+
+
+class {class_name}(
+    BaseEvaluator[{class_name}Criteria, {class_name}Config, None]
+):
+    """{description}"""
+
+    @classmethod
+    def get_evaluator_id(cls) -> str:
+        return "{class_name}"
+
+    async def evaluate(
+        self,
+        agent_execution: AgentExecution,
+        evaluation_criteria: {class_name}Criteria,
+    ) -> EvaluationResult:
+        try:
+            output = agent_execution.agent_output
+            # TODO: implement evaluation logic
+            score = 0.0
+            return NumericEvaluationResult(score=score, details="Not implemented yet")
+        except Exception as e:
+            return ErrorEvaluationResult(error=str(e))
+'''
+
+
+class ScaffoldCustomEvaluatorBody(BaseModel):
+    """Body for scaffolding a custom evaluator Python file."""
+
+    name: str
+    description: str = ""
+
+
+@router.post("/custom-evaluators/scaffold")
+async def scaffold_custom_evaluator(
+    body: ScaffoldCustomEvaluatorBody,
+) -> dict[str, Any]:
+    """Scaffold a new custom evaluator Python file."""
+    class_name = body.name.replace(" ", "").replace("-", "").replace("_", "")
+    if not class_name.endswith("Evaluator"):
+        class_name += "Evaluator"
+
+    # snake_case filename
+    snake = ""
+    for i, ch in enumerate(class_name):
+        if ch.isupper() and i > 0 and not class_name[i - 1].isupper():
+            snake += "_"
+        snake += ch.lower()
+    filename = f"{snake}.py"
+
+    custom_dir = Path.cwd() / "evaluations" / "evaluators" / "custom"
+    custom_dir.mkdir(parents=True, exist_ok=True)
+
+    filepath = custom_dir / filename
+    if filepath.exists():
+        raise HTTPException(status_code=409, detail=f"File already exists: {filepath}")
+
+    content = _CUSTOM_EVALUATOR_TEMPLATE.format(
+        class_name=class_name,
+        description=body.description or f"Custom evaluator: {body.name}",
+    )
+    filepath.write_text(content, encoding="utf-8")
+
+    return {
+        "file_path": str(filepath),
+        "filename": filename,
+        "class_name": class_name,
+        "evaluator_id": class_name,
+    }
+
+
+class RegisterCustomEvaluatorBody(BaseModel):
+    """Body for registering a custom evaluator."""
+
+    filename: str
+
+
+@router.post("/custom-evaluators/register")
+async def register_custom_evaluator(
+    body: RegisterCustomEvaluatorBody,
+) -> dict[str, Any]:
+    """Register a custom evaluator by running the registration logic."""
+    try:
+        from uipath.eval.evaluators.registration import register_evaluator
+
+        evaluator_id, spec_path = register_evaluator(body.filename)
+        return {
+            "evaluator_id": evaluator_id,
+            "spec_path": spec_path,
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
 
 
 class CreateEvaluatorBody(BaseModel):

@@ -1,4 +1,4 @@
-import type { EvaluatorInfo, LocalEvaluator, EvalSetSummary, EvalSetDetail, EvalItem, EvalRunSummary, EvalRunDetail } from "../types/eval";
+import type { EvaluatorInfo, LocalEvaluator, LlmModel, EvalSetSummary, EvalSetDetail, EvalItem, EvalRunSummary, EvalRunDetail } from "../types/eval";
 
 const BASE = "/api";
 
@@ -22,6 +22,10 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 
 export async function listEvaluators(): Promise<EvaluatorInfo[]> {
   return fetchJson(`${BASE}/evaluators`);
+}
+
+export async function listLlmModels(): Promise<LlmModel[]> {
+  return fetchJson(`${BASE}/llm-models`);
 }
 
 export async function listEvalSets(): Promise<EvalSetSummary[]> {
@@ -53,6 +57,42 @@ export async function addEvalItem(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(item),
   });
+}
+
+export async function updateEvalItem(
+  evalSetId: string,
+  itemName: string,
+  body: {
+    name?: string;
+    inputs?: Record<string, unknown>;
+    expected_output?: unknown;
+    expected_behavior?: string;
+    simulation_instructions?: string;
+  },
+): Promise<EvalItem> {
+  return fetchJson(
+    `${BASE}/eval-sets/${encodeURIComponent(evalSetId)}/items/${encodeURIComponent(itemName)}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+}
+
+export async function updateEvalItemEvaluators(
+  evalSetId: string,
+  itemName: string,
+  evaluationCriterias: Record<string, unknown>,
+): Promise<EvalItem> {
+  return fetchJson(
+    `${BASE}/eval-sets/${encodeURIComponent(evalSetId)}/items/${encodeURIComponent(itemName)}/evaluators`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ evaluation_criterias: evaluationCriterias }),
+    },
+  );
 }
 
 export async function deleteEvalItem(
@@ -107,6 +147,25 @@ export async function updateEvalSetEvaluators(
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ evaluator_refs: evaluatorRefs }),
+  });
+}
+
+export async function scaffoldCustomEvaluator(body: {
+  name: string;
+  description?: string;
+}): Promise<{ file_path: string; filename: string; class_name: string; evaluator_id: string }> {
+  return fetchJson(`${BASE}/custom-evaluators/scaffold`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function registerCustomEvaluator(filename: string): Promise<{ evaluator_id: string; spec_path: string }> {
+  return fetchJson(`${BASE}/custom-evaluators/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filename }),
   });
 }
 

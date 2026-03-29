@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEvalStore } from "../../store/useEvalStore";
 import { useHashRoute } from "../../hooks/useHashRoute";
-import { listLocalEvaluators, updateLocalEvaluator } from "../../api/eval-client";
+import { listLocalEvaluators, listLlmModels, updateLocalEvaluator } from "../../api/eval-client";
 import type { EvaluatorInfo, LocalEvaluator } from "../../types/eval";
 
 // --- Badge styles ---
@@ -38,7 +38,7 @@ export const typesByCategory: Record<string, { id: string; name: string }[]> = {
   ],
 };
 
-// Which types show which extra fields
+// Which types show which extra fields (legacy, kept for compatibility)
 export function getTypeFields(typeId: string): { targetOutputKey: boolean; prompt: boolean } {
   if (typeId.includes("trajectory")) return { targetOutputKey: false, prompt: true };
   if (typeId.includes("llm-judge")) return { targetOutputKey: true, prompt: true };
@@ -47,6 +47,161 @@ export function getTypeFields(typeId: string): { targetOutputKey: boolean; promp
     return { targetOutputKey: true, prompt: false };
   }
   return { targetOutputKey: false, prompt: false };
+}
+
+// Fields managed at the evaluator level (name/description handled separately)
+const SKIP_CONFIG_FIELDS = new Set(["name", "description", "default_evaluation_criteria"]);
+
+interface ConfigFieldDef {
+  key: string;
+  title: string;
+  description?: string;
+  type: string; // "string" | "boolean" | "number" | "integer"
+  default_value: unknown;
+  is_nullable: boolean;
+}
+
+/** Extract renderable config fields from an evaluatorConfigSchema. */
+export function getSchemaConfigFields(configSchema: Record<string, unknown>): ConfigFieldDef[] {
+  const props = configSchema?.properties as Record<string, Record<string, unknown>> | undefined;
+  if (!props) return [];
+
+  const fields: ConfigFieldDef[] = [];
+  for (const [key, prop] of Object.entries(props)) {
+    if (SKIP_CONFIG_FIELDS.has(key)) continue;
+
+    // Resolve type from "type" or from "anyOf"
+    let type = prop.type as string | undefined;
+    let isNullable = false;
+    if (!type && Array.isArray(prop.anyOf)) {
+      const nonNull = (prop.anyOf as Record<string, unknown>[]).filter((a) => a.type !== "null");
+      if (nonNull.length === 1) type = nonNull[0].type as string;
+      isNullable = (prop.anyOf as Record<string, unknown>[]).some((a) => a.type === "null");
+    }
+    if (!type) continue;
+
+    fields.push({
+      key,
+      title: (prop.title as string) ?? key.replace(/_/g, " "),
+      description: prop.description as string | undefined,
+      type,
+      default_value: prop.default,
+      is_nullable: isNullable,
+    });
+  }
+  return fields;
+}
+
+/** Render dynamic config fields from schema. */
+export function SchemaConfigFields({
+  fields,
+  values,
+  onChange,
+  llmModels,
+  inputStyle,
+}: {
+  fields: ConfigFieldDef[];
+  values: Record<string, unknown>;
+  onChange: (key: string, value: unknown) => void;
+  llmModels?: { model_name: string; vendor: string | null }[];
+  inputStyle: React.CSSProperties;
+}) {
+  return (
+    <>
+      {fields.map((f) => {
+        const val = values[f.key] ?? f.default_value ?? "";
+
+        // Special: model field with LLM models dropdown
+        if (f.key === "model" && llmModels && llmModels.length > 0) {
+          return (
+            <div key={f.key} className="mb-6">
+              <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-muted)" }}>
+                {f.title}
+              </label>
+              <select
+                value={String(val)}
+                onChange={(e) => onChange(f.key, e.target.value)}
+                className="w-full rounded-md px-3 py-2 text-xs cursor-pointer appearance-auto"
+                style={inputStyle}
+              >
+                <option value="">Select a model</option>
+                {llmModels.map((m) => (
+                  <option key={m.model_name} value={m.model_name}>
+                    {m.model_name}{m.vendor ? ` (${m.vendor})` : ""}
+                  </option>
+                ))}
+              </select>
+              {f.description && <div className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>{f.description}</div>}
+            </div>
+          );
+        }
+
+        if (f.type === "boolean") {
+          return (
+            <div key={f.key} className="mb-6">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={Boolean(val)}
+                  onChange={(e) => onChange(f.key, e.target.checked)}
+                  className="accent-[var(--accent)]"
+                />
+                <span className="text-[11px] font-medium" style={{ color: "var(--text-muted)" }}>{f.title}</span>
+              </label>
+              {f.description && <div className="text-[11px] mt-0.5 pl-5" style={{ color: "var(--text-muted)" }}>{f.description}</div>}
+            </div>
+          );
+        }
+
+        if (f.type === "number" || f.type === "integer") {
+          return (
+            <div key={f.key} className="mb-6">
+              <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-muted)" }}>
+                {f.title}
+              </label>
+              <input
+                type="number"
+                value={val === null || val === "" ? "" : Number(val)}
+                onChange={(e) => onChange(f.key, e.target.value === "" ? null : Number(e.target.value))}
+                step={f.type === "integer" ? 1 : 0.1}
+                className="w-full rounded-md px-3 py-2 text-xs"
+                style={inputStyle}
+              />
+              {f.description && <div className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>{f.description}</div>}
+            </div>
+          );
+        }
+
+        // Default: string (textarea for prompt, input for others)
+        const isLong = f.key === "prompt" || (typeof val === "string" && val.length > 100);
+        return (
+          <div key={f.key} className="mb-6">
+            <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-muted)" }}>
+              {f.title}
+            </label>
+            {isLong ? (
+              <textarea
+                value={String(val)}
+                onChange={(e) => onChange(f.key, e.target.value)}
+                rows={6}
+                className="w-full rounded-md px-3 py-2 text-xs font-mono leading-relaxed resize-y"
+                style={inputStyle}
+              />
+            ) : (
+              <input
+                type="text"
+                value={String(val)}
+                onChange={(e) => onChange(f.key, e.target.value)}
+                className="w-full rounded-md px-3 py-2 text-xs"
+                style={inputStyle}
+              />
+            )}
+            {f.description && <div className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>{f.description}</div>}
+          </div>
+        );
+      })}
+    </>
+  );
 }
 
 // Predefined defaults per evaluator type
@@ -368,30 +523,48 @@ function EditEvaluatorForm({
 }) {
   const category = categoryForTypeId(evaluator.evaluator_type_id);
   const types = typesByCategory[category] ?? [];
+  const builtInEvaluators = useEvalStore((s) => s.evaluators);
+  const llmModels = useEvalStore((s) => s.llmModels);
+  const setLlmModels = useEvalStore((s) => s.setLlmModels);
 
   const [description, setDescription] = useState(evaluator.description);
   const [typeId, setTypeId] = useState(evaluator.evaluator_type_id);
-  const [targetOutputKey, setTargetOutputKey] = useState(
-    (evaluator.config?.targetOutputKey as string) ?? "*",
-  );
-  const [prompt, setPrompt] = useState(
-    (evaluator.config?.prompt as string) ?? "",
-  );
+  const [configValues, setConfigValues] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    if (category === "llm" && llmModels.length === 0) {
+      listLlmModels().then(setLlmModels).catch(() => {});
+    }
+  }, [category]);
+
+  const schemaFields = useMemo(() => {
+    const ev = builtInEvaluators.find((e) => e.id === typeId);
+    return ev ? getSchemaConfigFields(ev.config_schema) : [];
+  }, [typeId, builtInEvaluators]);
 
   // Reset form when switching to a different evaluator
   useEffect(() => {
     setDescription(evaluator.description);
     setTypeId(evaluator.evaluator_type_id);
-    setTargetOutputKey((evaluator.config?.targetOutputKey as string) ?? "*");
-    setPrompt((evaluator.config?.prompt as string) ?? "");
+    // Initialize configValues from evaluator.config, using snake_case keys
+    const vals: Record<string, unknown> = {};
+    const cfg = evaluator.config ?? {};
+    // Map camelCase config keys to snake_case schema keys
+    const keyMap: Record<string, string> = { targetOutputKey: "target_output_key", caseSensitive: "case_sensitive", maxTokens: "max_tokens" };
+    for (const [k, v] of Object.entries(cfg)) {
+      vals[keyMap[k] ?? k] = v;
+    }
+    setConfigValues(vals);
     setError(null);
     setSuccess(false);
   }, [evaluator.id]);
 
-  const fields = getTypeFields(typeId);
+  const handleConfigChange = (key: string, value: unknown) => {
+    setConfigValues((prev) => ({ ...prev, [key]: value }));
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -399,8 +572,14 @@ function EditEvaluatorForm({
     setSuccess(false);
     try {
       const config: Record<string, unknown> = {};
-      if (fields.targetOutputKey) config.targetOutputKey = targetOutputKey;
-      if (fields.prompt && prompt.trim()) config.prompt = prompt;
+      // Map snake_case schema keys back to camelCase for the evaluator JSON
+      const keyMap: Record<string, string> = { target_output_key: "targetOutputKey", case_sensitive: "caseSensitive", max_tokens: "maxTokens" };
+      for (const f of schemaFields) {
+        const val = configValues[f.key];
+        if (val !== undefined && val !== null && val !== "") {
+          config[keyMap[f.key] ?? f.key] = val;
+        }
+      }
 
       const result = await updateLocalEvaluator(evaluator.id, {
         description: description.trim(),
@@ -485,42 +664,14 @@ function EditEvaluatorForm({
           />
         </div>
 
-        {/* Target Output Key (conditional) */}
-        {fields.targetOutputKey && (
-          <div>
-            <label className="text-[11px] font-medium block mb-1" style={{ color: "var(--text-muted)" }}>
-              Target Output Key
-            </label>
-            <input
-              type="text"
-              value={targetOutputKey}
-              onChange={(e) => setTargetOutputKey(e.target.value)}
-              placeholder="*"
-              className="w-full px-3 py-2 rounded-lg text-xs outline-none"
-              style={inputStyle}
-            />
-            <div className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
-              Use * for entire output or a specific key name
-            </div>
-          </div>
-        )}
-
-        {/* Prompt (conditional) */}
-        {fields.prompt && (
-          <div>
-            <label className="text-[11px] font-medium block mb-1" style={{ color: "var(--text-muted)" }}>
-              Prompt
-            </label>
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Evaluation prompt for the LLM judge..."
-              rows={8}
-              className="w-full px-3 py-2 rounded-lg text-xs font-mono leading-relaxed outline-none resize-y"
-              style={inputStyle}
-            />
-          </div>
-        )}
+        {/* Dynamic config fields from schema */}
+        <SchemaConfigFields
+          fields={schemaFields}
+          values={configValues}
+          onChange={handleConfigChange}
+          llmModels={llmModels}
+          inputStyle={inputStyle}
+        />
       </div>
 
       {/* Bottom pinned section */}

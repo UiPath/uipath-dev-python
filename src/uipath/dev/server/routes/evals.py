@@ -57,6 +57,8 @@ class AddEvalItemBody(BaseModel):
     name: str
     inputs: dict[str, Any] = {}
     expected_output: Any = None
+    expected_behavior: str = ""
+    simulation_instructions: str = ""
     evaluation_criterias: dict[str, dict[str, Any]] | None = None
 
 
@@ -72,7 +74,64 @@ async def add_eval_item(
             body.name,
             body.inputs,
             body.expected_output,
+            expected_behavior=body.expected_behavior,
+            simulation_instructions=body.simulation_instructions,
             evaluation_criterias=body.evaluation_criterias,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+    return item
+
+
+class UpdateEvalItemBody(BaseModel):
+    """Body for updating an eval item."""
+
+    name: str | None = None
+    inputs: dict[str, Any] | None = None
+    expected_output: Any = ...
+    expected_behavior: str | None = None
+    simulation_instructions: str | None = None
+
+
+@router.put("/eval-sets/{set_id}/items/{item_name}")
+async def update_eval_item(
+    request: Request, set_id: str, item_name: str, body: UpdateEvalItemBody
+) -> dict[str, Any]:
+    """Update an eval item's fields."""
+    server = request.app.state.server
+    try:
+        kwargs: dict[str, Any] = {}
+        if body.name is not None:
+            kwargs["name"] = body.name
+        if body.inputs is not None:
+            kwargs["inputs"] = body.inputs
+        if body.expected_output is not ...:
+            kwargs["expected_output"] = body.expected_output
+        if body.expected_behavior is not None:
+            kwargs["expected_behavior"] = body.expected_behavior
+        if body.simulation_instructions is not None:
+            kwargs["simulation_instructions"] = body.simulation_instructions
+        item = server.eval_service.update_eval_item(set_id, item_name, **kwargs)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+    return item
+
+
+class UpdateEvalItemCriteriasBody(BaseModel):
+    """Body for updating evaluationCriterias on a specific eval item."""
+
+    evaluation_criterias: dict[str, Any]
+
+
+@router.patch("/eval-sets/{set_id}/items/{item_name}/evaluators")
+async def update_eval_item_criterias(
+    request: Request, set_id: str, item_name: str, body: UpdateEvalItemCriteriasBody
+) -> dict[str, Any]:
+    """Update evaluationCriterias for a specific eval item."""
+    server = request.app.state.server
+    try:
+        item = server.eval_service.update_eval_item_criterias(
+            set_id, item_name, body.evaluation_criterias
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from None

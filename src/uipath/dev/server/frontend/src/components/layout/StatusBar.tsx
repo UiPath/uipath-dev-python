@@ -1,31 +1,57 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuthStore } from "../../store/useAuthStore";
 import { useConfigStore } from "../../store/useConfigStore";
+import { useEvalStore } from "../../store/useEvalStore";
 import { useTheme } from "../../store/useTheme";
+import { listLlmModels } from "../../api/eval-client";
 
 export default function StatusBar() {
   const { theme, toggleTheme } = useTheme();
   const { enabled, status, environment, tenants, uipathUrl, setEnvironment, startLogin, selectTenant, logout } = useAuthStore();
   const { projectName, projectVersion, projectAuthors } = useConfigStore();
+  const llmModels = useEvalStore((s) => s.llmModels);
+  const setLlmModels = useEvalStore((s) => s.setLlmModels);
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const [modelsOpen, setModelsOpen] = useState(false);
+  const [modelsLoading, setModelsLoading] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState("");
   const popoverRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLDivElement>(null);
+  const modelsPopoverRef = useRef<HTMLDivElement>(null);
+  const modelsTriggerRef = useRef<HTMLDivElement>(null);
 
-  // Close popover on outside click
+  // Close popovers on outside click
   useEffect(() => {
-    if (!popoverOpen) return;
+    if (!popoverOpen && !modelsOpen) return;
     const handleClick = (e: MouseEvent) => {
       if (
+        popoverOpen &&
         popoverRef.current && !popoverRef.current.contains(e.target as Node) &&
         triggerRef.current && !triggerRef.current.contains(e.target as Node)
       ) {
         setPopoverOpen(false);
       }
+      if (
+        modelsOpen &&
+        modelsPopoverRef.current && !modelsPopoverRef.current.contains(e.target as Node) &&
+        modelsTriggerRef.current && !modelsTriggerRef.current.contains(e.target as Node)
+      ) {
+        setModelsOpen(false);
+      }
     };
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [popoverOpen]);
+  }, [popoverOpen, modelsOpen]);
+
+  const handleModelsClick = () => {
+    if (!modelsOpen && llmModels.length === 0) {
+      setModelsLoading(true);
+      listLlmModels()
+        .then(setLlmModels)
+        .finally(() => setModelsLoading(false));
+    }
+    setModelsOpen((v) => !v);
+  };
 
   const isAuthenticated = status === "authenticated";
   const isExpired = status === "expired";
@@ -197,6 +223,69 @@ export default function StatusBar() {
           )}
         </div>
       )}
+
+      {/* Models */}
+      <div className="relative flex items-center">
+        <div
+          ref={modelsTriggerRef}
+          className={`${itemClass} cursor-pointer`}
+          onClick={handleModelsClick}
+          {...hoverHandlers}
+          title="Available LLM models"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="4" y="4" width="16" height="16" rx="2" />
+            <rect x="9" y="9" width="6" height="6" rx="1" />
+            <path d="M9 1v3" /><path d="M15 1v3" />
+            <path d="M9 20v3" /><path d="M15 20v3" />
+            <path d="M20 9h3" /><path d="M20 14h3" />
+            <path d="M1 9h3" /><path d="M1 14h3" />
+          </svg>
+          <span>Models{llmModels.length > 0 ? ` (${llmModels.length})` : ""}</span>
+        </div>
+        {modelsOpen && (
+          <div
+            ref={modelsPopoverRef}
+            className="absolute bottom-full left-0 mb-1 rounded border shadow-lg min-w-[220px] max-h-[320px] flex flex-col"
+            style={{ background: "var(--bg-secondary)", borderColor: "var(--border)" }}
+          >
+            <div
+              className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide border-b shrink-0"
+              style={{ color: "var(--text-muted)", borderColor: "var(--border)" }}
+            >
+              LLM Models
+            </div>
+            <div className="overflow-y-auto flex-1">
+              {modelsLoading && llmModels.length === 0 && (
+                <div className="px-2 py-3 text-[11px] text-center" style={{ color: "var(--text-muted)" }}>
+                  Loading...
+                </div>
+              )}
+              {!modelsLoading && llmModels.length === 0 && (
+                <div className="px-2 py-3 text-[11px] text-center" style={{ color: "var(--text-muted)" }}>
+                  No models available
+                </div>
+              )}
+              {llmModels.map((m) => (
+                <div
+                  key={m.model_name}
+                  className="px-2 py-1.5 text-[11px] flex items-center gap-2 border-b"
+                  style={{ borderColor: "var(--border)" }}
+                >
+                  <span className="font-mono truncate flex-1" style={{ color: "var(--text-primary)" }} title={m.model_name}>
+                    {m.model_name}
+                  </span>
+                  {m.vendor && (
+                    <span className="text-[10px] shrink-0" style={{ color: "var(--text-muted)" }}>
+                      {m.vendor}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Project name */}
       {projectName && (

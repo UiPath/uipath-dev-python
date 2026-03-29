@@ -5,6 +5,12 @@ export interface EvaluatorInfo {
   category: string;
   description: string;
   config_schema: Record<string, unknown>;
+  criteria_schema: Record<string, unknown>;
+}
+
+export interface LlmModel {
+  model_name: string;
+  vendor: string | null;
 }
 
 export interface LocalEvaluator {
