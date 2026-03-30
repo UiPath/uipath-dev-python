@@ -21,16 +21,24 @@ mcp = FastMCP(
 )
 
 
+def _get_port() -> str:
+    """Read port from .uipath/dev-server.port if present, else fall back to env var."""
+    from pathlib import Path
+
+    port_file = Path(".uipath") / "dev-server.port"
+    if port_file.exists():
+        return port_file.read_text().strip()
+    return os.environ.get("UIPATH_DEV_SERVER_PORT", "8080")
+
+
 def _base_url() -> str:
-    port = os.environ.get("UIPATH_DEV_SERVER_PORT", "8080")
     host = os.environ.get("UIPATH_DEV_SERVER_HOST", "localhost")
-    return f"http://{host}:{port}"
+    return f"http://{host}:{_get_port()}"
 
 
 def _ws_url() -> str:
-    port = os.environ.get("UIPATH_DEV_SERVER_PORT", "8080")
     host = os.environ.get("UIPATH_DEV_SERVER_HOST", "localhost")
-    return f"ws://{host}:{port}/ws"
+    return f"ws://{host}:{_get_port()}/ws"
 
 
 def _api_url(path: str) -> str:
@@ -200,6 +208,9 @@ def _summarize_eval_run(result: dict[str, Any]) -> dict[str, Any]:
             "scores": item.get("scores", {}),
             "justifications": item.get("justifications", {}),
             "overall_score": item.get("overall_score"),
+            "error": (item["error"][:100] + "...")
+            if item.get("error") and len(item["error"]) > 100
+            else item.get("error"),
         }
         for item in result.get("results", [])
     ]
