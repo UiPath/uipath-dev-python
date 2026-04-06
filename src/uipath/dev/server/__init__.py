@@ -11,6 +11,7 @@ import threading
 import time
 import webbrowser
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import uvicorn
@@ -120,6 +121,11 @@ class UiPathDeveloperServer:
         self.port = self._find_free_port(self.host, self.port)
         app = self.create_app()
 
+        # write the server port to .uipath/dev-server.port so the MCP can discover it
+        port_file = Path(".uipath") / "dev-server.port"
+        port_file.parent.mkdir(exist_ok=True)
+        port_file.write_text(str(self.port))
+
         base_url = f"http://{self.host}:{self.port}"
         self._print_banner(base_url)
 
@@ -147,6 +153,8 @@ class UiPathDeveloperServer:
     async def shutdown(self) -> None:
         """Clean up resources before shutting down."""
         logger.info("Shutting down server resources...")
+        port_file = Path(".uipath") / "dev-server.port"
+        port_file.unlink(missing_ok=True)
         self._stop_watcher()
         # Stop any active CLI agent PTY sessions
         await self.cli_agent_service.stop_all_sessions()
