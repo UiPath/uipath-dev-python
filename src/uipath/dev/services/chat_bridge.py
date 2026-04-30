@@ -4,7 +4,10 @@ import asyncio
 import logging
 from typing import Any, Callable
 
-from uipath.core.chat import UiPathConversationMessageEvent
+from uipath.core.chat import (
+    UiPathConversationMessageEvent,
+    UiPathConversationToolCallConfirmationEvent,
+)
 from uipath.runtime.resumable.trigger import UiPathResumeTrigger
 
 logger = logging.getLogger(__name__)
@@ -13,19 +16,23 @@ logger = logging.getLogger(__name__)
 class WebChatBridge:
     """Bridge between the web server and UiPathChatRuntime.
 
-    Implements UiPathChatProtocol. Broadcasts message and interrupt events
-    to WebSocket clients via callbacks, and blocks on wait_for_resume until
-    the user responds.
+    Implements UiPathChatProtocol. Forwards message events to WebSocket clients
+    and resumes runtime execution when the user confirms a tool call.
+
+    Tool confirmation flows through ``startToolCall`` events with
+    ``requireConfirmation: true`` and ``inputSchema``; the user's decision is
+    delivered back as a ``UiPathConversationToolCallConfirmationEvent`` via
+    ``set_tool_confirmation`` and consumed by ``wait_for_resume``.
     """
 
     def __init__(self) -> None:
         """Initialize the web chat bridge."""
-        self._resume_event = asyncio.Event()
-        self._resume_data: dict[str, Any] = {}
+        self._tool_confirmation_event = asyncio.Event()
+        self._tool_confirmation_value: (
+            UiPathConversationToolCallConfirmationEvent | None
+        ) = None
 
-        # Callbacks (wired by RunService / server)
         self.on_message: Callable[[UiPathConversationMessageEvent], None] | None = None
-        self.on_interrupt: Callable[[UiPathResumeTrigger], None] | None = None
         self.on_exchange_end: Callable[[], None] | None = None
 
     async def connect(self) -> None:
@@ -33,8 +40,8 @@ class WebChatBridge:
         logger.debug("WebChatBridge connected")
 
     async def disconnect(self) -> None:
-        """Close connection and send exchange end event."""
-        self._resume_event.set()
+        """Unblock any waiting coroutine and close."""
+        self._tool_confirmation_event.set()
         logger.debug("WebChatBridge disconnected")
 
     async def emit_message_event(
@@ -45,9 +52,13 @@ class WebChatBridge:
             self.on_message(message_event)
 
     async def emit_interrupt_event(self, resume_trigger: UiPathResumeTrigger) -> None:
-        """Forward an interrupt event via callback."""
-        if self.on_interrupt:
-            self.on_interrupt(resume_trigger)
+        """No-op.
+
+        Tool confirmations now flow on the tool call event itself
+        (``requireConfirmation`` + ``confirmToolCall``); generic agent
+        interrupts have no near-term consumer in the dev console.
+        """
+        return None
 
     async def emit_exchange_end_event(self) -> None:
         """Send an exchange end event."""
@@ -59,12 +70,21 @@ class WebChatBridge:
         logger.error(f"Exchange error: {error}")
 
     async def wait_for_resume(self) -> dict[str, Any]:
-        """Wait for the user to respond to an interrupt."""
-        self._resume_event.clear()
-        await self._resume_event.wait()
-        return self._resume_data
+        """Wait for a confirmToolCall event to be received."""
+        self._tool_confirmation_event.clear()
+        self._tool_confirmation_value = None
 
-    def resume(self, data: dict[str, Any]) -> None:
-        """Store resume data and signal the waiting coroutine."""
-        self._resume_data = data
-        self._resume_event.set()
+        await self._tool_confirmation_event.wait()
+
+        if self._tool_confirmation_value is not None:
+            return self._tool_confirmation_value.model_dump(
+                mode="python", by_alias=False
+            )
+        return {}
+
+    def set_tool_confirmation(
+        self, confirmation: UiPathConversationToolCallConfirmationEvent
+    ) -> None:
+        """Deliver the user's tool call confirmation and unblock the runtime."""
+        self._tool_confirmation_value = confirmation
+        self._tool_confirmation_event.set()

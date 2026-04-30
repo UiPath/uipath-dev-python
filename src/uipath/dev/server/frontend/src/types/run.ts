@@ -70,11 +70,20 @@ export interface ContentPart {
   data: { inline?: string; uri?: string };
 }
 
+export interface ToolCallConfirmation {
+  approved: boolean;
+  input?: unknown;
+  confirmed_at?: string | null;
+}
+
 export interface ToolCall {
   tool_call_id: string;
   name: string;
   input: unknown;
   result?: { value: unknown; is_error?: boolean };
+  require_confirmation?: boolean;
+  input_schema?: unknown;
+  confirmation?: ToolCallConfirmation;
 }
 
 export interface RunError {
@@ -82,15 +91,4 @@ export interface RunError {
   title: string;
   detail: string;
   category: string;
-}
-
-export interface InterruptEvent {
-  run_id: string;
-  interrupt_id: string;
-  interrupt_type: "tool_call_confirmation" | "generic";
-  tool_call_id?: string;
-  tool_name?: string;
-  input_schema?: unknown;
-  input_value?: unknown;
-  content?: unknown;
 }

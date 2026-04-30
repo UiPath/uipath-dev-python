@@ -15,9 +15,6 @@ from uipath.core.chat.content import (
     UiPathConversationContentPartEvent,
     UiPathConversationContentPartStartEvent,
 )
-from uipath.core.chat.interrupt import (
-    UiPathConversationToolCallConfirmationValue,
-)
 from uipath.core.chat.message import (
     UiPathConversationMessageEndEvent,
     UiPathConversationMessageStartEvent,
@@ -197,6 +194,8 @@ class MockSupportChatRuntime:
         self.tracer = trace.get_tracer("uipath.dev.mock.support-chat")
         self._suspended_turn: dict[str, Any] | None = None
         self._suspended_message_id: str | None = None
+        self._suspended_interrupt_id: str | None = None
+        self._suspended_call_id: str | None = None
 
     async def get_schema(self) -> UiPathRuntimeSchema:
         """Get the schema for the support chat runtime."""
@@ -505,8 +504,49 @@ class MockSupportChatRuntime:
         # --- Resume after tool approval ---
         if is_resuming and self._suspended_turn is not None:
             turn = self._suspended_turn
+            message_id = self._suspended_message_id or ""
+            interrupt_id = self._suspended_interrupt_id or ""
+            call_id = self._suspended_call_id or ""
             self._suspended_turn = None
             self._suspended_message_id = None
+            self._suspended_interrupt_id = None
+            self._suspended_call_id = None
+
+            # ``current_input`` on resume is ``{interrupt_id: {approved, input}}``
+            # — extract the user's decision.
+            confirmation = (
+                input.get(interrupt_id, {}) if isinstance(input, dict) else {}
+            )
+            approved = bool(confirmation.get("approved", False))
+            approval_tool = turn["approval_tool"]
+
+            yield UiPathRuntimeMessageEvent(
+                payload=UiPathConversationMessageEvent(
+                    message_id=message_id,
+                    tool_call=UiPathConversationToolCallEvent(
+                        tool_call_id=call_id,
+                        end=UiPathConversationToolCallEndEvent(
+                            timestamp=datetime.now().isoformat(),
+                            output=approval_tool["output"]
+                            if approved
+                            else "Cancelled by user.",
+                            cancelled=not approved,
+                        ),
+                    ),
+                ),
+            )
+
+            if not approved:
+                # User rejected — skip phase 2 and yield a SUCCESSFUL result so
+                # UiPathChatRuntime exits its outer loop. Returning bare here
+                # would leave ``execution_completed = False`` and trigger
+                # another ``delegate.stream`` iteration, advancing to the next
+                # turn.
+                yield UiPathRuntimeResult(
+                    output={"reply": "Cancelled by user."},
+                    status=UiPathRuntimeStatus.SUCCESSFUL,
+                )
+                return
 
             resume_span = self.tracer.start_span(
                 "support_chat.resume",
@@ -639,35 +679,50 @@ class MockSupportChatRuntime:
                 await asyncio.sleep(0.5)
             yield self._node_state("tools", C)
 
-            # --- Check if this turn needs tool approval ---
+            # --- Approval flow: emit startToolCall(requireConfirmation=true)
+            # so the UI renders the inline approve/reject panel, then suspend
+            # so UiPathChatRuntime awaits ``bridge.wait_for_resume()``. The
+            # bridge unblocks when the user clicks approve/reject and the
+            # confirmation flows through ``run_service.confirm_tool_call``.
             if needs_approval:
                 approval_tool = turn["approval_tool"]
+                approval_call_id = f"call_{uuid4().hex[:12]}"
                 interrupt_id = str(uuid4())
-                tool_call_id = f"call_{uuid4().hex[:12]}"
 
-                # Store state for resume
+                yield UiPathRuntimeMessageEvent(
+                    payload=UiPathConversationMessageEvent(
+                        message_id=message_id,
+                        tool_call=UiPathConversationToolCallEvent(
+                            tool_call_id=approval_call_id,
+                            start=UiPathConversationToolCallStartEvent(
+                                tool_name=approval_tool["name"],
+                                timestamp=datetime.now().isoformat(),
+                                input=approval_tool["input"],
+                                require_confirmation=True,
+                                input_schema=approval_tool["input_schema"],
+                            ),
+                        ),
+                    ),
+                )
+
                 self._suspended_turn = turn
                 self._suspended_message_id = message_id
+                self._suspended_interrupt_id = interrupt_id
+                self._suspended_call_id = approval_call_id
 
                 yield UiPathRuntimeResult(
                     status=UiPathRuntimeStatus.SUSPENDED,
-                    output={"paused_for_approval": approval_tool["name"]},
+                    output={"awaiting_confirmation": approval_tool["name"]},
                     triggers=[
                         UiPathResumeTrigger(
                             interrupt_id=interrupt_id,
                             trigger_type=UiPathResumeTriggerType.API,
-                            payload=UiPathConversationToolCallConfirmationValue(
-                                tool_call_id=tool_call_id,
-                                tool_name=approval_tool["name"],
-                                input_schema=approval_tool["input_schema"],
-                                input_value=approval_tool["input"],
-                            ),
                         ),
                     ],
                 )
                 return
 
-            # --- No approval needed — continue with phase 2 inline ---
+            # --- Continue with phase 2 inline ---
 
             # --- Middleware: Summarization (second pass with tool results) ---
             yield self._node_state("SummarizationMiddleware.before_model", S)

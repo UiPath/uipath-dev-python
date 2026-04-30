@@ -1,12 +1,48 @@
 import { create } from "zustand";
-import type { RunSummary, TraceSpan, LogEntry, InterruptEvent } from "../types/run";
+import type { RunSummary, TraceSpan, LogEntry, ToolCallConfirmation } from "../types/run";
 import type { GraphData } from "../types/graph";
+
+export interface ChatToolCall {
+  tool_call_id: string;
+  name: string;
+  has_result: boolean;
+  cancelled?: boolean;
+  require_confirmation?: boolean;
+  input?: unknown;
+  input_schema?: unknown;
+  confirmation?: ToolCallConfirmation;
+}
+
+export function projectToolCall(tc: Record<string, unknown>): ChatToolCall {
+  const confirmationRaw = (tc.confirmation as Record<string, unknown> | undefined) ?? undefined;
+  const resultRaw = tc.result as Record<string, unknown> | undefined;
+  return {
+    tool_call_id: ((tc.toolCallId ?? tc.tool_call_id) as string) ?? "",
+    name: (tc.name as string) ?? "",
+    has_result: !!resultRaw,
+    cancelled: resultRaw ? ((resultRaw.cancelled as boolean | undefined) ?? undefined) : undefined,
+    require_confirmation:
+      (tc.requireConfirmation ?? tc.require_confirmation) as boolean | undefined,
+    input: tc.input,
+    input_schema: tc.inputSchema ?? tc.input_schema,
+    confirmation: confirmationRaw
+      ? {
+          approved: (confirmationRaw.approved as boolean) ?? false,
+          input: confirmationRaw.input,
+          confirmed_at: (confirmationRaw.confirmedAt ?? confirmationRaw.confirmed_at) as
+            | string
+            | null
+            | undefined,
+        }
+      : undefined,
+  };
+}
 
 interface ChatMsg {
   message_id: string;
   role: string;
   content: string;
-  tool_calls?: { name: string; has_result: boolean }[];
+  tool_calls?: ChatToolCall[];
 }
 
 interface RunStore {
@@ -48,9 +84,6 @@ interface RunStore {
 
   focusedSpan: { name: string; index: number } | null;
   setFocusedSpan: (span: { name: string; index: number } | null) => void;
-
-  activeInterrupt: Record<string, InterruptEvent | null>;
-  setActiveInterrupt: (runId: string, interrupt: InterruptEvent | null) => void;
 
   reloadPending: boolean;
   setReloadPending: (val: boolean) => void;
@@ -96,11 +129,6 @@ export const useRunStore = create<RunStore>((set) => ({
       ) {
         const { [run.id]: _, ...rest } = state.activeNodes;
         result.activeNodes = rest;
-      }
-      // Clear active interrupt when status changes away from suspended
-      if (run.status !== "suspended" && state.activeInterrupt[run.id]) {
-        const { [run.id]: _, ...rest } = state.activeInterrupt;
-        result.activeInterrupt = rest;
       }
       return result;
     }),
@@ -154,13 +182,47 @@ export const useRunStore = create<RunStore>((set) => ({
         });
       const content = textParts.join("\n").trim();
 
+      // requireConfirmation/inputSchema/input live on event.toolCall.startToolCall,
+      // not on the persisted message.toolCalls entry. Pull them from the current
+      // event and merge with the existing in-store tool call so they survive
+      // subsequent events (endToolCall, etc.) for the same toolCallId.
+      const event = payload.event as Record<string, unknown> | undefined;
+      const eventToolCall = event?.toolCall as Record<string, unknown> | undefined;
+      const startToolCall = eventToolCall?.startToolCall as
+        | Record<string, unknown>
+        | undefined;
+      const eventToolCallId = eventToolCall?.toolCallId as string | undefined;
+
+      const previousById = new Map<string, ChatToolCall>();
+      const previousMsg = existing.find((m) => m.message_id === messageId);
+      if (previousMsg?.tool_calls) {
+        for (const tc of previousMsg.tool_calls) {
+          previousById.set(tc.tool_call_id, tc);
+        }
+      }
+
       // Extract tool calls (camelCase: toolCalls)
       const toolCalls = (
         ((msg.toolCalls ?? msg.tool_calls) as Array<Record<string, unknown>>) ?? []
-      ).map((tc) => ({
-        name: (tc.name as string) ?? "",
-        has_result: !!tc.result,
-      }));
+      ).map((tc) => {
+        const projected = projectToolCall(tc);
+        const prev = previousById.get(projected.tool_call_id);
+        if (prev) {
+          if (projected.require_confirmation === undefined)
+            projected.require_confirmation = prev.require_confirmation;
+          if (projected.input_schema === undefined)
+            projected.input_schema = prev.input_schema;
+          if (projected.input === undefined) projected.input = prev.input;
+        }
+        if (startToolCall && eventToolCallId === projected.tool_call_id) {
+          if (startToolCall.requireConfirmation !== undefined)
+            projected.require_confirmation = startToolCall.requireConfirmation as boolean;
+          if (startToolCall.inputSchema !== undefined)
+            projected.input_schema = startToolCall.inputSchema;
+          if (startToolCall.input !== undefined) projected.input = startToolCall.input;
+        }
+        return projected;
+      });
 
       const chatMsg: ChatMsg = {
         message_id: messageId,
@@ -270,12 +332,6 @@ export const useRunStore = create<RunStore>((set) => ({
 
   focusedSpan: null,
   setFocusedSpan: (span) => set({ focusedSpan: span }),
-
-  activeInterrupt: {},
-  setActiveInterrupt: (runId, interrupt) =>
-    set((state) => ({
-      activeInterrupt: { ...state.activeInterrupt, [runId]: interrupt },
-    })),
 
   reloadPending: false,
   setReloadPending: (val) => set({ reloadPending: val }),

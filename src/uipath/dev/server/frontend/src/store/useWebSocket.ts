@@ -7,7 +7,7 @@ import { useCliAgentStore } from "./useCliAgentStore";
 import { useExplorerStore } from "./useExplorerStore";
 import { getTerminalWriter } from "../api/cli-terminal-bridge";
 import { readFile, listDirectory } from "../api/explorer-client";
-import type { RunSummary, TraceSpan, LogEntry, InterruptEvent } from "../types/run";
+import type { RunSummary, TraceSpan, LogEntry } from "../types/run";
 import type { EvalRunSummary, EvalItemResult } from "../types/eval";
 let sharedWs: WsClient | null = null;
 
@@ -21,7 +21,7 @@ export function getWs(): WsClient {
 
 export function useWebSocket() {
   const ws = useRef(getWs());
-  const { upsertRun, addTrace, addLog, addChatEvent, setActiveInterrupt, setActiveNode, removeActiveNode, resetRunGraphState, addStateEvent } = useRunStore();
+  const { upsertRun, addTrace, addLog, addChatEvent, setActiveNode, removeActiveNode, resetRunGraphState, addStateEvent } = useRunStore();
   const { upsertEvalRun, updateEvalRunProgress, completeEvalRun } = useEvalStore();
 
   useEffect(() => {
@@ -53,11 +53,6 @@ export function useWebSocket() {
         case "chat": {
           const runId = msg.payload.run_id as string;
           addChatEvent(runId, msg.payload);
-          break;
-        }
-        case "chat.interrupt": {
-          const runId = msg.payload.run_id as string;
-          setActiveInterrupt(runId, msg.payload as unknown as InterruptEvent);
           break;
         }
         case "state": {
@@ -206,7 +201,7 @@ export function useWebSocket() {
     });
 
     return unsub;
-  }, [upsertRun, addTrace, addLog, addChatEvent, setActiveInterrupt, setActiveNode, removeActiveNode, resetRunGraphState, addStateEvent, upsertEvalRun, updateEvalRunProgress, completeEvalRun]);
+  }, [upsertRun, addTrace, addLog, addChatEvent, setActiveNode, removeActiveNode, resetRunGraphState, addStateEvent, upsertEvalRun, updateEvalRunProgress, completeEvalRun]);
 
   return ws.current;
 }

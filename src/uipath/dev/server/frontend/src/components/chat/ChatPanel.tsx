@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { WsClient } from "../../api/websocket";
-import { useRunStore } from "../../store/useRunStore";
+import { useRunStore, type ChatToolCall } from "../../store/useRunStore";
 import ChatMessage from "./ChatMessage";
 import ChatInput from "./ChatInput";
-import ChatInterrupt from "./ChatInterrupt";
 
 interface ChatMsg {
   message_id: string;
   role: string;
   content: string;
-  tool_calls?: { name: string; has_result: boolean }[];
+  tool_calls?: ChatToolCall[];
 }
 
 interface Props {
@@ -24,8 +23,6 @@ export default function ChatPanel({ messages, runId, runStatus, ws }: Props) {
   const stickToBottom = useRef(true);
   const addLocalChatMessage = useRunStore((s) => s.addLocalChatMessage);
   const setFocusedSpan = useRunStore((s) => s.setFocusedSpan);
-  const interrupt = useRunStore((s) => s.activeInterrupt[runId] ?? null);
-  const setActiveInterrupt = useRunStore((s) => s.setActiveInterrupt);
 
   // Precompute per-tool-call occurrence indices across all messages
   const toolCallIndicesMap = useMemo(() => {
@@ -45,9 +42,19 @@ export default function ChatPanel({ messages, runId, runStatus, ws }: Props) {
     return map;
   }, [messages]);
 
+  // True iff there's a pending confirmation we're waiting on
+  const awaitingConfirmation = useMemo(
+    () =>
+      messages.some((m) =>
+        (m.tool_calls ?? []).some(
+          (tc) => tc.require_confirmation && !tc.confirmation && !tc.has_result,
+        ),
+      ),
+    [messages],
+  );
+
   const [showScrollTop, setShowScrollTop] = useState(false);
 
-  // Track whether user has scrolled away from bottom
   const handleScroll = () => {
     const el = scrollRef.current;
     if (!el) return;
@@ -56,7 +63,6 @@ export default function ChatPanel({ messages, runId, runStatus, ws }: Props) {
     setShowScrollTop(el.scrollTop > 100);
   };
 
-  // Auto-scroll on any message content change (streaming tokens)
   useEffect(() => {
     if (stickToBottom.current && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -65,7 +71,6 @@ export default function ChatPanel({ messages, runId, runStatus, ws }: Props) {
 
   const handleSend = (text: string) => {
     stickToBottom.current = true;
-    // Show the user's message immediately
     addLocalChatMessage(runId, {
       message_id: `local-${Date.now()}`,
       role: "user",
@@ -74,13 +79,16 @@ export default function ChatPanel({ messages, runId, runStatus, ws }: Props) {
     ws.sendChatMessage(runId, text);
   };
 
-  const handleInterruptResponse = (data: Record<string, unknown>) => {
+  const handleConfirmToolCall = (
+    toolCallId: string,
+    approved: boolean,
+    input?: unknown,
+  ) => {
     stickToBottom.current = true;
-    ws.sendInterruptResponse(runId, data);
-    setActiveInterrupt(runId, null);
+    ws.sendConfirmToolCall(runId, toolCallId, approved, input);
   };
 
-  const isDisabled = runStatus === "running" || !!interrupt;
+  const isDisabled = runStatus === "running" || awaitingConfirmation;
 
   return (
     <div className="flex flex-col h-full">
@@ -101,14 +109,9 @@ export default function ChatPanel({ messages, runId, runStatus, ws }: Props) {
               message={msg}
               toolCallIndices={toolCallIndicesMap.get(msg.message_id)}
               onToolCallClick={(name, idx) => setFocusedSpan({ name, index: idx })}
+              onConfirmToolCall={handleConfirmToolCall}
             />
           ))}
-          {interrupt && (
-            <ChatInterrupt
-              interrupt={interrupt}
-              onRespond={handleInterruptResponse}
-            />
-          )}
         </div>
         {showScrollTop && (
           <button
@@ -126,7 +129,13 @@ export default function ChatPanel({ messages, runId, runStatus, ws }: Props) {
       <ChatInput
         onSend={handleSend}
         disabled={isDisabled}
-        placeholder={interrupt ? "Respond to the interrupt above..." : isDisabled ? "Waiting for response..." : "Message..."}
+        placeholder={
+          awaitingConfirmation
+            ? "Approve or reject the tool call above..."
+            : isDisabled
+              ? "Waiting for response..."
+              : "Message..."
+        }
       />
     </div>
   );

@@ -51,17 +51,3 @@ class ChatData:
     run_id: str
     event: UiPathConversationMessageEvent | None = None
     message: UiPathConversationMessage | None = None
-
-
-@dataclass
-class InterruptData:
-    """Plain data class for HITL interrupt events."""
-
-    run_id: str
-    interrupt_id: str
-    interrupt_type: str  # "tool_call_confirmation" | "generic"
-    tool_call_id: str | None = None
-    tool_name: str | None = None
-    input_schema: Any | None = None
-    input_value: Any | None = None
-    content: Any | None = None

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRunStore } from "./store/useRunStore";
+import { useRunStore, projectToolCall } from "./store/useRunStore";
 import { useAuthStore } from "./store/useAuthStore";
 import { useConfigStore } from "./store/useConfigStore";
 import { useWebSocket } from "./store/useWebSocket";
@@ -156,10 +156,7 @@ export default function App() {
             .join("\n")
             .trim() ?? "",
         tool_calls: toolCalls.length > 0
-          ? toolCalls.map((tc) => ({
-              name: (tc.name as string) ?? "",
-              has_result: !!tc.result,
-            }))
+          ? toolCalls.map(projectToolCall)
           : undefined,
       };
     });

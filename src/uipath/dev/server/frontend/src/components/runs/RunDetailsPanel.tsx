@@ -135,7 +135,13 @@ export default function RunDetailsPanel({ run, ws, isMobile }: Props) {
   const tabColor = (id: string) =>
     id === "primary" ? primaryColor : id === "events" ? "var(--success)" : "var(--accent)";
 
-  const interrupt = useRunStore((s) => s.activeInterrupt[run.id] ?? null);
+  const awaitingConfirmation = useRunStore((s) =>
+    (s.chatMessages[run.id] ?? []).some((m) =>
+      (m.tool_calls ?? []).some(
+        (tc) => tc.require_confirmation && !tc.confirmation && !tc.has_result,
+      ),
+    ),
+  );
 
   // Status indicator for the tab bar
   const statusIndicator =
@@ -149,7 +155,7 @@ export default function RunDetailsPanel({ run, ws, isMobile }: Props) {
       >
         {isChatMode ? "Thinking..." : "Running..."}
       </span>
-    ) : isChatMode && run.status === "suspended" && interrupt ? (
+    ) : isChatMode && awaitingConfirmation ? (
       <span
         className="ml-auto text-[11px] px-2 py-0.5 rounded-full shrink-0"
         style={{
@@ -174,7 +180,7 @@ export default function RunDetailsPanel({ run, ws, isMobile }: Props) {
     return (
       <div className="flex flex-col h-full">
         {/* Debug controls */}
-        {(run.mode === "debug" || (run.status === "suspended" && !interrupt) || (bpMap && Object.keys(bpMap).length > 0)) && (
+        {(run.mode === "debug" || (run.status === "suspended" && !awaitingConfirmation) || (bpMap && Object.keys(bpMap).length > 0)) && (
           <DebugControls runId={run.id} status={run.status} ws={ws} breakpointNode={run.breakpoint_node} />
         )}
         {/* Graph panel — fixed height */}
@@ -258,7 +264,7 @@ export default function RunDetailsPanel({ run, ws, isMobile }: Props) {
       {/* Main content: graph + trace tree */}
       <div ref={containerRef} className="flex flex-col flex-1 min-w-0">
         {/* Debug controls */}
-        {(run.mode === "debug" || (run.status === "suspended" && !interrupt) || (bpMap && Object.keys(bpMap).length > 0)) && (
+        {(run.mode === "debug" || (run.status === "suspended" && !awaitingConfirmation) || (bpMap && Object.keys(bpMap).length > 0)) && (
           <DebugControls runId={run.id} status={run.status} ws={ws} breakpointNode={run.breakpoint_node} />
         )}
         {/* Graph panel — resizable */}
