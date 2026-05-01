@@ -58,11 +58,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 if run_id and text:
                     await _handle_chat_message(server, run_id, text)
 
-            elif command == ClientCommand.CHAT_INTERRUPT_RESPONSE.value:
+            elif command == ClientCommand.CHAT_CONFIRM_TOOL_CALL.value:
                 run_id = payload.get("run_id", "")
-                data = payload.get("data", {})
                 if run_id:
-                    _handle_interrupt_response(server, run_id, data)
+                    _handle_confirm_tool_call(server, run_id, payload)
 
             elif command == ClientCommand.DEBUG_STEP.value:
                 run_id = payload.get("run_id", "")
@@ -136,15 +135,18 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         manager.disconnect(websocket)
 
 
-def _handle_interrupt_response(server: Any, run_id: str, data: Any) -> None:
-    """Process an interrupt response from a WebSocket client."""
+def _handle_confirm_tool_call(
+    server: Any, run_id: str, payload: dict[str, Any]
+) -> None:
+    """Process a tool call confirmation (approve/reject) from a WebSocket client."""
     run = server.run_service.get_run(run_id)
-    if run is None or run.status != "suspended":
+    if run is None:
         return
-
-    chat_bridge = server.run_service.get_chat_bridge(run_id)
-    if chat_bridge:
-        server.run_service.resume_chat(run, data if isinstance(data, dict) else {})
+    server.run_service.confirm_tool_call(
+        run_id,
+        approved=bool(payload.get("approved", False)),
+        input=payload.get("input"),
+    )
 
 
 async def _handle_chat_message(server: Any, run_id: str, text: str) -> None:

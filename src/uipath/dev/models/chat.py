@@ -40,7 +40,6 @@ class ChatEvents:
                 role=self.get_role(event),
                 content_parts=[],
                 tool_calls=[],
-                interrupts=[],
                 created_at=self.get_timestamp(event),
                 updated_at=self.get_timestamp(event),
             )
@@ -205,7 +204,6 @@ def get_user_message(user_text: str) -> UiPathConversationMessage:
             )
         ],
         tool_calls=[],
-        interrupts=[],
         role="user",
     )
 
