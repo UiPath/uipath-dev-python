@@ -60,6 +60,14 @@ class WebChatBridge:
         """
         return None
 
+    async def emit_executing_tool_call_event(
+        self,
+        tool_call_id: str,
+        tool_input: dict[str, Any] | None = None,
+    ) -> None:
+        """Emit an executingToolCall event. Forwarded via message callback."""
+        pass
+
     async def emit_exchange_end_event(self) -> None:
         """Send an exchange end event."""
         if self.on_exchange_end:
