@@ -2511,7 +2511,7 @@ wheels = [
 
 [[package]]
 name = "uipath"
-version = "2.10.60"
+version = "2.10.74"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "applicationinsights" },
@@ -2534,28 +2534,28 @@ dependencies = [
     { name = "uipath-platform" },
     { name = "uipath-runtime" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1d/47/c551ec9ba09b105860ee9597d8d87b8b4298b9415a25f1a00a7f9902c39a/uipath-2.10.60.tar.gz", hash = "sha256:be1833249c18cd8105dcd1959f0d1ca00c834d3e7bdd9329b194722e3a979678", size = 2933329, upload-time = "2026-04-30T12:18:34.187Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/26/55/8e00773946979f80934fd5ee0957f3e55b6a13a01b0de6b813a72caef001/uipath-2.10.74.tar.gz", hash = "sha256:6fa9d677559562c7ca0faef51660dfdc4803b744c233af6453d410b06c60ef1a", size = 2947956, upload-time = "2026-05-29T16:18:42.389Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/85/1b/ae8f3eb7db8bb54cef311b6eab6c24c1df643da940a3a02d641442630905/uipath-2.10.60-py3-none-any.whl", hash = "sha256:4fde5a4a59ec0a209433c023dc113033082fc51494138aa1ceef11594e474c07", size = 389319, upload-time = "2026-04-30T12:18:31.732Z" },
+    { url = "https://files.pythonhosted.org/packages/a5/01/40029c2447610348bbae1049f398ee194396d04b170af44c20a235869b36/uipath-2.10.74-py3-none-any.whl", hash = "sha256:fc8033cbe634bc0dabe2c9f8d2cee9f9ddef439aad207bcc2bdcbfb4f491388c", size = 391889, upload-time = "2026-05-29T16:18:40.047Z" },
 ]
 
 [[package]]
 name = "uipath-core"
-version = "0.5.15"
+version = "0.5.17"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "opentelemetry-instrumentation" },
     { name = "opentelemetry-sdk" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4d/61/945ed075095ab2b4e5e4a43f3724f7d7d2e8897267e11e34bce290df96de/uipath_core-0.5.15.tar.gz", hash = "sha256:dc1049bff52029313f213ab87a6b39acae76c462543729fcea80ea5ac23366b5", size = 117892, upload-time = "2026-04-30T07:39:01.092Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e3/80/a626eb3136a6765e0af06c9d5080ac0843c2a72f17b7a2170f1f45da40dd/uipath_core-0.5.17.tar.gz", hash = "sha256:13565e1eba9f059a8221494dfb3239257ddf7f265fc7057199ffe03ed066300a", size = 119023, upload-time = "2026-05-28T21:34:10.903Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3d/e4/e763bb94dd08ea93e98937b1a229a29f2907bee75a273a0594d929528133/uipath_core-0.5.15-py3-none-any.whl", hash = "sha256:8aa50b1f1531151ef827d29454d63e409c38699cd5a5d63f943094f2b7d5ddd7", size = 44575, upload-time = "2026-04-30T07:38:59.427Z" },
+    { url = "https://files.pythonhosted.org/packages/74/cf/f4b481970621e2a9aec869302773fa2c7d346aef294a553429626369633f/uipath_core-0.5.17-py3-none-any.whl", hash = "sha256:6e088eec5130bc492ac176ab85d4924d7d4cb07ee290ed7e6a46984e9de8c12b", size = 44957, upload-time = "2026-05-28T21:34:09.534Z" },
 ]
 
 [[package]]
 name = "uipath-dev"
-version = "0.0.79"
+version = "0.0.80"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },
@@ -2596,7 +2596,7 @@ requires-dist = [
     { name = "pywinpty", marker = "sys_platform == 'win32'", specifier = ">=2.0.0" },
     { name = "textual", specifier = ">=7.5.0,<8.0.0" },
     { name = "uipath", specifier = ">=2.10.57,<2.11.0" },
-    { name = "uipath-runtime", specifier = ">=0.10.0,<0.11.0" },
+    { name = "uipath-runtime", specifier = ">=0.11.0,<0.12.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.40.0" },
 ]
 
@@ -2620,7 +2620,7 @@ dev = [
 
 [[package]]
 name = "uipath-platform"
-version = "0.1.42"
+version = "0.1.59"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
@@ -2630,21 +2630,21 @@ dependencies = [
     { name = "truststore" },
     { name = "uipath-core" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/48/d0/b815b95164294138f679da5a4f703f5f0ba27bbda4cc07c0b6486a325dce/uipath_platform-0.1.42.tar.gz", hash = "sha256:44f3230fb61e63bce73c6151afc6d5f1156a96646eed220b89a8409866e0b315", size = 334236, upload-time = "2026-04-30T16:36:39.946Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/31/69/a58be91ea5319fdc8ada510c310a846f9e21bf84ed111b1998f0b8c661f9/uipath_platform-0.1.59.tar.gz", hash = "sha256:15f785eb6173c9f214d57986db12029add22f5b4c5d07e1da3f32497d4fea1ed", size = 366196, upload-time = "2026-05-28T08:33:22.221Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7f/a5/db4ecf46424cedddc57fdd2f8edf17b8dab51458a125e53b7f13a25b20db/uipath_platform-0.1.42-py3-none-any.whl", hash = "sha256:9f908c523ab2c9c2dca0542a1afd499e5d049c76deb58a4f4e1df30ba9ad2bb1", size = 219840, upload-time = "2026-04-30T16:36:38.48Z" },
+    { url = "https://files.pythonhosted.org/packages/59/9b/9d6ff9ff974bf010765f3b05e10aa63a11301595dadde0f92da1f7965e79/uipath_platform-0.1.59-py3-none-any.whl", hash = "sha256:2f46bae05e04df61a2b60e49e71dfb536812f384a0e8a8c1ad1f6db793a576ff", size = 243097, upload-time = "2026-05-28T08:33:20.596Z" },
 ]
 
 [[package]]
 name = "uipath-runtime"
-version = "0.10.2"
+version = "0.11.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "uipath-core" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/79/a5/3643d567b291a584de3b9ff1b39734db8041e5c09a97256426212bbe1f33/uipath_runtime-0.10.2.tar.gz", hash = "sha256:885183183f658aa0af785d2cc268426a583b1a6f12276f5bbafa797323217167", size = 141197, upload-time = "2026-04-29T08:10:33.261Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/72/8d/4d36d6a5dda4ca5f25e52508bc20dd82cb92fcdf2a36cd0adc4f9832d047/uipath_runtime-0.11.0.tar.gz", hash = "sha256:cc94f2fdab43b593ef678eff904fc6cdd4831963cffe39a83909ffcf9082d76f", size = 143685, upload-time = "2026-05-29T15:13:30.562Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e4/52/b50ad909e7025f8731422f0cf62c1143d674c445fe128e94d7f652bdfaa3/uipath_runtime-0.10.2-py3-none-any.whl", hash = "sha256:394c78d1666fc049ceab30d65faaf8f9f51c97831ef67468a174bf2ffd7d2217", size = 43058, upload-time = "2026-04-29T08:10:31.315Z" },
+    { url = "https://files.pythonhosted.org/packages/e7/08/c7b90851d4544ff5e76ca7c55452597aae1619cf1ebc2c0aa7b098110f14/uipath_runtime-0.11.0-py3-none-any.whl", hash = "sha256:08bf53a0e38bb3d19edc6708d2ecb7d918aa96fdda13e35f3ad0e6f2a6c392b9", size = 43770, upload-time = "2026-05-29T15:13:29.282Z" },
 ]
 
 [[package]]
