@@ -1,6 +1,6 @@
 [project]
 name = "uipath-dev"
-version = "0.0.81"
+version = "0.0.82"
 description = "UiPath Developer Console"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
@@ -10,7 +10,7 @@ dependencies = [
   "pyperclip>=1.11.0, <2.0.0",
   "fastapi>=0.128.8",
   "uvicorn[standard]>=0.40.0",
-  "uipath>=2.11.7, <2.12.0",
+  "uipath>=2.12.0, <2.13.0",
   "aiosqlite>=0.20.0",
   "pywinpty>=2.0.0; sys_platform == 'win32'",
   "mcp[cli]>=1.0.0",

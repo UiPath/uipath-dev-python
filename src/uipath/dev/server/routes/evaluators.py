@@ -240,10 +240,10 @@ from uipath.eval.evaluators import (
     BaseEvaluatorConfig,
 )
 from uipath.eval.models import (
-    AgentExecution,
     ErrorEvaluationResult,
     EvaluationResult,
     NumericEvaluationResult,
+    WorkloadExecution,
 )
 
 
@@ -261,7 +261,7 @@ class {class_name}Config(BaseEvaluatorConfig[{class_name}Criteria]):
 
 
 class {class_name}(
-    BaseEvaluator[{class_name}Criteria, {class_name}Config, None]
+    BaseEvaluator[{class_name}Criteria, {class_name}Config, str]
 ):
     """{description}"""
 
@@ -271,11 +271,11 @@ class {class_name}(
 
     async def evaluate(
         self,
-        agent_execution: AgentExecution,
+        workload_execution: WorkloadExecution,
         evaluation_criteria: {class_name}Criteria,
     ) -> EvaluationResult:
         try:
-            output = agent_execution.agent_output
+            output = workload_execution.workload_output
             # TODO: implement evaluation logic
             score = 0.0
             return NumericEvaluationResult(score=score, details="Not implemented yet")
