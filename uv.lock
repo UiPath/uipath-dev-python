@@ -2592,7 +2592,7 @@ wheels = [
 
 [[package]]
 name = "uipath-dev"
-version = "0.0.82"
+version = "0.0.83"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },
