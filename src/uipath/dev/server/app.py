@@ -12,6 +12,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
 from uipath.dev.server import UiPathDeveloperServer
+from uipath.dev.server.security import (
+    LoopbackGuardMiddleware,
+    loopback_origin_regex,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -103,11 +107,14 @@ def create_app(server: UiPathDeveloperServer) -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origin_regex=loopback_origin_regex(),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Added last so it wraps CORS and runs first on every request and WebSocket.
+    app.add_middleware(LoopbackGuardMiddleware)
 
     # Store server reference on app state for route access
     app.state.server = server

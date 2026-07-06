@@ -84,6 +84,20 @@ def _resolve_safe(path: str) -> Path:
     return resolved
 
 
+def _reject_if_secret(target: Path) -> None:
+    """Block reads/writes of credential files inside the project root."""
+    rel_parts = target.relative_to(ROOT).parts if target.is_relative_to(ROOT) else ()
+    if ".uipath" in rel_parts:
+        raise HTTPException(
+            status_code=403, detail="Access to this file is not allowed"
+        )
+    name = target.name
+    if name == ".env" or name.startswith(".env."):
+        raise HTTPException(
+            status_code=403, detail="Access to this file is not allowed"
+        )
+
+
 def _detect_language(filepath: Path) -> str | None:
     name = filepath.name.lower()
     if name == "dockerfile":
@@ -139,6 +153,7 @@ async def list_directory(path: str = "") -> list[dict[str, Any]]:
 async def read_file(path: str) -> dict[str, Any]:
     """Read file content. Returns content, binary flag, size, and language."""
     target = _resolve_safe(path)
+    _reject_if_secret(target)
     if not target.is_file():
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -189,6 +204,7 @@ class SaveFileBody(BaseModel):
 async def save_file(path: str, body: SaveFileBody) -> dict[str, str]:
     """Save file content. Creates parent dirs if needed."""
     target = _resolve_safe(path)
+    _reject_if_secret(target)
     target.parent.mkdir(parents=True, exist_ok=True)
     # Write bytes directly to avoid Python text-mode converting \n → \r\n on
     # Windows, which would add extra carriage returns on every save since
