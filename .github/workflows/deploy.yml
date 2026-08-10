@@ -10,18 +10,18 @@ permissions:
 jobs:
   deploy:
     environment: website-prod
-    runs-on: ubuntu-latest
+    runs-on: uipath-ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
 
       - name: Azure login
-        uses: azure/login@v2
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6  # v2.3.1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
       
       - name: Install Azure CLI
-        uses: pietrobolcato/install-azure-cli-action@main
+        uses: pietrobolcato/install-azure-cli-action@161e654d6c82d50576f1b32adbeea9433bf2a0ea  # main
 
       - name: Run Deploy.ps1
         shell: pwsh
