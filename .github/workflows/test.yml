@@ -6,11 +6,15 @@ on:
 jobs:
   test:
     name: Test
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os == 'windows-latest' && 'uipath-windows-latest' || 'uipath-ubuntu-latest' }}
     strategy:
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
-        os: [uipath-ubuntu-latest, uipath-windows-latest]
+        # Stock labels on purpose: GitHub builds the check-run name from these
+        # matrix values, and branch protection requires the stock names
+        # ("Test (3.11, ubuntu-latest)"). runs-on below maps them onto the
+        # uipath- pool, so the jobs run on uipath runners either way.
+        os: [ubuntu-latest, windows-latest]
 
     permissions:
       contents: read
