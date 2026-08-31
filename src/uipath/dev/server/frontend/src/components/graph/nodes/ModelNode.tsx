@@ -1,4 +1,5 @@
 import { Handle, Position, type NodeProps } from "reactflow";
+import MarchingBorder from "./MarchingBorder";
 
 const hiddenHandle = {
   opacity: 0,
@@ -25,7 +26,7 @@ export default function ModelNode({ data }: NodeProps) {
     : isExecutingNode
       ? "var(--success)"
       : isActiveNode
-        ? "var(--accent)"
+        ? "transparent"
         : status === "completed"
           ? "var(--success)"
           : status === "running"
@@ -64,6 +65,7 @@ export default function ModelNode({ data }: NodeProps) {
           }}
         />
       )}
+      {isActiveNode && <MarchingBorder />}
       <Handle type="target" position={Position.Top} style={hiddenHandle} />
       <div style={{ color: "var(--info)", fontSize: 9, marginBottom: 1 }}>model</div>
       <div className="overflow-hidden text-ellipsis whitespace-nowrap">{label}</div>
