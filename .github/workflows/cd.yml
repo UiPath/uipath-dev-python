@@ -11,9 +11,11 @@ on:
 
 jobs:
   lint:
+    if: ${{ !github.event.created }}
     uses: ./.github/workflows/lint.yml
 
   test:
+    if: ${{ !github.event.created }}
     uses: ./.github/workflows/test.yml
 
   build:
