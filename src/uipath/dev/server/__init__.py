@@ -27,6 +27,11 @@ from uipath.dev.models.data import (
 from uipath.dev.models.eval_data import EvalItemResult, EvalRunState
 from uipath.dev.models.execution import ExecutionRun
 from uipath.dev.server.debug_bridge import WebDebugBridge
+from uipath.dev.server.security import (
+    TOKEN_FILE,
+    generate_token,
+    write_token_file,
+)
 from uipath.dev.services.cli_agent import CliAgentService
 from uipath.dev.services.eval_service import EvalService
 from uipath.dev.services.run_service import RunService
@@ -71,6 +76,8 @@ class UiPathDeveloperServer:
         self._watcher_task: asyncio.Task[None] | None = None
         self._watcher_stop: asyncio.Event | None = None
         self.reload_pending = False
+
+        self.auth_token = generate_token()
 
         from uipath.dev.server.ws.manager import ConnectionManager
 
@@ -124,8 +131,9 @@ class UiPathDeveloperServer:
         port_file.parent.mkdir(exist_ok=True)
         port_file.write_text(str(self.port))
 
-        base_url = f"http://{self.host}:{self.port}"
-        self._print_banner(base_url)
+        write_token_file(self.auth_token)
+
+        self._print_banner(self.console_url)
 
         if self.open_browser:
             threading.Thread(
@@ -153,6 +161,7 @@ class UiPathDeveloperServer:
         logger.info("Shutting down server resources...")
         port_file = Path(".uipath") / "dev-server.port"
         port_file.unlink(missing_ok=True)
+        (Path(".uipath") / TOKEN_FILE.name).unlink(missing_ok=True)
         self._stop_watcher()
         # Stop any active CLI agent PTY sessions
         await self.cli_agent_service.stop_all_sessions()
@@ -397,7 +406,12 @@ class UiPathDeveloperServer:
         )
         console.print()
 
+    @property
+    def console_url(self) -> str:
+        """The URL to open the console with, carrying this run's token."""
+        return f"http://{self.host}:{self.port}/?token={self.auth_token}"
+
     def _deferred_open_browser(self) -> None:
         """Open the browser after a short delay to let uvicorn bind."""
         time.sleep(1.5)
-        webbrowser.open(f"http://{self.host}:{self.port}")
+        webbrowser.open(self.console_url)
