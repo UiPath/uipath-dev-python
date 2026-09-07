@@ -10,6 +10,11 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from uipath.dev.models.chat import get_user_message, get_user_message_event
 from uipath.dev.models.data import ChatData
+from uipath.dev.server.security import (
+    WS_POLICY_VIOLATION,
+    query_token,
+    token_matches,
+)
 from uipath.dev.server.ws.protocol import (
     ClientCommand,
     ServerEvent,
@@ -23,9 +28,20 @@ logger = logging.getLogger(__name__)
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
-    """Handle WebSocket connections for real-time event streaming."""
+    """Handle WebSocket connections for real-time event streaming.
+
+    Gated before accept: CORS never applies to a WebSocket, and this socket can
+    start a CLI agent PTY and write to its stdin. The token arrives in the query
+    string because a browser cannot set headers on a WebSocket.
+    """
     server = websocket.app.state.server
     manager = server.connection_manager
+
+    presented = query_token(websocket.scope.get("query_string"))
+    if not token_matches(presented, server.auth_token):
+        logger.warning("Refused an unauthenticated WebSocket handshake")
+        await websocket.close(code=WS_POLICY_VIOLATION)
+        return
 
     await manager.connect(websocket)
 

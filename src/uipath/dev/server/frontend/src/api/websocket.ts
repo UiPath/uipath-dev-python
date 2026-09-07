@@ -1,4 +1,5 @@
 import type { ClientCommandType, ServerMessage } from "../types/ws";
+import { withToken } from "./token";
 
 type MessageHandler = (msg: ServerMessage) => void;
 
@@ -13,7 +14,7 @@ export class WsClient {
 
   constructor(url?: string) {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    this.url = url ?? `${protocol}//${window.location.host}/ws`;
+    this.url = withToken(url ?? `${protocol}//${window.location.host}/ws`);
   }
 
   connect(): void {

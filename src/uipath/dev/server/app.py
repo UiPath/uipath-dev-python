@@ -7,11 +7,19 @@ import logging
 import os
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from uipath.dev.server import UiPathDeveloperServer
+from uipath.dev.server.security import (
+    MISDIRECTED,
+    UNAUTHORIZED,
+    api_path_requires_token,
+    bearer_token,
+    host_is_loopback,
+    token_matches,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +109,28 @@ def create_app(server: UiPathDeveloperServer) -> FastAPI:
         version="0.1.0",
     )
 
+    # Store server reference on app state for route access
+    app.state.server = server
+
+    @app.middleware("http")
+    async def _guard(request: Request, call_next):
+        """Refuse a rebound Host, and require the token on /api."""
+        if not host_is_loopback(request.headers.get("host")):
+            return JSONResponse(
+                {"detail": "This server only answers requests addressed to localhost"},
+                status_code=MISDIRECTED,
+            )
+
+        if api_path_requires_token(request.url.path):
+            presented = bearer_token(request.headers.get("authorization"))
+            if not token_matches(presented, server.auth_token):
+                return JSONResponse(
+                    {"detail": "Missing or invalid developer server token"},
+                    status_code=UNAUTHORIZED,
+                )
+
+        return await call_next(request)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -108,9 +138,6 @@ def create_app(server: UiPathDeveloperServer) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-
-    # Store server reference on app state for route access
-    app.state.server = server
 
     auth_enabled = os.environ.get("UIPATH_AUTH_ENABLED", "true").lower() not in (
         "false",

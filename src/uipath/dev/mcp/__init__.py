@@ -38,17 +38,29 @@ def _base_url() -> str:
 
 def _ws_url() -> str:
     host = os.environ.get("UIPATH_DEV_SERVER_HOST", "localhost")
-    return f"ws://{host}:{_get_port()}/ws"
+    return f"ws://{host}:{_get_port()}/ws?token={_token()}"
 
 
 def _api_url(path: str) -> str:
     return f"{_base_url()}/api{path}"
 
 
+def _token() -> str:
+    """The running server's token, from its file or the environment."""
+    from uipath.dev.server.security import TOKEN_ENV_VAR, read_token_file
+
+    return read_token_file() or os.environ.get(TOKEN_ENV_VAR, "")
+
+
+def _client() -> httpx.AsyncClient:
+    """An HTTP client presenting the dev server token."""
+    return httpx.AsyncClient(headers={"Authorization": f"Bearer {_token()}"})
+
+
 async def _report_tool_call(tool: str, args: dict[str, Any] | None = None) -> None:
     """Notify the dev server that an MCP tool was invoked."""
     try:
-        async with httpx.AsyncClient() as client:
+        async with _client() as client:
             await client.post(
                 _api_url("/mcp/events"),
                 json={"tool": tool, "args": args or {}},
@@ -66,7 +78,7 @@ async def list_entrypoints() -> list[dict[str, Any]]:
     Use the returned names with get_entrypoint_schema or run_entrypoint.
     """
     await _report_tool_call("list_entrypoints")
-    async with httpx.AsyncClient() as client:
+    async with _client() as client:
         resp = await client.get(_api_url("/entrypoints"), timeout=10)
         resp.raise_for_status()
         return resp.json()
@@ -83,7 +95,7 @@ async def get_entrypoint_schema(entrypoint: str) -> dict[str, Any]:
     input and output. Use this to construct input_data for run_entrypoint.
     """
     await _report_tool_call("get_entrypoint_schema", {"entrypoint": entrypoint})
-    async with httpx.AsyncClient() as client:
+    async with _client() as client:
         resp = await client.get(
             _api_url(f"/entrypoints/{entrypoint}/schema"),
             timeout=30,
@@ -115,7 +127,7 @@ async def run_entrypoint(
     await _report_tool_call(
         "run_entrypoint", {"entrypoint": entrypoint, "input_data": input_data}
     )
-    async with httpx.AsyncClient() as client:
+    async with _client() as client:
         resp = await client.post(
             _api_url("/runs"),
             json={
@@ -169,7 +181,7 @@ async def run_entrypoint(
                 await ctx.log(level, message)
 
     # Fetch final run result
-    async with httpx.AsyncClient() as client:
+    async with _client() as client:
         resp = await client.get(_api_url(f"/runs/{run_id}"), timeout=10)
         resp.raise_for_status()
         result: dict[str, Any] = resp.json()
@@ -193,7 +205,7 @@ async def get_run_status(run_id: str) -> dict[str, Any]:
     Returns full run details including status, output, traces, and logs.
     """
     await _report_tool_call("get_run_status", {"run_id": run_id})
-    async with httpx.AsyncClient() as client:
+    async with _client() as client:
         resp = await client.get(_api_url(f"/runs/{run_id}"), timeout=10)
         resp.raise_for_status()
         return resp.json()
@@ -231,7 +243,7 @@ async def list_eval_sets() -> list[dict[str, Any]]:
     and attached evaluator IDs. Use the returned IDs with run_eval_set.
     """
     await _report_tool_call("list_eval_sets")
-    async with httpx.AsyncClient() as client:
+    async with _client() as client:
         resp = await client.get(_api_url("/eval-sets"), timeout=10)
         resp.raise_for_status()
         return resp.json()
@@ -248,7 +260,7 @@ async def get_eval_set(eval_set_id: str) -> dict[str, Any]:
     and evaluation criteria.
     """
     await _report_tool_call("get_eval_set", {"eval_set_id": eval_set_id})
-    async with httpx.AsyncClient() as client:
+    async with _client() as client:
         resp = await client.get(_api_url(f"/eval-sets/{eval_set_id}"), timeout=10)
         resp.raise_for_status()
         return resp.json()
@@ -268,7 +280,7 @@ async def run_eval_set(
     Returns the full run result with per-item scores and overall score.
     """
     await _report_tool_call("run_eval_set", {"eval_set_id": eval_set_id})
-    async with httpx.AsyncClient() as client:
+    async with _client() as client:
         resp = await client.post(_api_url(f"/eval-sets/{eval_set_id}/runs"), timeout=30)
         resp.raise_for_status()
         run: dict[str, Any] = resp.json()
@@ -305,7 +317,7 @@ async def run_eval_set(
                 break
 
     # Fetch final run detail
-    async with httpx.AsyncClient() as client:
+    async with _client() as client:
         resp = await client.get(_api_url(f"/eval-runs/{run_id}"), timeout=10)
         resp.raise_for_status()
         result = resp.json()
@@ -321,7 +333,7 @@ async def list_eval_runs() -> list[dict[str, Any]]:
     and progress. Use run IDs with get_eval_run for full details.
     """
     await _report_tool_call("list_eval_runs")
-    async with httpx.AsyncClient() as client:
+    async with _client() as client:
         resp = await client.get(_api_url("/eval-runs"), timeout=10)
         resp.raise_for_status()
         return resp.json()
@@ -337,7 +349,7 @@ async def get_eval_run(eval_run_id: str) -> dict[str, Any]:
     Returns per-item evaluator scores and justifications.
     """
     await _report_tool_call("get_eval_run", {"eval_run_id": eval_run_id})
-    async with httpx.AsyncClient() as client:
+    async with _client() as client:
         resp = await client.get(_api_url(f"/eval-runs/{eval_run_id}"), timeout=10)
         resp.raise_for_status()
         result = resp.json()
