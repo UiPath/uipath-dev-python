@@ -39,7 +39,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
     presented = query_token(websocket.scope.get("query_string"))
     if not token_matches(presented, server.auth_token):
-        logger.warning("Refused an unauthenticated WebSocket handshake")
+        logger.warning(
+            "Refused a WebSocket handshake from origin %s: %s. Open the URL "
+            "printed at startup, including its token, and reload the page.",
+            websocket.headers.get("origin") or "unknown",
+            "stale or wrong token" if presented else "no token",
+        )
         await websocket.close(code=WS_POLICY_VIOLATION)
         return
 
