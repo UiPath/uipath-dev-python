@@ -248,7 +248,25 @@ def create_app(server: UiPathDeveloperServer) -> FastAPI:
     if frontend_ready and (STATIC_DIR / "index.html").exists():
         from fastapi.staticfiles import StaticFiles
 
-        app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
+        class _RevalidatedHtml(StaticFiles):
+            """Cache the hashed assets, never the document that names them.
+
+            A cached index.html pins a browser to asset hashes a rebuild has
+            already deleted, so the tab keeps running code that is no longer
+            served and cannot pick up a new token.
+            """
+
+            def file_response(self, full_path, stat_result, scope, status_code=200):
+                response = super().file_response(
+                    full_path, stat_result, scope, status_code
+                )
+                if str(full_path).endswith(".html"):
+                    response.headers["Cache-Control"] = "no-store"
+                return response
+
+        app.mount(
+            "/", _RevalidatedHtml(directory=str(STATIC_DIR), html=True), name="static"
+        )
     else:
         fallback = _fallback_html()
 
