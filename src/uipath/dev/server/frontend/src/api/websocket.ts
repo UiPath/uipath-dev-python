@@ -3,9 +3,11 @@ import { withToken } from "./token";
 
 type MessageHandler = (msg: ServerMessage) => void;
 
+const WS_POLICY_VIOLATION = 1008;
+
 export class WsClient {
   private ws: WebSocket | null = null;
-  private url: string;
+  private baseUrl?: string;
   private handlers: Set<MessageHandler> = new Set();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private shouldReconnect = true;
@@ -13,14 +15,19 @@ export class WsClient {
   private activeSubscriptions: Set<string> = new Set();
 
   constructor(url?: string) {
+    this.baseUrl = url;
+  }
+
+  /** Built per attempt: the token is not known when the client is constructed. */
+  private currentUrl(): string {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    this.url = withToken(url ?? `${protocol}//${window.location.host}/ws`);
+    return withToken(this.baseUrl ?? `${protocol}//${window.location.host}/ws`);
   }
 
   connect(): void {
     if (this.ws?.readyState === WebSocket.OPEN) return;
 
-    this.ws = new WebSocket(this.url);
+    this.ws = new WebSocket(this.currentUrl());
 
     this.ws.onopen = () => {
       console.log("[ws] connected");
@@ -52,7 +59,15 @@ export class WsClient {
       });
     };
 
-    this.ws.onclose = () => {
+    this.ws.onclose = (event) => {
+      if (event.code === WS_POLICY_VIOLATION) {
+        this.shouldReconnect = false;
+        console.error(
+          "[ws] refused: this page has no valid developer server token. " +
+            "Open the URL printed by `uipath dev`, including its ?token=.",
+        );
+        return;
+      }
       console.log("[ws] disconnected");
       if (this.shouldReconnect) {
         this.reconnectTimer = setTimeout(() => this.connect(), 2000);
