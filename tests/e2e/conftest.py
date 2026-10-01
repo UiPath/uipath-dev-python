@@ -34,6 +34,9 @@ def live_server_url():
     Uses 'live_server_url' (not 'base_url') to avoid conflicting with the
     autouse session fixture from pytest-base-url, which would force the
     server to start even for non-web tests.
+
+    The URL carries this run's token, exactly as the server opens the browser
+    in production, so it already ends with a query string.
     """
     try:
         import uvicorn
@@ -67,7 +70,6 @@ def live_server_url():
     thread.start()
 
     # Wait for server to be ready
-    url = f"http://127.0.0.1:{port}"
     for _ in range(50):
         try:
             with socket.create_connection(("127.0.0.1", port), timeout=0.2):
@@ -77,7 +79,7 @@ def live_server_url():
     else:
         raise RuntimeError("Server did not start in time")
 
-    yield url
+    yield server_obj.console_url
 
     uv_server.should_exit = True
     thread.join(timeout=5)

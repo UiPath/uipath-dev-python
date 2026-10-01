@@ -22,7 +22,7 @@ def _wait_for_entrypoints(page: Page) -> None:
 
 def _go_to_new_run(page: Page, url: str) -> None:
     """Navigate to the new run page and wait for entrypoints."""
-    page.goto(f"{url}/#/new")
+    page.goto(f"{url}#/new")
     expect(page.locator("#entrypoint-select")).to_be_visible()
     _wait_for_entrypoints(page)
 
