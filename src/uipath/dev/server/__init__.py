@@ -30,6 +30,7 @@ from uipath.dev.server.debug_bridge import WebDebugBridge
 from uipath.dev.server.security import (
     TOKEN_FILE,
     generate_token,
+    host_is_wildcard,
     write_token_file,
 )
 from uipath.dev.services.cli_agent import CliAgentService
@@ -107,7 +108,7 @@ class UiPathDeveloperServer:
             on_output=self._on_cli_agent_output,
             on_exit=self._on_cli_agent_exit,
             server_port=self.port,
-            server_host=self.host,
+            server_host=self.addressable_host,
         )
 
     def create_app(self) -> Any:
@@ -407,9 +408,14 @@ class UiPathDeveloperServer:
         console.print()
 
     @property
+    def addressable_host(self) -> str:
+        """A host a client can dial. A wildcard bind names no single one."""
+        return "localhost" if host_is_wildcard(self.host) else self.host
+
+    @property
     def console_url(self) -> str:
         """The URL to open the console with, carrying this run's token."""
-        return f"http://{self.host}:{self.port}/?token={self.auth_token}"
+        return f"http://{self.addressable_host}:{self.port}/?token={self.auth_token}"
 
     def _deferred_open_browser(self) -> None:
         """Open the browser after a short delay to let uvicorn bind."""

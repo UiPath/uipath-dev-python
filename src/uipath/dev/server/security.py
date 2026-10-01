@@ -12,6 +12,7 @@ TOKEN_FILE = Path(".uipath") / "dev-server.token"
 
 TOKEN_BYTES = 32
 LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "[::1]"})
+WILDCARD_HOSTS = frozenset({"0.0.0.0", "::", "*"})
 
 UNAUTHORIZED = 401
 MISDIRECTED = 421
@@ -52,8 +53,27 @@ def token_matches(presented: str | None, expected: str) -> bool:
     return secrets.compare_digest(presented, expected)
 
 
-def host_is_loopback(host_header: str | None) -> bool:
-    """Whether a `Host` header names this machine. A missing header is refused."""
+def host_is_wildcard(bind_host: str | None) -> bool:
+    """Whether a bind address names every interface rather than one."""
+    return (bind_host or "").strip().lower().strip("[]") in WILDCARD_HOSTS
+
+
+def allowed_hosts(bind_host: str | None) -> frozenset[str]:
+    """Loopback, plus the bind address when it names a single interface.
+
+    A wildcard is excluded: allowing it would accept any Host and defeat the
+    rebinding check this exists for.
+    """
+    host = (bind_host or "").strip().lower().strip("[]")
+    if not host or host_is_wildcard(host):
+        return LOOPBACK_HOSTS
+    if ":" in host:
+        return LOOPBACK_HOSTS | {host, f"[{host}]"}
+    return LOOPBACK_HOSTS | {host}
+
+
+def host_is_allowed(host_header: str | None, allowed: frozenset[str]) -> bool:
+    """Whether a `Host` header names an address this server answers for."""
     if not host_header:
         return False
     host = host_header.strip().lower()
@@ -61,8 +81,8 @@ def host_is_loopback(host_header: str | None) -> bool:
         closing = host.find("]")
         if closing == -1:
             return False
-        return host[: closing + 1] in LOOPBACK_HOSTS
-    return host.rsplit(":", 1)[0] in LOOPBACK_HOSTS
+        return host[: closing + 1] in allowed
+    return host.rsplit(":", 1)[0] in allowed
 
 
 def bearer_token(authorization: str | None) -> str | None:

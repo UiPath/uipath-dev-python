@@ -8,7 +8,7 @@ about Access-Control headers.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
 
 import pytest
 from fastapi.testclient import TestClient
@@ -34,23 +34,32 @@ def project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 @pytest.fixture()
-def server(
+def make_server(
     project: Path,
     mock_factory: Any,
     trace_manager: Any,
     monkeypatch: pytest.MonkeyPatch,
-) -> Any:
-    """A developer server on the mock factory, with no frontend build."""
+) -> Callable[[str], Any]:
+    """Builds a developer server bound to a given host, with no frontend."""
     from uipath.dev.server import UiPathDeveloperServer, frontend_build
 
     monkeypatch.setattr(frontend_build, "ensure_frontend_built", lambda: False)
     monkeypatch.setenv("UIPATH_AUTH_ENABLED", "false")
 
-    return UiPathDeveloperServer(
-        runtime_factory=mock_factory,
-        trace_manager=trace_manager,
-        open_browser=False,
-    )
+    def build(host: str) -> Any:
+        return UiPathDeveloperServer(
+            runtime_factory=mock_factory,
+            trace_manager=trace_manager,
+            open_browser=False,
+            host=host,
+        )
+
+    return build
+
+
+@pytest.fixture()
+def server(make_server: Callable[[str], Any]) -> Any:
+    return make_server("localhost")
 
 
 @pytest.fixture()
@@ -154,3 +163,49 @@ def test_token_file_is_owner_readable_only(project: Path, server: Any) -> None:
 
     if sys.platform != "win32":
         assert path.stat().st_mode & 0o777 == 0o600
+
+
+def test_a_configured_host_is_accepted(make_server: Callable[[str], Any]) -> None:
+    """A server bound to one address must answer requests addressed to it."""
+    srv = make_server("192.0.2.10")
+    with TestClient(srv.create_app(), base_url="http://192.0.2.10:8080") as c:
+        resp = c.get("/api/entrypoints", headers=auth(srv.auth_token))
+    assert resp.status_code == 200
+
+
+def test_a_wildcard_bind_does_not_widen_the_allowlist(
+    make_server: Callable[[str], Any],
+) -> None:
+    """0.0.0.0 names every interface, so allowing it would allow any Host."""
+    srv = make_server("0.0.0.0")
+    with TestClient(srv.create_app(), base_url="http://0.0.0.0:8080") as c:
+        resp = c.get("/api/entrypoints", headers=auth(srv.auth_token))
+    assert resp.status_code == MISDIRECTED
+
+
+def test_the_console_url_host_is_always_one_the_guard_accepts(
+    make_server: Callable[[str], Any],
+) -> None:
+    """The banner URL and the Host allowlist must never disagree."""
+    for bind in ("localhost", "127.0.0.1", "0.0.0.0", "192.0.2.10"):
+        srv = make_server(bind)
+        origin = srv.console_url.split("/?")[0]
+        with TestClient(srv.create_app(), base_url=origin) as c:
+            resp = c.get("/api/entrypoints", headers=auth(srv.auth_token))
+        assert resp.status_code == 200, f"bind {bind} is unreachable at {origin}"
+
+
+def test_the_console_page_loads_on_a_configured_host(
+    make_server: Callable[[str], Any],
+) -> None:
+    """The guard runs before the path check, so a refused Host 421s the page too."""
+    srv = make_server("192.0.2.10")
+    with TestClient(srv.create_app(), base_url="http://192.0.2.10:8080") as c:
+        assert c.get("/").status_code == 200
+
+
+def test_a_wildcard_bind_is_not_handed_to_the_mcp_client(
+    make_server: Callable[[str], Any],
+) -> None:
+    """uipath-dev-mcp dials this host, and the guard refuses a wildcard."""
+    assert make_server("0.0.0.0").cli_agent_service._server_host == "localhost"

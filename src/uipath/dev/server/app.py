@@ -15,9 +15,10 @@ from uipath.dev.server import UiPathDeveloperServer
 from uipath.dev.server.security import (
     MISDIRECTED,
     UNAUTHORIZED,
+    allowed_hosts,
     api_path_requires_token,
     bearer_token,
-    host_is_loopback,
+    host_is_allowed,
     token_matches,
 )
 
@@ -112,12 +113,16 @@ def create_app(server: UiPathDeveloperServer) -> FastAPI:
     # Store server reference on app state for route access
     app.state.server = server
 
+    allowed = allowed_hosts(server.host)
+
     @app.middleware("http")
     async def _guard(request: Request, call_next):
         """Refuse a rebound Host, and require the token on /api."""
-        if not host_is_loopback(request.headers.get("host")):
+        if not host_is_allowed(request.headers.get("host"), allowed):
             return JSONResponse(
-                {"detail": "This server only answers requests addressed to localhost"},
+                {
+                    "detail": "This server does not answer requests addressed to this Host"
+                },
                 status_code=MISDIRECTED,
             )
 
