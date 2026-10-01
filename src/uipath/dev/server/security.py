@@ -7,7 +7,6 @@ import secrets
 from pathlib import Path
 from urllib.parse import parse_qs
 
-TOKEN_ENV_VAR = "UIPATH_DEV_SERVER_TOKEN"
 TOKEN_FILE = Path(".uipath") / "dev-server.token"
 
 TOKEN_BYTES = 32
@@ -20,8 +19,8 @@ WS_POLICY_VIOLATION = 1008
 
 
 def generate_token() -> str:
-    """Mint this run's token, honouring an externally supplied one."""
-    return os.environ.get(TOKEN_ENV_VAR) or secrets.token_urlsafe(TOKEN_BYTES)
+    """Mint this run's token."""
+    return secrets.token_urlsafe(TOKEN_BYTES)
 
 
 def write_token_file(token: str, directory: Path | None = None) -> Path:

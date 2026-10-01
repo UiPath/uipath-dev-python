@@ -209,3 +209,11 @@ def test_a_wildcard_bind_is_not_handed_to_the_mcp_client(
 ) -> None:
     """uipath-dev-mcp dials this host, and the guard refuses a wildcard."""
     assert make_server("0.0.0.0").cli_agent_service._server_host == "localhost"
+
+
+def test_the_token_is_never_taken_from_the_environment(
+    make_server: Callable[[str], Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Per-run rotation is the point, so a pinned token must not be honoured."""
+    monkeypatch.setenv("UIPATH_DEV_SERVER_TOKEN", "pinned-by-an-env-var")
+    assert make_server("localhost").auth_token != "pinned-by-an-env-var"

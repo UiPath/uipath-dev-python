@@ -46,10 +46,10 @@ def _api_url(path: str) -> str:
 
 
 def _token() -> str:
-    """The running server's token, from its file or the environment."""
-    from uipath.dev.server.security import TOKEN_ENV_VAR, read_token_file
+    """The running server's token, from the file it writes at startup."""
+    from uipath.dev.server.security import read_token_file
 
-    return read_token_file() or os.environ.get(TOKEN_ENV_VAR, "")
+    return read_token_file() or ""
 
 
 def _client() -> httpx.AsyncClient:
