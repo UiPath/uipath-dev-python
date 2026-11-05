@@ -13,7 +13,7 @@ dependencies = [
   "uipath>=2.14.1, <2.16.0",
   "aiosqlite>=0.20.0",
   "pywinpty>=2.0.0; sys_platform == 'win32'",
-  "mcp[cli]>=1.0.0",
+  "mcp[cli]>=1.0.0,<2",
 ]
 classifiers = [
   "Intended Audience :: Developers",
