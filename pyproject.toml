@@ -1,6 +1,6 @@
 [project]
 name = "uipath-dev"
-version = "0.0.87"
+version = "0.0.88"
 description = "UiPath Developer Console"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
