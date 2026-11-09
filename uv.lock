@@ -2593,7 +2593,7 @@ wheels = [
 
 [[package]]
 name = "uipath-dev"
-version = "0.0.87"
+version = "0.0.88"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },
@@ -2629,7 +2629,7 @@ dev = [
 requires-dist = [
     { name = "aiosqlite", specifier = ">=0.20.0" },
     { name = "fastapi", specifier = ">=0.128.8" },
-    { name = "mcp", extras = ["cli"], specifier = ">=1.0.0" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.0.0,<2" },
     { name = "pyperclip", specifier = ">=1.11.0,<2.0.0" },
     { name = "pywinpty", marker = "sys_platform == 'win32'", specifier = ">=2.0.0" },
     { name = "textual", specifier = ">=7.5.0,<8.0.0" },
